@@ -1,0 +1,103 @@
+use anyhow::Result;
+use colored::*;
+use std::path::PathBuf;
+use crate::config::loader::{load_config, save_config};
+use crate::config::validator::validate_config;
+use crate::generator::api_client::generate_api_client;
+use crate::generator::module_selector::select_modules;
+use crate::generator::swagger_parser::fetch_and_parse_spec;
+use crate::generator::ts_typings::generate_typings;
+use crate::generator::writer::{write_api_client, write_schemas};
+use crate::generator::zod_schema::generate_zod_schemas;
+
+pub async fn run(spec: Option<String>) -> Result<()> {
+    println!("{}", "🚀 Starting code generation...".bright_cyan());
+    println!();
+
+    // Load config
+    let mut config = load_config()?;
+    validate_config(&config)?;
+
+    // Get spec path
+    let spec_path = spec.ok_or_else(|| anyhow::anyhow!("Spec path or URL is required. Use --spec <path-or-url>"))?;
+
+    // Fetch and parse Swagger spec
+    println!("{}", format!("📥 Fetching spec from: {}", spec_path).bright_blue());
+    let parsed = fetch_and_parse_spec(&spec_path).await?;
+    println!("{}", format!("✅ Parsed spec with {} modules", parsed.modules.len()).green());
+    println!();
+
+    // Filter out ignored modules
+    let available_modules: Vec<String> = parsed.modules
+        .iter()
+        .filter(|m| !config.modules.ignore.contains(m))
+        .cloned()
+        .collect();
+
+    if available_modules.is_empty() {
+        return Err(anyhow::anyhow!("No modules available after filtering"));
+    }
+
+    // Select modules interactively
+    let selected_modules = select_modules(&available_modules, &config.modules.ignore)?;
+    println!();
+    println!("{}", format!("📦 Selected {} module(s): {}", selected_modules.len(), selected_modules.join(", ")).bright_green());
+    println!();
+
+    // Save spec path and selected modules to config
+    config.spec_path = Some(spec_path.clone());
+    config.modules.selected = selected_modules.clone();
+    save_config(&config)?;
+
+    // Generate code for each module
+    let schemas_dir = PathBuf::from(&config.schemas.output);
+    let apis_dir = PathBuf::from(&config.apis.output);
+
+    let mut total_files = 0;
+
+    for module in &selected_modules {
+        println!("{}", format!("🔨 Generating code for module: {}", module).bright_cyan());
+
+        // Get operations for this module
+        let operations = parsed.operations_by_tag
+            .get(module)
+            .cloned()
+            .unwrap_or_default();
+
+        if operations.is_empty() {
+            println!("{}", format!("⚠️  No operations found for module: {}", module).yellow());
+            continue;
+        }
+
+        // For now, use all schemas
+        let all_schema_names: Vec<String> = parsed.schemas.keys().cloned().collect();
+
+        // Generate TypeScript typings
+        let types = generate_typings(&parsed.openapi, &parsed.schemas, &all_schema_names)?;
+
+        // Generate Zod schemas
+        let zod_schemas = generate_zod_schemas(&parsed.openapi, &parsed.schemas, &all_schema_names)?;
+
+        // Generate API client
+        let api_functions = generate_api_client(&parsed.openapi, &operations)?;
+
+        // Write schemas
+        let schema_files = write_schemas(&schemas_dir, module, &types, &zod_schemas)?;
+        total_files += schema_files.len();
+
+        // Write API client
+        let api_files = write_api_client(&apis_dir, module, &api_functions)?;
+        total_files += api_files.len();
+
+        println!("{}", format!("✅ Generated {} files for module: {}", schema_files.len() + api_files.len(), module).green());
+    }
+
+    println!();
+    println!("{}", format!("✨ Successfully generated {} files!", total_files).bright_green());
+    println!();
+    println!("Generated files:");
+    println!("  📁 Schemas: {}", config.schemas.output);
+    println!("  📁 APIs: {}", config.apis.output);
+
+    Ok(())
+}

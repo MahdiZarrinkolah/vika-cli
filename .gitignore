@@ -1,0 +1,7 @@
+/target
+**/*.rs.bk
+Cargo.lock
+.vika.json
+*.log
+
+temp
