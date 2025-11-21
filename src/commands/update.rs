@@ -44,6 +44,7 @@ pub async fn run() -> Result<()> {
     let apis_dir = PathBuf::from(&config.apis.output);
 
     let mut total_files = 0;
+    let mut module_summary: Vec<(String, usize)> = Vec::new();
 
     for module in &selected_modules {
         println!("{}", format!("🔨 Regenerating code for module: {}", module).bright_cyan());
@@ -59,14 +60,25 @@ pub async fn run() -> Result<()> {
             continue;
         }
 
-        // Use all schemas (same as generate command)
-        let all_schema_names: Vec<String> = parsed.schemas.keys().cloned().collect();
+        // Get schema names used by this module
+        let module_schema_names = parsed.module_schemas
+            .get(module)
+            .cloned()
+            .unwrap_or_default();
 
         // Generate TypeScript typings
-        let types = generate_typings(&parsed.openapi, &parsed.schemas, &all_schema_names)?;
+        let types = if !module_schema_names.is_empty() {
+            generate_typings(&parsed.openapi, &parsed.schemas, &module_schema_names)?
+        } else {
+            Vec::new()
+        };
 
         // Generate Zod schemas
-        let zod_schemas = generate_zod_schemas(&parsed.openapi, &parsed.schemas, &all_schema_names)?;
+        let zod_schemas = if !module_schema_names.is_empty() {
+            generate_zod_schemas(&parsed.openapi, &parsed.schemas, &module_schema_names)?
+        } else {
+            Vec::new()
+        };
 
         // Generate API client
         let api_functions = generate_api_client(&parsed.openapi, &operations)?;
@@ -79,15 +91,24 @@ pub async fn run() -> Result<()> {
         let api_files = write_api_client(&apis_dir, module, &api_functions)?;
         total_files += api_files.len();
 
-        println!("{}", format!("✅ Regenerated {} files for module: {}", schema_files.len() + api_files.len(), module).green());
+        let module_file_count = schema_files.len() + api_files.len();
+        module_summary.push((module.clone(), module_file_count));
+        println!("{}", format!("✅ Regenerated {} files for module: {}", module_file_count, module).green());
     }
 
     println!();
     println!("{}", format!("✨ Successfully updated {} files!", total_files).bright_green());
     println!();
-    println!("Updated files:");
+    println!("{}", "Updated files:".bright_cyan());
     println!("  📁 Schemas: {}", config.schemas.output);
     println!("  📁 APIs: {}", config.apis.output);
+    println!();
+    if !module_summary.is_empty() {
+        println!("{}", "Module breakdown:".bright_cyan());
+        for (module, count) in &module_summary {
+            println!("  • {}: {} files", module, count);
+        }
+    }
 
     Ok(())
 }

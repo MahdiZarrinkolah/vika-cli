@@ -1,6 +1,6 @@
 use anyhow::Result;
 use openapiv3::{Operation, Parameter, ReferenceOr};
-use crate::generator::swagger_parser::{get_schema_name_from_ref, OperationInfo};
+use crate::generator::swagger_parser::{get_schema_name_from_ref, OperationInfo, resolve_parameter_ref, resolve_request_body_ref, resolve_response_ref};
 use crate::generator::utils::{to_camel_case, to_pascal_case};
 use openapiv3::OpenAPI;
 
@@ -37,10 +37,10 @@ fn generate_function_for_operation(
     };
 
     // Extract path parameters
-    let path_params = extract_path_parameters(operation)?;
+    let path_params = extract_path_parameters(openapi, operation)?;
     
     // Extract query parameters
-    let query_params = extract_query_parameters(operation)?;
+    let query_params = extract_query_parameters(openapi, operation)?;
     
     // Extract request body
     let request_body = extract_request_body(openapi, operation)?;
@@ -60,15 +60,11 @@ fn generate_function_for_operation(
 
     // Add query parameters
     if !query_params.is_empty() {
-        let query_type = if query_params.len() == 1 {
-            format!("{{ {}: string }}", query_params[0])
-        } else {
-            let query_fields: Vec<String> = query_params
-                .iter()
-                .map(|p| format!("{}?: string", p))
-                .collect();
-            format!("{{ {} }}", query_fields.join(", "))
-        };
+        let query_fields: Vec<String> = query_params
+            .iter()
+            .map(|p| format!("{}?: string", p))
+            .collect();
+        let query_type = format!("{{ {} }}", query_fields.join(", "));
         params.push(format!("query?: {}", query_type));
     }
 
@@ -94,7 +90,8 @@ fn generate_function_for_operation(
         for param in &query_params {
             body_lines.push(format!("    if (query?.{}) queryString.append(\"{}\", query.{});", param, param, param));
         }
-        body_lines.push(format!("    const url = `{}` + (queryString.toString() ? `?${{queryString.toString()}}` : '');", url_template));
+        body_lines.push("    const queryStr = queryString.toString();".to_string());
+        body_lines.push(format!("    const url = `{}` + (queryStr ? `?${{queryStr}}` : '');", url_template));
     } else {
         body_lines.push(format!("    const url = `{}`;", url_template));
     }
@@ -146,13 +143,36 @@ fn generate_function_for_operation(
     })
 }
 
-fn extract_path_parameters(operation: &Operation) -> Result<Vec<String>> {
+fn extract_path_parameters(openapi: &OpenAPI, operation: &Operation) -> Result<Vec<String>> {
     let mut params = Vec::new();
     
     for param_ref in &operation.parameters {
         match param_ref {
-            ReferenceOr::Reference { reference: _ } => {
-                // TODO: Resolve reference
+            ReferenceOr::Reference { reference } => {
+                // Resolve parameter reference (with support for nested references up to 3 levels)
+                let mut current_ref = Some(reference.clone());
+                let mut depth = 0;
+                while let Some(ref_path) = current_ref.take() {
+                    if depth > 3 {
+                        break; // Prevent infinite loops
+                    }
+                    match resolve_parameter_ref(openapi, &ref_path) {
+                        Ok(ReferenceOr::Item(param)) => {
+                            if let Parameter::Path { parameter_data, .. } = param {
+                                params.push(parameter_data.name.clone());
+                            }
+                            break;
+                        }
+                        Ok(ReferenceOr::Reference { reference: nested_ref }) => {
+                            current_ref = Some(nested_ref);
+                            depth += 1;
+                        }
+                        Err(_) => {
+                            // Reference resolution failed - skip
+                            break;
+                        }
+                    }
+                }
             }
             ReferenceOr::Item(param) => {
                 if let Parameter::Path { parameter_data, .. } = param {
@@ -165,13 +185,36 @@ fn extract_path_parameters(operation: &Operation) -> Result<Vec<String>> {
     Ok(params)
 }
 
-fn extract_query_parameters(operation: &Operation) -> Result<Vec<String>> {
+fn extract_query_parameters(openapi: &OpenAPI, operation: &Operation) -> Result<Vec<String>> {
     let mut params = Vec::new();
     
     for param_ref in &operation.parameters {
         match param_ref {
-            ReferenceOr::Reference { reference: _ } => {
-                // TODO: Resolve reference
+            ReferenceOr::Reference { reference } => {
+                // Resolve parameter reference (with support for nested references up to 3 levels)
+                let mut current_ref = Some(reference.clone());
+                let mut depth = 0;
+                while let Some(ref_path) = current_ref.take() {
+                    if depth > 3 {
+                        break; // Prevent infinite loops
+                    }
+                    match resolve_parameter_ref(openapi, &ref_path) {
+                        Ok(ReferenceOr::Item(param)) => {
+                            if let Parameter::Query { parameter_data, .. } = param {
+                                params.push(parameter_data.name.clone());
+                            }
+                            break;
+                        }
+                        Ok(ReferenceOr::Reference { reference: nested_ref }) => {
+                            current_ref = Some(nested_ref);
+                            depth += 1;
+                        }
+                        Err(_) => {
+                            // Reference resolution failed - skip
+                            break;
+                        }
+                    }
+                }
             }
             ReferenceOr::Item(param) => {
                 if let Parameter::Query { parameter_data, .. } = param {
@@ -185,14 +228,50 @@ fn extract_query_parameters(operation: &Operation) -> Result<Vec<String>> {
 }
 
 fn extract_request_body(
-    _openapi: &OpenAPI,
+    openapi: &OpenAPI,
     operation: &Operation,
 ) -> Result<Option<String>> {
     if let Some(request_body) = &operation.request_body {
         match request_body {
-            ReferenceOr::Reference { reference: _ } => {
-                // TODO: Resolve reference
-                Ok(Some("any".to_string()))
+            ReferenceOr::Reference { reference } => {
+                // Resolve request body reference
+                match resolve_request_body_ref(openapi, reference) {
+                    Ok(ReferenceOr::Item(body)) => {
+                        if let Some(json_media) = body.content.get("application/json") {
+                            if let Some(schema_ref) = &json_media.schema {
+                                match schema_ref {
+                                    ReferenceOr::Reference { reference } => {
+                                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                            Ok(Some(to_pascal_case(&ref_name)))
+                                        } else {
+                                            Ok(Some("any".to_string()))
+                                        }
+                                    }
+                                    ReferenceOr::Item(_schema) => {
+                                        // Inline schemas: These are schema definitions embedded directly
+                                        // in the request body. Generating proper types would require
+                                        // recursive type generation at this point, which is complex.
+                                        // For now, we use 'any' as a fallback. This can be enhanced
+                                        // to generate inline types if needed.
+                                        Ok(Some("any".to_string()))
+                                    }
+                                }
+                            } else {
+                                Ok(Some("any".to_string()))
+                            }
+                        } else {
+                            Ok(Some("any".to_string()))
+                        }
+                    }
+                    Ok(ReferenceOr::Reference { .. }) => {
+                        // Nested reference - return any
+                        Ok(Some("any".to_string()))
+                    }
+                    Err(_) => {
+                        // Reference resolution failed - return any
+                        Ok(Some("any".to_string()))
+                    }
+                }
             }
             ReferenceOr::Item(body) => {
                 if let Some(json_media) = body.content.get("application/json") {
@@ -206,8 +285,11 @@ fn extract_request_body(
                                 }
                             }
                             ReferenceOr::Item(_schema) => {
-                                // For inline schemas, we'd need to generate a type
-                                // For now, return a generic type name
+                                // Inline schemas: These are schema definitions embedded directly
+                                // in the request body. Generating proper types would require
+                                // recursive type generation at this point, which is complex.
+                                // For now, we use 'any' as a fallback. This can be enhanced
+                                // to generate inline types if needed.
                                 Ok(Some("any".to_string()))
                             }
                         }
@@ -225,14 +307,46 @@ fn extract_request_body(
 }
 
 fn extract_response_type(
-    _openapi: &OpenAPI,
+    openapi: &OpenAPI,
     operation: &Operation,
 ) -> Result<String> {
     // Try to get 200 response
     if let Some(success_response) = operation.responses.responses.get(&openapiv3::StatusCode::Code(200)) {
         match success_response {
-            ReferenceOr::Reference { reference: _ } => {
-                Ok("any".to_string())
+            ReferenceOr::Reference { reference } => {
+                // Resolve response reference
+                match resolve_response_ref(openapi, reference) {
+                    Ok(ReferenceOr::Item(response)) => {
+                        if let Some(json_media) = response.content.get("application/json") {
+                            if let Some(schema_ref) = &json_media.schema {
+                                match schema_ref {
+                                    ReferenceOr::Reference { reference } => {
+                                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                            Ok(to_pascal_case(&ref_name))
+                                        } else {
+                                            Ok("any".to_string())
+                                        }
+                                    }
+                                    ReferenceOr::Item(_) => {
+                                        Ok("any".to_string())
+                                    }
+                                }
+                            } else {
+                                Ok("any".to_string())
+                            }
+                        } else {
+                            Ok("any".to_string())
+                        }
+                    }
+                    Ok(ReferenceOr::Reference { .. }) => {
+                        // Nested reference - return any
+                        Ok("any".to_string())
+                    }
+                    Err(_) => {
+                        // Reference resolution failed - return any
+                        Ok("any".to_string())
+                    }
+                }
             }
             ReferenceOr::Item(response) => {
                 if let Some(json_media) = response.content.get("application/json") {
@@ -269,10 +383,41 @@ fn generate_function_name_from_path(path: &str, method: &str) -> String {
         .filter(|p| !p.starts_with('{'))
         .collect();
     
+    // Map HTTP methods to common prefixes
+    let method_upper = method.to_uppercase();
+    let method_lower = method.to_lowercase();
+    let method_prefix = match method_upper.as_str() {
+        "GET" => "get",
+        "POST" => "create",
+        "PUT" => "update",
+        "DELETE" => "delete",
+        "PATCH" => "patch",
+        _ => method_lower.as_str(),
+    };
+    
     let base_name = if path_parts.is_empty() {
-        method.to_lowercase()
+        method_prefix.to_string()
     } else {
-        format!("{}{}", method.to_lowercase(), to_pascal_case(&path_parts.join("")))
+        // Extract resource name from path (usually the first or last part)
+        let resource_name = if path_parts.len() > 1 {
+            // For nested paths like /users/{id}/posts, use the last resource
+            path_parts.last().unwrap_or(&"")
+        } else {
+            path_parts.first().unwrap_or(&"")
+        };
+        
+        // Handle common patterns
+        if resource_name.ends_with("s") && path.contains('{') {
+            // Plural resource with ID: /products/{id} -> getProductById
+            let singular = &resource_name[..resource_name.len() - 1];
+            format!("{}{}ById", method_prefix, to_pascal_case(singular))
+        } else if path.contains('{') {
+            // Resource with ID: /user/{id} -> getUserById
+            format!("{}{}ById", method_prefix, to_pascal_case(resource_name))
+        } else {
+            // No ID: /products -> getProducts
+            format!("{}{}", method_prefix, to_pascal_case(resource_name))
+        }
     };
     
     to_camel_case(&base_name)

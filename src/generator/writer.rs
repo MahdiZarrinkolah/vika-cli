@@ -25,33 +25,31 @@ pub fn write_schemas(
 
     // Write TypeScript types
     if !types.is_empty() {
-        let types_content = format!(
-            "{}\n",
+        let types_content = format_typescript_code(&format!(
+            "{}",
             types.iter()
                 .map(|t| t.content.clone())
                 .collect::<Vec<_>>()
                 .join("\n\n")
-        );
+        ));
         
         let types_file = module_dir.join("types.ts");
-        std::fs::write(&types_file, types_content)
-            .with_context(|| format!("Failed to write types file: {}", types_file.display()))?;
+        write_file_safe(&types_file, &types_content)?;
         written_files.push(types_file);
     }
 
     // Write Zod schemas
     if !zod_schemas.is_empty() {
-        let zod_content = format!(
-            "import {{ z }} from \"zod\";\n\n{}\n",
+        let zod_content = format_typescript_code(&format!(
+            "import {{ z }} from \"zod\";\n\n{}",
             zod_schemas.iter()
                 .map(|z| z.content.clone())
                 .collect::<Vec<_>>()
                 .join("\n\n")
-        );
+        ));
         
         let zod_file = module_dir.join("schemas.ts");
-        std::fs::write(&zod_file, zod_content)
-            .with_context(|| format!("Failed to write schemas file: {}", zod_file.display()))?;
+        write_file_safe(&zod_file, &zod_content)?;
         written_files.push(zod_file);
     }
 
@@ -65,9 +63,9 @@ pub fn write_schemas(
     }
 
     if !index_exports.is_empty() {
+        let index_content = format_typescript_code(&(index_exports.join("\n") + "\n"));
         let index_file = module_dir.join("index.ts");
-        std::fs::write(&index_file, index_exports.join("\n") + "\n")
-            .with_context(|| format!("Failed to write index file: {}", index_file.display()))?;
+        write_file_safe(&index_file, &index_content)?;
         written_files.push(index_file);
     }
 
@@ -85,17 +83,16 @@ pub fn write_api_client(
     let mut written_files = Vec::new();
 
     if !functions.is_empty() {
-        let functions_content = format!(
-            "{}\n",
+        let functions_content = format_typescript_code(&format!(
+            "{}",
             functions.iter()
                 .map(|f| f.content.clone())
                 .collect::<Vec<_>>()
                 .join("\n\n")
-        );
+        ));
 
         let api_file = module_dir.join("index.ts");
-        std::fs::write(&api_file, functions_content)
-            .with_context(|| format!("Failed to write API file: {}", api_file.display()))?;
+        write_file_safe(&api_file, &functions_content)?;
         written_files.push(api_file);
     }
 
@@ -178,9 +175,52 @@ pub fn write_http_client_template(output_path: &Path) -> Result<()> {
 };
 "#;
 
-    std::fs::write(output_path, http_client_content)
-        .with_context(|| format!("Failed to write http client template: {}", output_path.display()))?;
+    write_file_safe(output_path, http_client_content)?;
 
+    Ok(())
+}
+
+fn format_typescript_code(code: &str) -> String {
+    // Basic formatting: ensure consistent spacing and remove extra blank lines
+    let lines: Vec<&str> = code.lines().collect();
+    let mut formatted = Vec::new();
+    let mut last_was_empty = false;
+    
+    for line in lines {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            if !last_was_empty && !formatted.is_empty() {
+                formatted.push(String::new());
+                last_was_empty = true;
+            }
+            continue;
+        }
+        last_was_empty = false;
+        formatted.push(trimmed.to_string());
+    }
+    
+    // Remove trailing empty lines
+    while formatted.last().map(|s| s.is_empty()).unwrap_or(false) {
+        formatted.pop();
+    }
+    
+    formatted.join("\n")
+}
+
+fn write_file_safe(path: &Path, content: &str) -> Result<()> {
+    // Check if file exists and content is different
+    if path.exists() {
+        if let Ok(existing_content) = std::fs::read_to_string(path) {
+            if existing_content == content {
+                // Content is the same, skip writing
+                return Ok(());
+            }
+        }
+    }
+    
+    std::fs::write(path, content)
+        .with_context(|| format!("Failed to write file: {}", path.display()))?;
+    
     Ok(())
 }
 

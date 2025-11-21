@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use crate::generator::swagger_parser::{get_schema_name_from_ref, resolve_ref};
 use crate::generator::utils::to_pascal_case;
 
+#[derive(Clone)]
 pub struct TypeScriptType {
     pub content: String,
 }
@@ -29,6 +30,23 @@ pub fn generate_typings(
     }
 
     Ok(types)
+}
+
+#[allow(dead_code)]
+pub fn organize_types_by_module(
+    types: Vec<TypeScriptType>,
+    module_schemas: &std::collections::HashMap<String, Vec<String>>,
+) -> std::collections::HashMap<String, Vec<TypeScriptType>> {
+    let mut organized: std::collections::HashMap<String, Vec<TypeScriptType>> = std::collections::HashMap::new();
+    
+    // Organize types by module. Currently, all types are included in each module
+    // since schemas can be shared across modules. This could be enhanced to filter
+    // types based on actual usage per module for better code organization.
+    for (module, _schema_names) in module_schemas {
+        organized.insert(module.clone(), types.clone());
+    }
+    
+    organized
 }
 
 fn generate_type_for_schema(
@@ -175,9 +193,76 @@ fn schema_to_typescript(
             }
         }
         SchemaKind::Any(_) => Ok("any".to_string()),
-        SchemaKind::OneOf { .. } => Ok("any".to_string()),
-        SchemaKind::AllOf { .. } => Ok("any".to_string()),
-        SchemaKind::AnyOf { .. } => Ok("any".to_string()),
+        SchemaKind::OneOf { one_of, .. } => {
+            let mut variant_types = Vec::new();
+            for item in one_of {
+                match item {
+                    ReferenceOr::Reference { reference } => {
+                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                            variant_types.push(to_pascal_case(&ref_name));
+                        } else {
+                            variant_types.push("any".to_string());
+                        }
+                    }
+                    ReferenceOr::Item(item_schema) => {
+                        let item_type = schema_to_typescript(openapi, item_schema, types, processed, indent)?;
+                        variant_types.push(item_type);
+                    }
+                }
+            }
+            if variant_types.is_empty() {
+                Ok("any".to_string())
+            } else {
+                Ok(variant_types.join(" | "))
+            }
+        }
+        SchemaKind::AllOf { all_of, .. } => {
+            let mut all_types = Vec::new();
+            for item in all_of {
+                match item {
+                    ReferenceOr::Reference { reference } => {
+                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                            all_types.push(to_pascal_case(&ref_name));
+                        } else {
+                            all_types.push("any".to_string());
+                        }
+                    }
+                    ReferenceOr::Item(item_schema) => {
+                        let item_type = schema_to_typescript(openapi, item_schema, types, processed, indent)?;
+                        all_types.push(item_type);
+                    }
+                }
+            }
+            if all_types.is_empty() {
+                Ok("any".to_string())
+            } else {
+                Ok(all_types.join(" & "))
+            }
+        }
+        SchemaKind::AnyOf { any_of, .. } => {
+            // AnyOf is treated same as OneOf (union type)
+            let mut variant_types = Vec::new();
+            for item in any_of {
+                match item {
+                    ReferenceOr::Reference { reference } => {
+                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                            variant_types.push(to_pascal_case(&ref_name));
+                        } else {
+                            variant_types.push("any".to_string());
+                        }
+                    }
+                    ReferenceOr::Item(item_schema) => {
+                        let item_type = schema_to_typescript(openapi, item_schema, types, processed, indent)?;
+                        variant_types.push(item_type);
+                    }
+                }
+            }
+            if variant_types.is_empty() {
+                Ok("any".to_string())
+            } else {
+                Ok(variant_types.join(" | "))
+            }
+        }
         SchemaKind::Not { .. } => Ok("any".to_string()),
     }
     .map(|base_type| {
