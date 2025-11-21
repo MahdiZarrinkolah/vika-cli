@@ -13,10 +13,17 @@ pub fn generate_zod_schemas(
     schemas: &HashMap<String, Schema>,
     schema_names: &[String],
 ) -> Result<Vec<ZodSchema>> {
+    generate_zod_schemas_with_registry(openapi, schemas, schema_names, &mut std::collections::HashMap::new())
+}
+
+pub fn generate_zod_schemas_with_registry(
+    openapi: &OpenAPI,
+    schemas: &HashMap<String, Schema>,
+    schema_names: &[String],
+    enum_registry: &mut std::collections::HashMap<String, String>,
+) -> Result<Vec<ZodSchema>> {
     let mut zod_schemas = Vec::new();
     let mut processed = std::collections::HashSet::new();
-    // Enum registry: maps enum values (sorted, joined) to enum name
-    let mut enum_registry: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
     for schema_name in schema_names {
         if let Some(schema) = schemas.get(schema_name) {
@@ -26,7 +33,8 @@ pub fn generate_zod_schemas(
                 schema,
                 &mut zod_schemas,
                 &mut processed,
-                &mut enum_registry,
+                enum_registry,
+                None,
             )?;
         }
     }
@@ -41,6 +49,7 @@ fn generate_zod_for_schema(
     zod_schemas: &mut Vec<ZodSchema>,
     processed: &mut std::collections::HashSet<String>,
     enum_registry: &mut std::collections::HashMap<String, String>,
+    parent_schema_name: Option<&str>,
 ) -> Result<()> {
     if processed.contains(name) {
         return Ok(());
@@ -48,15 +57,25 @@ fn generate_zod_for_schema(
     processed.insert(name.to_string());
 
     let schema_name = to_pascal_case(name);
-    let zod_def = schema_to_zod(openapi, schema, zod_schemas, processed, 0, enum_registry, None)?;
+    let zod_def = schema_to_zod(openapi, schema, zod_schemas, processed, 0, enum_registry, None, parent_schema_name)?;
 
-    // Handle enums
+    // Handle enums at top level (when schema itself is an enum)
+    // Note: For property-level enums, they're handled in schema_to_zod with context
     if let SchemaKind::Type(Type::String(string_type)) = &schema.schema_kind {
         if !string_type.enumeration.is_empty() {
-            let enum_values: Vec<String> = string_type.enumeration.iter()
+            let mut enum_values: Vec<String> = string_type.enumeration.iter()
                 .filter_map(|v| v.as_ref().cloned())
                 .collect();
             if !enum_values.is_empty() {
+                enum_values.sort();
+                let enum_key = enum_values.join(",");
+                
+                // Check if this enum already exists in registry
+                if enum_registry.get(&enum_key).is_some() {
+                    // Enum already generated, skip
+                    return Ok(());
+                }
+                
                 // Use schema name if available, otherwise generate from values
                 let enum_name = if !name.is_empty() {
                     format!("{}Enum", to_pascal_case(name))
@@ -65,6 +84,10 @@ fn generate_zod_for_schema(
                     let value_hash: String = enum_values.iter().take(3).map(|v| v.chars().next().unwrap_or('X')).collect();
                     format!("Enum{}", value_hash)
                 };
+                
+                // Store in registry
+                enum_registry.insert(enum_key, enum_name.clone());
+                
                 let enum_schema = generate_enum_zod(&enum_name, &enum_values);
                 zod_schemas.push(enum_schema);
                 return Ok(());
@@ -93,6 +116,7 @@ fn schema_to_zod(
     indent: usize,
     enum_registry: &mut std::collections::HashMap<String, String>,
     context: Option<(&str, &str)>, // (property_name, parent_schema_name)
+    current_schema_name: Option<&str>, // Current schema being processed (for enum naming context)
 ) -> Result<String> {
     // Prevent infinite recursion with a reasonable depth limit
     if indent > 100 {
@@ -113,9 +137,42 @@ fn schema_to_zod(
                             enum_values.sort();
                             let enum_key = enum_values.join(",");
                             
+                            // For generic property names, include context in the key to avoid conflicts
+                            let context_key = if let Some((prop_name, parent_schema)) = context {
+                                let generic_names = ["status", "type", "state", "kind"];
+                                if generic_names.contains(&prop_name.to_lowercase().as_str()) && !parent_schema.is_empty() {
+                                    // Include parent schema in key for generic properties to avoid conflicts
+                                    format!("{}:{}", enum_key, parent_schema)
+                                } else {
+                                    enum_key.clone()
+                                }
+                            } else {
+                                enum_key.clone()
+                            };
+                            
                             // Check if this enum already exists in registry
-                            if let Some(existing_name) = enum_registry.get(&enum_key) {
-                                return Ok(format!("{}z.lazy(() => {}Schema)", indent_str, existing_name));
+                            // First check context_key (for context-aware enums)
+                            // Then check base enum_key to deduplicate enums with same values
+                            let existing_enum_name = enum_registry.get(&context_key)
+                                .or_else(|| enum_registry.get(&enum_key))
+                                .cloned();
+                            
+                            if let Some(existing_name) = existing_enum_name {
+                                // Store in registry with context_key for future lookups
+                                enum_registry.insert(context_key.clone(), existing_name.clone());
+                                
+                                // Check if enum schema has already been generated
+                                let schema_already_generated = zod_schemas.iter()
+                                    .any(|s| s.content.contains(&format!("{}Schema", existing_name)));
+                                
+                                // If not generated yet, generate it now
+                                if !schema_already_generated {
+                                    let enum_schema = generate_enum_zod(&existing_name, &enum_values);
+                                    zod_schemas.push(enum_schema);
+                                }
+                                
+                                // Enums don't need z.lazy(), use directly
+                                return Ok(format!("{}{}Schema", indent_str, existing_name));
                             }
                             
                             // Generate meaningful enum name using context (property name + parent schema) or fallback
@@ -136,9 +193,13 @@ fn schema_to_zod(
                                         .to_string();
                                     
                                     // Check if parent already contains the property name (e.g., "KycStatus" contains "Status")
+                                    // Use case-insensitive matching and check if property name is a suffix or contained
                                     let prop_lower = prop_pascal.to_lowercase();
                                     let parent_lower = parent_clean.to_lowercase();
-                                    if parent_lower.contains(&prop_lower) {
+                                    
+                                    // Check if parent ends with property name (e.g., "KycStatus" ends with "Status")
+                                    // or if property is contained in parent (case-insensitive)
+                                    if parent_lower.ends_with(&prop_lower) || parent_lower.contains(&prop_lower) {
                                         // Parent already contains property name, just use parent + Enum
                                         format!("{}Enum", parent_clean)
                                     } else {
@@ -158,14 +219,17 @@ fn schema_to_zod(
                                 "UnknownEnum".to_string()
                             };
                             
-                            // Store in registry
+                            // Store in registry using context_key (includes context for generic properties)
+                            // Also store with base enum_key for deduplication
+                            enum_registry.insert(context_key.clone(), enum_name.clone());
                             enum_registry.insert(enum_key.clone(), enum_name.clone());
                             
                             // Generate enum schema
                             let enum_schema = generate_enum_zod(&enum_name, &enum_values);
                             zod_schemas.push(enum_schema);
                             
-                            return Ok(format!("{}z.lazy(() => {}Schema)", indent_str, enum_name));
+                            // Enums don't need z.lazy(), use directly
+                            return Ok(format!("{}{}Schema", indent_str, enum_name));
                         }
                     }
                     let mut zod_expr = format!("{}z.string()", indent_str);
@@ -259,10 +323,10 @@ fn schema_to_zod(
                                         if let ReferenceOr::Item(item_schema) = resolved {
                                             // Check if it's an object that needs to be extracted
                                             if matches!(&item_schema.schema_kind, SchemaKind::Type(Type::Object(_))) {
-                                                generate_zod_for_schema(openapi, &ref_name, &item_schema, zod_schemas, processed, enum_registry)?;
+                                                generate_zod_for_schema(openapi, &ref_name, &item_schema, zod_schemas, processed, enum_registry, None)?;
                                                 format!("{}z.lazy(() => {}Schema)", indent_str, to_pascal_case(&ref_name))
                                             } else {
-                                                schema_to_zod(openapi, &item_schema, zod_schemas, processed, indent, enum_registry, None)?
+                                                schema_to_zod(openapi, &item_schema, zod_schemas, processed, indent, enum_registry, None, current_schema_name)?
                                             }
                                         } else {
                                             format!("{}z.lazy(() => {}Schema)", indent_str, to_pascal_case(&ref_name))
@@ -276,11 +340,11 @@ fn schema_to_zod(
                                 // If it's an object, we need to generate it inline or as a separate schema
                                 if matches!(&item_schema.schema_kind, SchemaKind::Type(Type::Object(_))) {
                                     // Generate object fields
-                                    let object_fields = schema_to_zod(openapi, item_schema, zod_schemas, processed, indent + 1, enum_registry, None)?;
+                                    let object_fields = schema_to_zod(openapi, item_schema, zod_schemas, processed, indent + 1, enum_registry, None, current_schema_name)?;
                                     // Wrap in z.object()
                                     format!("{}z.object({{\n{}\n{}}})", indent_str, object_fields, indent_str)
                                 } else {
-                                    schema_to_zod(openapi, item_schema, zod_schemas, processed, indent, enum_registry, None)?
+                                    schema_to_zod(openapi, item_schema, zod_schemas, processed, indent, enum_registry, None, current_schema_name)?
                                 }
                             }
                         }
@@ -303,9 +367,21 @@ fn schema_to_zod(
                 Type::Object(object_type) => {
                     if !object_type.properties.is_empty() {
                         let mut fields = Vec::new();
-                        // Get parent schema name from context if available, otherwise use empty string
-                        let parent_schema = context.map(|(_, parent)| parent.to_string())
-                            .unwrap_or_else(|| String::new());
+                        // Get parent schema name from context if available, otherwise use current_schema_name parameter
+                        // For object properties, use the current schema name as parent
+                        let parent_schema_for_props = if let Some((_, parent)) = context {
+                            if !parent.is_empty() {
+                                parent.to_string()
+                            } else if let Some(current) = current_schema_name {
+                                current.to_string()
+                            } else {
+                                String::new()
+                            }
+                        } else if let Some(current) = current_schema_name {
+                            current.to_string()
+                        } else {
+                            String::new()
+                        };
                         
                         for (prop_name, prop_schema_ref) in object_type.properties.iter() {
                             let prop_zod = match prop_schema_ref {
@@ -317,7 +393,7 @@ fn schema_to_zod(
                                         if let Ok(resolved) = resolve_ref(openapi, &reference) {
                                             if let ReferenceOr::Item(ref_schema) = resolved {
                                                 if matches!(&ref_schema.schema_kind, SchemaKind::Type(Type::Object(_))) {
-                                                    generate_zod_for_schema(openapi, &ref_name, &ref_schema, zod_schemas, processed, enum_registry)?;
+                                                    generate_zod_for_schema(openapi, &ref_name, &ref_schema, zod_schemas, processed, enum_registry, Some(&parent_schema_for_props))?;
                                                 }
                                             }
                                         }
@@ -328,7 +404,7 @@ fn schema_to_zod(
                                 }
                             }
                                 ReferenceOr::Item(prop_schema) => {
-                                    schema_to_zod(openapi, prop_schema, zod_schemas, processed, indent + 1, enum_registry, Some((prop_name, &parent_schema)))?
+                                    schema_to_zod(openapi, prop_schema, zod_schemas, processed, indent + 1, enum_registry, Some((prop_name, &parent_schema_for_props)), current_schema_name)?
                                 }
                             };
 
@@ -373,7 +449,7 @@ fn schema_to_zod(
                         }
                     }
                     ReferenceOr::Item(item_schema) => {
-                        let item_zod = schema_to_zod(openapi, item_schema, zod_schemas, processed, indent, enum_registry, None)?;
+                        let item_zod = schema_to_zod(openapi, item_schema, zod_schemas, processed, indent, enum_registry, None, current_schema_name)?;
                         variant_schemas.push(item_zod);
                     }
                 }
@@ -396,7 +472,7 @@ fn schema_to_zod(
                         }
                     }
                     ReferenceOr::Item(item_schema) => {
-                        let item_zod = schema_to_zod(openapi, item_schema, zod_schemas, processed, indent, enum_registry, None)?;
+                        let item_zod = schema_to_zod(openapi, item_schema, zod_schemas, processed, indent, enum_registry, None, current_schema_name)?;
                         all_schemas.push(item_zod);
                     }
                 }
@@ -428,7 +504,7 @@ fn schema_to_zod(
                         }
                     }
                     ReferenceOr::Item(item_schema) => {
-                        let item_zod = schema_to_zod(openapi, item_schema, zod_schemas, processed, indent, enum_registry, None)?;
+                        let item_zod = schema_to_zod(openapi, item_schema, zod_schemas, processed, indent, enum_registry, None, current_schema_name)?;
                         variant_schemas.push(item_zod);
                     }
                 }

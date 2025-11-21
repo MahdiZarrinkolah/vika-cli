@@ -5,9 +5,9 @@ use crate::config::loader::load_config;
 use crate::config::validator::validate_config;
 use crate::generator::api_client::generate_api_client;
 use crate::generator::swagger_parser::{fetch_and_parse_spec, filter_common_schemas};
-use crate::generator::ts_typings::generate_typings;
+use crate::generator::ts_typings::generate_typings_with_registry;
 use crate::generator::writer::{write_api_client, write_schemas};
-use crate::generator::zod_schema::generate_zod_schemas;
+use crate::generator::zod_schema::generate_zod_schemas_with_registry;
 
 pub async fn run() -> Result<()> {
     println!("{}", "🔄 Updating generated code...".bright_cyan());
@@ -53,11 +53,14 @@ pub async fn run() -> Result<()> {
     if !common_schemas.is_empty() {
         println!("{}", format!("🔨 Regenerating common schemas...").bright_cyan());
         
-        // Generate TypeScript typings for common schemas
-        let common_types = generate_typings(&parsed.openapi, &parsed.schemas, &common_schemas)?;
+        // Shared enum registry to ensure consistent naming between TypeScript and Zod
+        let mut shared_enum_registry = std::collections::HashMap::new();
         
-        // Generate Zod schemas for common schemas
-        let common_zod_schemas = generate_zod_schemas(&parsed.openapi, &parsed.schemas, &common_schemas)?;
+        // Generate TypeScript typings for common schemas
+        let common_types = generate_typings_with_registry(&parsed.openapi, &parsed.schemas, &common_schemas, &mut shared_enum_registry)?;
+        
+        // Generate Zod schemas for common schemas (using same registry)
+        let common_zod_schemas = generate_zod_schemas_with_registry(&parsed.openapi, &parsed.schemas, &common_schemas, &mut shared_enum_registry)?;
         
         // Write common schemas
         let common_files = write_schemas(&schemas_dir, "common", &common_types, &common_zod_schemas)?;
@@ -85,16 +88,19 @@ pub async fn run() -> Result<()> {
             .cloned()
             .unwrap_or_default();
 
+        // Shared enum registry to ensure consistent naming between TypeScript and Zod
+        let mut shared_enum_registry = std::collections::HashMap::new();
+        
         // Generate TypeScript typings
         let types = if !module_schema_names.is_empty() {
-            generate_typings(&parsed.openapi, &parsed.schemas, &module_schema_names)?
+            generate_typings_with_registry(&parsed.openapi, &parsed.schemas, &module_schema_names, &mut shared_enum_registry)?
         } else {
             Vec::new()
         };
 
-        // Generate Zod schemas
+        // Generate Zod schemas (using same registry)
         let zod_schemas = if !module_schema_names.is_empty() {
-            generate_zod_schemas(&parsed.openapi, &parsed.schemas, &module_schema_names)?
+            generate_zod_schemas_with_registry(&parsed.openapi, &parsed.schemas, &module_schema_names, &mut shared_enum_registry)?
         } else {
             Vec::new()
         };

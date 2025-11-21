@@ -53,8 +53,8 @@ fn generate_function_for_operation(
     let response_type = extract_response_type(openapi, operation)?;
     
     // Calculate namespace name for qualified type access
-    // Replace slashes with nothing and convert to PascalCase (e.g., "tenant/auth" -> "TenantAuth")
-    let namespace_name = to_pascal_case(&module_name.replace("/", ""));
+    // Replace slashes with underscore and convert to PascalCase (e.g., "tenant/auth" -> "TenantAuth")
+    let namespace_name = to_pascal_case(&module_name.replace("/", "_"));
 
     // Build function signature
     let mut params = Vec::new();
@@ -78,12 +78,17 @@ fn generate_function_for_operation(
 
     // Add request body (check if it's in common schemas)
     if let Some(body_type) = &request_body {
-        let qualified_body_type = if common_schemas.contains(body_type) {
-            format!("Common.{}", body_type)
+        // Don't qualify "any" type with namespace
+        if body_type == "any" {
+            params.push("body: any".to_string());
         } else {
-            body_type.clone()
-        };
-        params.push(format!("body: {}", qualified_body_type));
+            let qualified_body_type = if common_schemas.contains(body_type) {
+                format!("Common.{}", body_type)
+            } else {
+                format!("{}.{}", namespace_name, body_type)
+            };
+            params.push(format!("body: {}", qualified_body_type));
+        }
     }
 
     let params_str = params.join(", ");

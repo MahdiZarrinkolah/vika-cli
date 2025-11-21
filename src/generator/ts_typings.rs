@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use openapiv3::{OpenAPI, ReferenceOr, Schema, SchemaKind, Type};
 use std::collections::HashMap;
 use crate::generator::swagger_parser::{get_schema_name_from_ref, resolve_ref};
@@ -14,10 +14,17 @@ pub fn generate_typings(
     schemas: &HashMap<String, Schema>,
     schema_names: &[String],
 ) -> Result<Vec<TypeScriptType>> {
+    generate_typings_with_registry(openapi, schemas, schema_names, &mut std::collections::HashMap::new())
+}
+
+pub fn generate_typings_with_registry(
+    openapi: &OpenAPI,
+    schemas: &HashMap<String, Schema>,
+    schema_names: &[String],
+    enum_registry: &mut std::collections::HashMap<String, String>,
+) -> Result<Vec<TypeScriptType>> {
     let mut types = Vec::new();
     let mut processed = std::collections::HashSet::new();
-    // Enum registry: maps enum values (sorted, joined) to enum name
-    let mut enum_registry: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
     for schema_name in schema_names {
         if let Some(schema) = schemas.get(schema_name) {
@@ -27,7 +34,7 @@ pub fn generate_typings(
                 schema,
                 &mut types,
                 &mut processed,
-                &mut enum_registry,
+                enum_registry,
                 None,
             )?;
         }
@@ -69,7 +76,8 @@ fn generate_type_for_schema(
 
     let type_name = to_pascal_case(name);
     
-    // Handle enums
+    // Handle enums at top level (when schema itself is an enum)
+    // Note: For property-level enums, they're handled in schema_to_typescript with context
     if let SchemaKind::Type(Type::String(string_type)) = &schema.schema_kind {
         if !string_type.enumeration.is_empty() {
             let mut enum_values: Vec<String> = string_type.enumeration.iter()
@@ -80,15 +88,45 @@ fn generate_type_for_schema(
                 enum_values.sort();
                 let enum_key = enum_values.join(",");
                 
+                // For top-level enum schemas, use schema name as context if available
+                // But also check the base enum_key to avoid duplicates
+                let context_key = if let Some(parent) = parent_schema_name {
+                    if !parent.is_empty() {
+                        format!("{}:{}", enum_key, parent)
+                    } else {
+                        enum_key.clone()
+                    }
+                } else {
+                    enum_key.clone()
+                };
+                
                 // Check if this enum already exists in registry
-                if enum_registry.contains_key(&enum_key) {
-                    // Enum already generated, skip
+                // First check context_key (for context-aware enums)
+                // Then check base enum_key to deduplicate enums with same values
+                if enum_registry.get(&context_key).is_some() || enum_registry.get(&enum_key).is_some() {
+                    // Enum already generated, skip (don't generate duplicate)
                     return Ok(());
                 }
                 
                 // Generate meaningful enum name
                 let enum_name = if !name.is_empty() {
                     format!("{}Enum", to_pascal_case(name))
+                } else if let Some(parent) = parent_schema_name {
+                    if !parent.is_empty() {
+                        let parent_clean = to_pascal_case(parent)
+                            .trim_end_matches("ResponseDto")
+                            .trim_end_matches("Dto")
+                            .trim_end_matches("Response")
+                            .to_string();
+                        format!("{}Enum", parent_clean)
+                    } else if enum_values.len() > 0 {
+                        let first_value = &enum_values[0];
+                        let base_name = first_value.chars().take(1).collect::<String>().to_uppercase() 
+                            + &first_value.chars().skip(1).collect::<String>();
+                        format!("{}Enum", to_pascal_case(&base_name))
+                    } else {
+                        "UnknownEnum".to_string()
+                    }
                 } else if enum_values.len() > 0 {
                     let first_value = &enum_values[0];
                     let base_name = first_value.chars().take(1).collect::<String>().to_uppercase() 
@@ -98,8 +136,8 @@ fn generate_type_for_schema(
                     "UnknownEnum".to_string()
                 };
                 
-                // Store in registry
-                enum_registry.insert(enum_key, enum_name.clone());
+                // Store in registry using context_key
+                enum_registry.insert(context_key, enum_name.clone());
                 
                 let enum_type = generate_enum_type(&enum_name, &enum_values);
                 types.push(enum_type);
@@ -108,7 +146,8 @@ fn generate_type_for_schema(
         }
     }
     
-    let content = schema_to_typescript(openapi, schema, types, processed, 0, enum_registry, None, parent_schema_name)?;
+    // Pass the current schema name as parent_schema_name for enum context
+    let content = schema_to_typescript(openapi, schema, types, processed, 0, enum_registry, None, Some(name))?;
     
     // Only create interface if it's an object type
     if matches!(&schema.schema_kind, SchemaKind::Type(Type::Object(_))) {
@@ -148,9 +187,30 @@ fn schema_to_typescript(
                         enum_values.sort();
                         let enum_key = enum_values.join(",");
                         
+                        // For generic property names, include context in the key to avoid conflicts
+                        let context_key = if let Some((prop_name, parent_schema)) = context {
+                            let generic_names = ["status", "type", "state", "kind"];
+                            if generic_names.contains(&prop_name.to_lowercase().as_str()) && !parent_schema.is_empty() {
+                                // Include parent schema in key for generic properties to avoid conflicts
+                                format!("{}:{}", enum_key, parent_schema)
+                            } else {
+                                enum_key.clone()
+                            }
+                        } else {
+                            enum_key.clone()
+                        };
+                        
                         // Check registry for existing enum
-                        if let Some(enum_name) = enum_registry.get(&enum_key) {
-                            Ok(enum_name.clone())
+                        // First check context_key (for context-aware enums)
+                        // Then check base enum_key to deduplicate enums with same values
+                        let existing_enum_name = enum_registry.get(&context_key)
+                            .or_else(|| enum_registry.get(&enum_key))
+                            .cloned();
+                        
+                        if let Some(enum_name) = existing_enum_name {
+                            // Store in registry with context_key for future lookups
+                            enum_registry.insert(context_key, enum_name.clone());
+                            Ok(enum_name)
                         } else {
                             // Generate meaningful enum name using context (property name + parent schema) or fallback
                             let enum_name = if let Some((prop_name, parent_schema)) = context {
@@ -172,9 +232,13 @@ fn schema_to_typescript(
                                         .to_string();
                                     
                                     // Check if parent already contains the property name (e.g., "KycStatus" contains "Status")
+                                    // Use case-insensitive matching and check if property name is a suffix or contained
                                     let prop_lower = prop_pascal.to_lowercase();
                                     let parent_lower = parent_clean.to_lowercase();
-                                    if parent_lower.contains(&prop_lower) {
+                                    
+                                    // Check if parent ends with property name (e.g., "KycStatus" ends with "Status")
+                                    // or if property is contained in parent (case-insensitive)
+                                    if parent_lower.ends_with(&prop_lower) || parent_lower.contains(&prop_lower) {
                                         // Parent already contains property name, just use parent + Enum
                                         format!("{}Enum", parent_clean)
                                     } else {
@@ -193,7 +257,10 @@ fn schema_to_typescript(
                             } else {
                                 "UnknownEnum".to_string()
                             };
-                            enum_registry.insert(enum_key, enum_name.clone());
+                            // Store in registry using context_key (includes context for generic properties)
+                            // Also store with base enum_key for deduplication
+                            enum_registry.insert(context_key.clone(), enum_name.clone());
+                            enum_registry.insert(enum_key.clone(), enum_name.clone());
                             
                             // Generate enum type
                             let enum_type = generate_enum_type(&enum_name, &enum_values);
@@ -213,24 +280,16 @@ fn schema_to_typescript(
                         match items {
                             ReferenceOr::Reference { reference } => {
                                 if let Some(ref_name) = get_schema_name_from_ref(&reference) {
-                                    // If already processed, just return the type name to avoid infinite recursion
-                                    if processed.contains(&ref_name) {
-                                        to_pascal_case(&ref_name)
-                                    } else {
-                                        let resolved = resolve_ref(openapi, &reference)
-                                            .context("Failed to resolve schema reference")?;
-                                        if let ReferenceOr::Item(item_schema) = resolved {
-                                            // If it's an object, wrap the fields in braces
-                                            if matches!(&item_schema.schema_kind, SchemaKind::Type(Type::Object(_))) {
-                                                let fields = schema_to_typescript(openapi, &item_schema, types, processed, indent, enum_registry, None, current_schema_name)?;
-                                                format!("{{\n{}{}\n{}}}", indent_str, fields, indent_str)
-                                            } else {
-                                                schema_to_typescript(openapi, &item_schema, types, processed, indent, enum_registry, None, current_schema_name)?
+                                    // For $ref, always use the type name (don't inline)
+                                    // Generate the referenced schema if not already processed
+                                    if !processed.contains(&ref_name) {
+                                        if let Ok(resolved) = resolve_ref(openapi, &reference) {
+                                            if let ReferenceOr::Item(ref_schema) = resolved {
+                                                generate_type_for_schema(openapi, &ref_name, &ref_schema, types, processed, enum_registry, current_schema_name)?;
                                             }
-                                        } else {
-                                            to_pascal_case(&ref_name)
                                         }
                                     }
+                                    to_pascal_case(&ref_name)
                                 } else {
                                     "any".to_string()
                                 }
