@@ -8,6 +8,7 @@ pub struct ParsedSpec {
     pub operations_by_tag: HashMap<String, Vec<OperationInfo>>,
     pub schemas: HashMap<String, Schema>,
     pub module_schemas: HashMap<String, Vec<String>>,
+    pub common_schemas: Vec<String>, // Schemas shared across multiple modules
 }
 
 #[derive(Debug, Clone)]
@@ -36,7 +37,7 @@ pub async fn fetch_and_parse_spec(spec_path: &str) -> Result<ParsedSpec> {
     let modules = extract_modules(&openapi);
     let operations_by_tag = extract_operations_by_tag(&openapi);
     let schemas = extract_schemas(&openapi);
-    let module_schemas = map_modules_to_schemas(&openapi, &operations_by_tag, &schemas)?;
+    let (module_schemas, _) = map_modules_to_schemas(&openapi, &operations_by_tag, &schemas)?;
 
     Ok(ParsedSpec {
         openapi,
@@ -44,6 +45,7 @@ pub async fn fetch_and_parse_spec(spec_path: &str) -> Result<ParsedSpec> {
         operations_by_tag,
         schemas,
         module_schemas,
+        common_schemas: Vec::new(), // Will be filtered based on selected modules
     })
 }
 
@@ -330,13 +332,171 @@ pub fn extract_schemas_for_operation(operation: &Operation, openapi: &OpenAPI) -
     Ok(schema_names)
 }
 
+/// Recursively collect all schema dependencies for a given set of schema names
+pub fn collect_all_dependencies(
+    schema_names: &[String],
+    schemas: &HashMap<String, Schema>,
+    openapi: &OpenAPI,
+) -> Result<Vec<String>> {
+    let mut all_schemas = std::collections::HashSet::new();
+    let mut to_process: Vec<String> = schema_names.to_vec();
+    let mut processed = std::collections::HashSet::new();
+
+    while let Some(schema_name) = to_process.pop() {
+        if processed.contains(&schema_name) {
+            continue;
+        }
+        processed.insert(schema_name.clone());
+        all_schemas.insert(schema_name.clone());
+
+        // Get dependencies of this schema
+        if let Some(schema) = schemas.get(&schema_name) {
+            let deps = extract_schema_dependencies(schema, openapi)?;
+            for dep in deps {
+                if schemas.contains_key(&dep) && !processed.contains(&dep) {
+                    to_process.push(dep);
+                }
+            }
+        }
+    }
+
+    Ok(all_schemas.into_iter().collect())
+}
+
+/// Extract all schema references from a schema
+fn extract_schema_dependencies(schema: &Schema, openapi: &OpenAPI) -> Result<Vec<String>> {
+    let mut deps = Vec::new();
+    let mut visited = std::collections::HashSet::new();
+    extract_schema_refs_recursive(schema, openapi, &mut deps, &mut visited)?;
+    Ok(deps)
+}
+
+fn extract_schema_refs_recursive(
+    schema: &Schema,
+    openapi: &OpenAPI,
+    deps: &mut Vec<String>,
+    visited: &mut std::collections::HashSet<String>,
+) -> Result<()> {
+    match &schema.schema_kind {
+        openapiv3::SchemaKind::Type(type_) => {
+            match type_ {
+                openapiv3::Type::Array(array) => {
+                    if let Some(items) = &array.items {
+                        match items {
+                            ReferenceOr::Reference { reference } => {
+                                if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                    if !visited.contains(&ref_name) {
+                                        visited.insert(ref_name.clone());
+                                        deps.push(ref_name.clone());
+                                        if let Ok(ReferenceOr::Item(dep_schema)) = resolve_ref(openapi, &reference) {
+                                            extract_schema_refs_recursive(&dep_schema, openapi, deps, visited)?;
+                                        }
+                                    }
+                                }
+                            }
+                            ReferenceOr::Item(item_schema) => {
+                                extract_schema_refs_recursive(item_schema, openapi, deps, visited)?;
+                            }
+                        }
+                    }
+                }
+                openapiv3::Type::Object(object_type) => {
+                    for (_, prop_schema_ref) in object_type.properties.iter() {
+                        match prop_schema_ref {
+                            ReferenceOr::Reference { reference } => {
+                                if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                    if !visited.contains(&ref_name) {
+                                        visited.insert(ref_name.clone());
+                                        deps.push(ref_name.clone());
+                                        if let Ok(ReferenceOr::Item(dep_schema)) = resolve_ref(openapi, &reference) {
+                                            extract_schema_refs_recursive(&dep_schema, openapi, deps, visited)?;
+                                        }
+                                    }
+                                }
+                            }
+                            ReferenceOr::Item(prop_schema) => {
+                                extract_schema_refs_recursive(prop_schema, openapi, deps, visited)?;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        openapiv3::SchemaKind::OneOf { one_of, .. } => {
+            for item in one_of {
+                match item {
+                    ReferenceOr::Reference { reference } => {
+                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                            if !visited.contains(&ref_name) {
+                                visited.insert(ref_name.clone());
+                                deps.push(ref_name.clone());
+                                if let Ok(ReferenceOr::Item(dep_schema)) = resolve_ref(openapi, &reference) {
+                                    extract_schema_refs_recursive(&dep_schema, openapi, deps, visited)?;
+                                }
+                            }
+                        }
+                    }
+                    ReferenceOr::Item(item_schema) => {
+                        extract_schema_refs_recursive(item_schema, openapi, deps, visited)?;
+                    }
+                }
+            }
+        }
+        openapiv3::SchemaKind::AllOf { all_of, .. } => {
+            for item in all_of {
+                match item {
+                    ReferenceOr::Reference { reference } => {
+                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                            if !visited.contains(&ref_name) {
+                                visited.insert(ref_name.clone());
+                                deps.push(ref_name.clone());
+                                if let Ok(ReferenceOr::Item(dep_schema)) = resolve_ref(openapi, &reference) {
+                                    extract_schema_refs_recursive(&dep_schema, openapi, deps, visited)?;
+                                }
+                            }
+                        }
+                    }
+                    ReferenceOr::Item(item_schema) => {
+                        extract_schema_refs_recursive(item_schema, openapi, deps, visited)?;
+                    }
+                }
+            }
+        }
+        openapiv3::SchemaKind::AnyOf { any_of, .. } => {
+            for item in any_of {
+                match item {
+                    ReferenceOr::Reference { reference } => {
+                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                            if !visited.contains(&ref_name) {
+                                visited.insert(ref_name.clone());
+                                deps.push(ref_name.clone());
+                                if let Ok(ReferenceOr::Item(dep_schema)) = resolve_ref(openapi, &reference) {
+                                    extract_schema_refs_recursive(&dep_schema, openapi, deps, visited)?;
+                                }
+                            }
+                        }
+                    }
+                    ReferenceOr::Item(item_schema) => {
+                        extract_schema_refs_recursive(item_schema, openapi, deps, visited)?;
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 pub fn map_modules_to_schemas(
     openapi: &OpenAPI,
     operations_by_tag: &HashMap<String, Vec<OperationInfo>>,
     schemas: &HashMap<String, Schema>,
-) -> Result<HashMap<String, Vec<String>>> {
+) -> Result<(HashMap<String, Vec<String>>, Vec<String>)> {
     let mut module_schemas: HashMap<String, Vec<String>> = HashMap::new();
+    let mut schema_usage: HashMap<String, Vec<String>> = HashMap::new(); // Track which modules use each schema
 
+    // First pass: collect all schemas per module
     for (module, operations) in operations_by_tag {
         let mut module_schema_set = std::collections::HashSet::new();
 
@@ -344,14 +504,80 @@ pub fn map_modules_to_schemas(
             let op_schemas = extract_schemas_for_operation(&op_info.operation, openapi)?;
             for schema_name in op_schemas {
                 if schemas.contains_key(&schema_name) {
-                    module_schema_set.insert(schema_name);
+                    module_schema_set.insert(schema_name.clone());
+                    // Track schema usage
+                    schema_usage.entry(schema_name.clone())
+                        .or_insert_with(Vec::new)
+                        .push(module.clone());
                 }
             }
         }
 
-        module_schemas.insert(module.clone(), module_schema_set.into_iter().collect());
+        // Collect all dependencies for the schemas used by this module
+        let initial_schemas: Vec<String> = module_schema_set.into_iter().collect();
+        let all_dependencies = collect_all_dependencies(&initial_schemas, schemas, openapi)?;
+        
+        // Track dependencies usage too
+        for dep in &all_dependencies {
+            schema_usage.entry(dep.clone())
+                .or_insert_with(Vec::new)
+                .push(module.clone());
+        }
+        
+        module_schemas.insert(module.clone(), all_dependencies);
     }
 
-    Ok(module_schemas)
+    // Return without filtering - filtering will be done based on selected modules
+    Ok((module_schemas, Vec::new()))
+}
+
+/// Filter common schemas based on selected modules only
+/// Only creates common schemas when 2+ modules are selected
+pub fn filter_common_schemas(
+    module_schemas: &HashMap<String, Vec<String>>,
+    selected_modules: &[String],
+) -> (HashMap<String, Vec<String>>, Vec<String>) {
+    let mut filtered_module_schemas = module_schemas.clone();
+    
+    // Only create common module if 2+ modules are selected
+    if selected_modules.len() < 2 {
+        return (filtered_module_schemas, Vec::new());
+    }
+    
+    let mut schema_usage: HashMap<String, Vec<String>> = HashMap::new();
+    
+    // Track schema usage only for selected modules
+    for module in selected_modules {
+        if let Some(schemas) = filtered_module_schemas.get(module) {
+            for schema_name in schemas {
+                schema_usage.entry(schema_name.clone())
+                    .or_insert_with(Vec::new)
+                    .push(module.clone());
+            }
+        }
+    }
+    
+    // Identify shared schemas (used by 2+ selected modules)
+    // Only include schemas that are used by ALL selected modules or at least 2 of them
+    let mut shared_schemas = std::collections::HashSet::new();
+    for (schema_name, modules_using_it) in &schema_usage {
+        // Count unique modules using this schema
+        let unique_modules: std::collections::HashSet<String> = modules_using_it.iter().cloned().collect();
+        if unique_modules.len() >= 2 {
+            shared_schemas.insert(schema_name.clone());
+        }
+    }
+    
+    // Remove shared schemas from individual selected modules
+    let common_schemas: Vec<String> = shared_schemas.iter().cloned().collect();
+    if !shared_schemas.is_empty() {
+        for module in selected_modules {
+            if let Some(module_schema_list) = filtered_module_schemas.get_mut(module) {
+                module_schema_list.retain(|s| !shared_schemas.contains(s));
+            }
+        }
+    }
+    
+    (filtered_module_schemas, common_schemas)
 }
 

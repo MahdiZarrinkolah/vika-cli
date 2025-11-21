@@ -11,11 +11,13 @@ pub struct ApiFunction {
 pub fn generate_api_client(
     openapi: &OpenAPI,
     operations: &[OperationInfo],
+    module_name: &str,
+    common_schemas: &[String],
 ) -> Result<Vec<ApiFunction>> {
     let mut functions = Vec::new();
 
     for op_info in operations {
-        let func = generate_function_for_operation(openapi, op_info)?;
+        let func = generate_function_for_operation(openapi, op_info, module_name, common_schemas)?;
         functions.push(func);
     }
 
@@ -25,6 +27,8 @@ pub fn generate_api_client(
 fn generate_function_for_operation(
     openapi: &OpenAPI,
     op_info: &OperationInfo,
+    module_name: &str,
+    common_schemas: &[String],
 ) -> Result<ApiFunction> {
     let operation = &op_info.operation;
     let method = op_info.method.to_lowercase();
@@ -47,6 +51,10 @@ fn generate_function_for_operation(
     
     // Extract response type
     let response_type = extract_response_type(openapi, operation)?;
+    
+    // Calculate namespace name for qualified type access
+    // Replace slashes with nothing and convert to PascalCase (e.g., "tenant/auth" -> "TenantAuth")
+    let namespace_name = to_pascal_case(&module_name.replace("/", ""));
 
     // Build function signature
     let mut params = Vec::new();
@@ -68,9 +76,14 @@ fn generate_function_for_operation(
         params.push(format!("query?: {}", query_type));
     }
 
-    // Add request body
+    // Add request body (check if it's in common schemas)
     if let Some(body_type) = &request_body {
-        params.push(format!("body: {}", body_type));
+        let qualified_body_type = if common_schemas.contains(body_type) {
+            format!("Common.{}", body_type)
+        } else {
+            body_type.clone()
+        };
+        params.push(format!("body: {}", qualified_body_type));
     }
 
     let params_str = params.join(", ");
@@ -106,35 +119,68 @@ fn generate_function_for_operation(
         _ => "get",
     };
     
+    // Use qualified type for generic parameter (check if it's common or module-specific)
+    let qualified_response_type_for_generic = if response_type != "any" {
+        let is_common = common_schemas.contains(&response_type);
+        if is_common {
+            format!("Common.{}", response_type)
+        } else {
+            format!("{}.{}", namespace_name, response_type)
+        }
+    } else {
+        response_type.clone()
+    };
+    
     if let Some(_body_type) = &request_body {
         body_lines.push(format!("    return http.{}(url, body);", http_method));
     } else {
-        body_lines.push(format!("    return http.{}<{}>(url);", http_method, response_type));
+        body_lines.push(format!("    return http.{}<{}>(url);", http_method, qualified_response_type_for_generic));
     }
-
-    let function_body = body_lines.join("\n");
-    
-    let return_type = if response_type == "any" {
-        String::new()
-    } else {
-        format!(": Promise<{}>", response_type)
-    };
 
     // HTTP client is at apis/http.ts, and we're generating apis/<module>/index.ts
     // So the relative path is ../http
     let http_import = "../http";
     
+    // Determine if response type is in common schemas or module-specific
+    let (type_imports, qualified_type) = if response_type != "any" {
+        let is_common = common_schemas.contains(&response_type);
+        if is_common {
+            // Import from common module
+            let common_import = "../../schemas/common";
+            let common_namespace = "Common";
+            let imports = format!("import * as {} from \"{}\";\n", common_namespace, common_import);
+            let qualified = format!("{}.{}", common_namespace, response_type);
+            (imports, qualified)
+        } else {
+            // Import from module-specific schemas
+            let schemas_import = format!("../../schemas/{}", module_name);
+            let imports = format!("import * as {} from \"{}\";\n", namespace_name, schemas_import);
+            let qualified = format!("{}.{}", namespace_name, response_type);
+            (imports, qualified)
+        }
+    } else {
+        (String::new(), String::new())
+    };
+    
+    let return_type = if response_type == "any" {
+        String::new()
+    } else {
+        format!(": Promise<{}>", qualified_type)
+    };
+    
+    let function_body = body_lines.join("\n");
+    
     let content = if params_str.is_empty() {
         format!(
-            "import {{ http }} from \"{}\";\n\n\
+            "import {{ http }} from \"{}\";\n{}\
             export const {} = async (){} => {{\n{}\n}};",
-            http_import, func_name, return_type, function_body
+            http_import, type_imports, func_name, return_type, function_body
         )
     } else {
         format!(
-            "import {{ http }} from \"{}\";\n\n\
+            "import {{ http }} from \"{}\";\n{}\
             export const {} = async ({}){} => {{\n{}\n}};",
-            http_import, func_name, params_str, return_type, function_body
+            http_import, type_imports, func_name, params_str, return_type, function_body
         )
     };
 

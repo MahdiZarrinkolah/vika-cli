@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::generator::api_client::ApiFunction;
 use crate::generator::ts_typings::TypeScriptType;
 use crate::generator::zod_schema::ZodSchema;
+use crate::generator::utils::to_pascal_case;
 
 pub fn ensure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
@@ -53,7 +54,7 @@ pub fn write_schemas(
         written_files.push(zod_file);
     }
 
-    // Write index file
+    // Write index file with namespace export for better organization
     let mut index_exports = Vec::new();
     if !types.is_empty() {
         index_exports.push("export * from \"./types\";".to_string());
@@ -63,6 +64,9 @@ pub fn write_schemas(
     }
 
     if !index_exports.is_empty() {
+        // Write index file with regular exports
+        // Note: TypeScript namespaces cannot use export *, so we use regular exports
+        // and import as namespace in API clients for better organization
         let index_content = format_typescript_code(&(index_exports.join("\n") + "\n"));
         let index_file = module_dir.join("index.ts");
         write_file_safe(&index_file, &index_content)?;
@@ -83,13 +87,42 @@ pub fn write_api_client(
     let mut written_files = Vec::new();
 
     if !functions.is_empty() {
-        let functions_content = format_typescript_code(&format!(
-            "{}",
-            functions.iter()
-                .map(|f| f.content.clone())
-                .collect::<Vec<_>>()
-                .join("\n\n")
-        ));
+        // Consolidate imports: extract all imports and deduplicate them
+        let mut all_imports: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut function_bodies = Vec::new();
+        
+        for func in functions {
+            let lines: Vec<&str> = func.content.lines().collect();
+            let mut func_lines = Vec::new();
+            let mut in_function = false;
+            
+            for line in lines {
+                if line.trim().starts_with("import ") {
+                    all_imports.insert(line.trim().to_string());
+                } else if line.trim().starts_with("export const ") {
+                    in_function = true;
+                    func_lines.push(line);
+                } else if in_function {
+                    func_lines.push(line);
+                }
+            }
+            
+            if !func_lines.is_empty() {
+                function_bodies.push(func_lines.join("\n"));
+            }
+        }
+        
+        // Combine imports and function bodies
+        let imports_vec: Vec<String> = all_imports.iter().cloned().collect();
+        let imports_str = imports_vec.join("\n");
+        let functions_str = function_bodies.join("\n\n");
+        let combined_content = if !imports_str.is_empty() {
+            format!("{}\n\n{}", imports_str, functions_str)
+        } else {
+            functions_str
+        };
+        
+        let functions_content = format_typescript_code(&combined_content);
 
         let api_file = module_dir.join("index.ts");
         write_file_safe(&api_file, &functions_content)?;

@@ -5,7 +5,7 @@ use crate::config::loader::{load_config, save_config};
 use crate::config::validator::validate_config;
 use crate::generator::api_client::generate_api_client;
 use crate::generator::module_selector::select_modules;
-use crate::generator::swagger_parser::fetch_and_parse_spec;
+use crate::generator::swagger_parser::{fetch_and_parse_spec, filter_common_schemas};
 use crate::generator::ts_typings::generate_typings;
 use crate::generator::writer::{write_api_client, write_schemas};
 use crate::generator::zod_schema::generate_zod_schemas;
@@ -49,12 +49,39 @@ pub async fn run(spec: Option<String>) -> Result<()> {
     config.modules.selected = selected_modules.clone();
     save_config(&config)?;
 
+    // Filter common schemas based on selected modules only
+    let (filtered_module_schemas, common_schemas) = filter_common_schemas(&parsed.module_schemas, &selected_modules);
+
     // Generate code for each module
     let schemas_dir = PathBuf::from(&config.schemas.output);
     let apis_dir = PathBuf::from(&config.apis.output);
 
+    // Ensure http.ts file exists
+    let http_file = apis_dir.join("http.ts");
+    if !http_file.exists() {
+        use crate::generator::writer::write_http_client_template;
+        write_http_client_template(&http_file)?;
+        println!("{}", format!("✅ Created {}", http_file.display()).green());
+    }
+
     let mut total_files = 0;
     let mut module_summary: Vec<(String, usize)> = Vec::new();
+
+    // Generate common module first if there are shared schemas
+    if !common_schemas.is_empty() {
+        println!("{}", format!("🔨 Generating common schemas...").bright_cyan());
+        
+        // Generate TypeScript typings for common schemas
+        let common_types = generate_typings(&parsed.openapi, &parsed.schemas, &parsed.common_schemas)?;
+        
+        // Generate Zod schemas for common schemas
+        let common_zod_schemas = generate_zod_schemas(&parsed.openapi, &parsed.schemas, &parsed.common_schemas)?;
+        
+        // Write common schemas
+        let common_files = write_schemas(&schemas_dir, "common", &common_types, &common_zod_schemas)?;
+        total_files += common_files.len();
+        module_summary.push(("common".to_string(), common_files.len()));
+    }
 
     for module in &selected_modules {
         println!("{}", format!("🔨 Generating code for module: {}", module).bright_cyan());
@@ -70,8 +97,8 @@ pub async fn run(spec: Option<String>) -> Result<()> {
             continue;
         }
 
-        // Get schema names used by this module
-        let module_schema_names = parsed.module_schemas
+        // Get schema names used by this module (from filtered schemas)
+        let module_schema_names = filtered_module_schemas
             .get(module)
             .cloned()
             .unwrap_or_default();
@@ -91,7 +118,7 @@ pub async fn run(spec: Option<String>) -> Result<()> {
         };
 
         // Generate API client
-        let api_functions = generate_api_client(&parsed.openapi, &operations)?;
+        let api_functions = generate_api_client(&parsed.openapi, &operations, module, &common_schemas)?;
 
         // Write schemas
         let schema_files = write_schemas(&schemas_dir, module, &types, &zod_schemas)?;
