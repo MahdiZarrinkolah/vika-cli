@@ -1,6 +1,9 @@
 # vika-cli
 
-A Rust-based CLI tool that generates TypeScript typings, Zod schemas, and Fetch-based API clients from Swagger/OpenAPI specifications.
+A production-grade Rust CLI tool that generates TypeScript typings, Zod schemas, and Fetch-based API clients from Swagger/OpenAPI specifications.
+
+[![CI](https://github.com/MahdiZarrinkolah/vika-cli/workflows/CI/badge.svg)](https://github.com/MahdiZarrinkolah/vika-cli/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Features
 
@@ -20,17 +23,40 @@ A Rust-based CLI tool that generates TypeScript typings, Zod schemas, and Fetch-
 
 ## Installation
 
+### Quick Install (macOS/Linux)
+
 ```bash
-cargo install --path .
+curl -fsSL https://github.com/MahdiZarrinkolah/vika-cli/releases/latest/download/install.sh | sh
 ```
 
-Or build from source:
+### Windows (PowerShell)
+
+```powershell
+irm https://github.com/MahdiZarrinkolah/vika-cli/releases/latest/download/install.ps1 | iex
+```
+
+### Cargo
 
 ```bash
+cargo install vika-cli
+```
+
+### Homebrew (macOS)
+
+```bash
+brew tap MahdiZarrinkolah/vika
+brew install vika-cli
+```
+
+### Build from Source
+
+```bash
+git clone https://github.com/MahdiZarrinkolah/vika-cli.git
+cd vika
 cargo build --release
 ```
 
-## Usage
+## Getting Started
 
 ### 1. Initialize a project
 
@@ -95,6 +121,27 @@ vika-cli inspect --spec ./swagger.yaml --module products --schemas
 vika-cli inspect --spec ./swagger.yaml --json
 ```
 
+## How Generation Works
+
+`vika-cli` follows a multi-stage generation pipeline:
+
+1. **Spec Parsing**: Fetches and parses OpenAPI/Swagger specifications (supports JSON and YAML)
+2. **Module Extraction**: Groups endpoints by tags, creating logical modules
+3. **Schema Resolution**: Resolves `$ref` references and builds dependency graphs
+4. **Type Generation**: Converts OpenAPI schemas to TypeScript interfaces
+5. **Zod Generation**: Creates Zod validation schemas from OpenAPI constraints
+6. **API Client Generation**: Generates type-safe Fetch-based API functions
+7. **File Writing**: Writes generated code with conflict detection and backup support
+
+The generator handles:
+- Circular dependencies (detected and handled gracefully)
+- Deep nesting (unlimited depth)
+- Union types (`oneOf`, `anyOf`)
+- AllOf composition
+- Enums and string constraints
+- Optional vs required fields
+- Nullable types
+
 ## Configuration
 
 The `.vika.json` configuration file:
@@ -128,6 +175,8 @@ The `.vika.json` configuration file:
 - `apis.baseUrl`: Base URL prefix for API endpoints (supports `${ENV_VAR}` substitution)
 - `apis.headerStrategy`: Header generation strategy (`bearerToken`, `fixed`, `consumerInjected`)
 - `modules.ignore`: List of module tags to ignore during generation
+
+See [docs/configuration.md](docs/configuration.md) for complete configuration reference.
 
 ## Generated Code Structure
 
@@ -179,6 +228,33 @@ export const getProduct = async (id: string): Promise<ProductDto> => {
 };
 ```
 
+## Customizing Output
+
+### Template System
+
+`vika-cli` uses templates for code generation. Templates are located in `src/templates/`:
+
+- `http_client.ts`: HTTP client utility template
+- `index.ts`: Barrel export template
+
+To customize output, you can modify these templates. See [docs/templates.md](docs/templates.md) for details.
+
+### Naming Conventions
+
+Control how schemas are named using the `schemas.naming` config option:
+
+- `PascalCase`: `UserProfile` (default)
+- `camelCase`: `userProfile`
+- `snake_case`: `user_profile`
+
+### Header Strategies
+
+Configure how authentication headers are generated:
+
+- `bearerToken`: Adds `Authorization: Bearer ${token}` header
+- `fixed`: Adds fixed headers from config
+- `consumerInjected`: Expects headers to be injected by consumer
+
 ## Advanced Features
 
 ### Caching
@@ -215,6 +291,77 @@ All errors are structured and provide clear messages. Common error types:
 - Network errors (fetch failures, invalid URLs)
 - File system errors (permission denied, disk full)
 
+## Examples
+
+### Real-World Usage
+
+```bash
+# Generate from remote API
+vika-cli generate --spec https://api.example.com/openapi.json --cache
+
+# Generate specific modules only
+vika-cli generate --spec ./swagger.yaml
+# Then select modules interactively
+
+# Update after API changes
+vika-cli update --force
+
+# Inspect before generating
+vika-cli inspect --spec ./swagger.yaml --json
+```
+
+See [docs/getting-started.md](docs/getting-started.md) for more examples.
+
+## Troubleshooting
+
+### Common Issues
+
+**Problem**: "Spec path required" error
+- **Solution**: Ensure you provide `--spec` flag or set `spec_path` in `.vika.json`
+
+**Problem**: Circular dependency warnings
+- **Solution**: This is handled automatically. The generator uses lazy references for circular deps.
+
+**Problem**: Generated files conflict with user modifications
+- **Solution**: Use `--force` to overwrite, or `--backup` to create backups first
+
+**Problem**: Network errors when fetching remote specs
+- **Solution**: Check your internet connection, or use `--cache` with a previously cached spec
+
+See [docs/troubleshooting.md](docs/troubleshooting.md) for more solutions.
+
+## Architecture
+
+`vika-cli` is built with a modular architecture:
+
+- **CLI Layer**: Command parsing and user interaction (`src/cli.rs`, `src/commands/`)
+- **Generator Core**: Code generation logic (`src/generator/`)
+- **Config System**: Configuration management (`src/config/`)
+- **Error Handling**: Structured error types (`src/error.rs`)
+- **Utilities**: Caching, progress reporting, formatting (`src/cache.rs`, `src/progress.rs`, `src/formatter.rs`)
+
+See [docs/architecture.md](docs/architecture.md) for detailed architecture documentation.
+
+## Versioning
+
+`vika-cli` follows [Semantic Versioning](https://semver.org/):
+
+- **Major (x.0.0)**: Breaking changes to generated code format, CLI interface changes
+- **Minor (0.x.0)**: New features, new generation options, backward-compatible additions
+- **Patch (0.0.x)**: Bug fixes, performance improvements, documentation updates
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
+
+## Contributing
+
+Contributions are welcome! Please see [docs/contributing.md](docs/contributing.md) for guidelines.
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
+
 ## Requirements
 
 - Rust 1.70+ (for building)
@@ -224,3 +371,8 @@ All errors are structured and provide clear messages. Common error types:
 
 MIT
 
+## Links
+
+- [GitHub Repository](https://github.com/MahdiZarrinkolah/vika-cli)
+- [Documentation](docs/)
+- [Issue Tracker](https://github.com/MahdiZarrinkolah/vika-cli/issues)

@@ -8,4 +8,6 @@ temp
 swagger-*.json
 .vika-cache
 .vika-backup
-.vika-cache
+
+# Insta snapshot testing - ignore pending/unreviewed snapshots
+*.snap.new
