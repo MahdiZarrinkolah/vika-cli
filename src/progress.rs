@@ -1,5 +1,5 @@
-use indicatif::{ProgressBar, ProgressStyle};
 use colored::Colorize;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::sync::Arc;
 
 pub struct ProgressReporter {
@@ -21,7 +21,7 @@ impl ProgressReporter {
             pb.set_style(
                 ProgressStyle::default_spinner()
                     .template("{spinner:.cyan} {msg}")
-                    .unwrap()
+                    .unwrap(),
             );
             pb.set_message(message.to_string());
             pb.enable_steady_tick(std::time::Duration::from_millis(100));

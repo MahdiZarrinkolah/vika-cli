@@ -227,4 +227,3 @@ mod tests {
         assert!(error_msg.contains("Config error"));
     }
 }
-

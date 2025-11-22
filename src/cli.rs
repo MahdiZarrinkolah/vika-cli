@@ -52,4 +52,3 @@ pub enum Commands {
         json: bool,
     },
 }
-

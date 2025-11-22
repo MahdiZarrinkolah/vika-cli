@@ -1,7 +1,7 @@
 pub fn to_pascal_case(s: &str) -> String {
     let mut result = String::new();
     let mut capitalize_next = true;
-    
+
     for c in s.chars() {
         if c == '_' || c == '-' || c == ' ' {
             capitalize_next = true;
@@ -12,7 +12,7 @@ pub fn to_pascal_case(s: &str) -> String {
             result.push(c);
         }
     }
-    
+
     result
 }
 
@@ -21,7 +21,7 @@ pub fn to_camel_case(s: &str) -> String {
     if pascal.is_empty() {
         return pascal;
     }
-    
+
     let mut chars = pascal.chars();
     let first = chars.next().unwrap().to_lowercase().next().unwrap();
     format!("{}{}", first, chars.as_str())
@@ -104,4 +104,3 @@ mod tests {
         assert_eq!(to_camel_case("hello_world-test"), "helloWorldTest");
     }
 }
-

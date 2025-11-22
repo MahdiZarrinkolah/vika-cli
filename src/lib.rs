@@ -8,5 +8,4 @@ pub mod generator;
 pub mod progress;
 
 pub use config::model::Config;
-pub use error::{VikaError, Result};
-
+pub use error::{Result, VikaError};

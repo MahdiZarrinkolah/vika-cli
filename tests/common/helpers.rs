@@ -15,7 +15,12 @@ pub fn create_temp_dir() -> TempDir {
 pub fn assert_file_contents(path: &Path, expected: &str) {
     let content = std::fs::read_to_string(path)
         .unwrap_or_else(|_| panic!("Failed to read file: {}", path.display()));
-    assert_eq!(content.trim(), expected.trim(), "File contents don't match for {}", path.display());
+    assert_eq!(
+        content.trim(),
+        expected.trim(),
+        "File contents don't match for {}",
+        path.display()
+    );
 }
 
 /// Create a mock config for testing
@@ -61,7 +66,10 @@ pub fn cleanup_test_env(_dir: TempDir) {
 
 /// Assert error type matches expected
 #[allow(dead_code)]
-pub fn assert_error_type<T: std::fmt::Display>(result: Result<T, vika_cli::error::VikaError>, expected_error: &str) {
+pub fn assert_error_type<T: std::fmt::Display>(
+    result: Result<T, vika_cli::error::VikaError>,
+    expected_error: &str,
+) {
     match result {
         Ok(_) => panic!("Expected error but got Ok"),
         Err(e) => {
@@ -96,4 +104,3 @@ pub fn minimal_spec_json() -> &'static str {
     }
     "#
 }
-

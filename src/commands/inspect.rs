@@ -13,16 +13,22 @@ struct ModuleInfo {
     schemas: usize,
 }
 
-pub async fn run(spec: Option<String>, module: Option<String>, schemas: bool, _graph: bool, json: bool) -> Result<()> {
+pub async fn run(
+    spec: Option<String>,
+    module: Option<String>,
+    schemas: bool,
+    _graph: bool,
+    json: bool,
+) -> Result<()> {
     use crate::error::GenerationError;
-    
+
     let spec_path = spec.ok_or_else(|| GenerationError::SpecPathRequired)?;
-    
+
     println!("{}", "🔍 Inspecting OpenAPI spec...".bright_cyan());
     println!();
-    
+
     let parsed = fetch_and_parse_spec(&spec_path).await?;
-    
+
     if json {
         // JSON output
         let output = serde_json::json!({
@@ -39,18 +45,29 @@ pub async fn run(spec: Option<String>, module: Option<String>, schemas: bool, _g
                 })
             }).collect::<Vec<_>>()
         });
-        println!("{}", serde_json::to_string_pretty(&output)
-            .map_err(|e| crate::error::GenerationError::InvalidOperation {
-                message: format!("Failed to serialize JSON: {}", e),
-            })?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&output).map_err(|e| {
+                crate::error::GenerationError::InvalidOperation {
+                    message: format!("Failed to serialize JSON: {}", e),
+                }
+            })?
+        );
     } else {
         // Human-readable output
         println!("{}", format!("📊 Spec Summary:").bright_cyan());
         println!("  • Total modules: {}", parsed.modules.len());
-        println!("  • Total endpoints: {}", parsed.operations_by_tag.values().map(|v| v.len()).sum::<usize>());
+        println!(
+            "  • Total endpoints: {}",
+            parsed
+                .operations_by_tag
+                .values()
+                .map(|v| v.len())
+                .sum::<usize>()
+        );
         println!("  • Total schemas: {}", parsed.schemas.len());
         println!();
-        
+
         if let Some(module_name) = module {
             // Show details for specific module
             if let Some(operations) = parsed.operations_by_tag.get(&module_name) {
@@ -66,14 +83,22 @@ pub async fn run(spec: Option<String>, module: Option<String>, schemas: bool, _g
                     }
                 }
             } else {
-                println!("{}", format!("⚠️  Module '{}' not found", module_name).yellow());
+                println!(
+                    "{}",
+                    format!("⚠️  Module '{}' not found", module_name).yellow()
+                );
             }
         } else {
             // Show all modules
-            let table_data: Vec<ModuleInfo> = parsed.modules
+            let table_data: Vec<ModuleInfo> = parsed
+                .modules
                 .iter()
                 .map(|m| {
-                    let endpoints = parsed.operations_by_tag.get(m).map(|v| v.len()).unwrap_or(0);
+                    let endpoints = parsed
+                        .operations_by_tag
+                        .get(m)
+                        .map(|v| v.len())
+                        .unwrap_or(0);
                     let schemas_count = parsed.module_schemas.get(m).map(|v| v.len()).unwrap_or(0);
                     ModuleInfo {
                         module: m.clone(),
@@ -82,13 +107,12 @@ pub async fn run(spec: Option<String>, module: Option<String>, schemas: bool, _g
                     }
                 })
                 .collect();
-            
+
             let table = Table::new(table_data);
             println!("{}", "📦 Modules:".bright_cyan());
             println!("{}", table);
         }
     }
-    
+
     Ok(())
 }
-

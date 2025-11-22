@@ -4,25 +4,26 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     #[serde(rename = "$schema", default = "default_schema")]
     pub schema: String,
-    
+
     #[serde(default = "default_root_dir")]
     pub root_dir: String,
-    
+
     #[serde(default)]
     pub schemas: SchemasConfig,
-    
+
     #[serde(default)]
     pub apis: ApisConfig,
-    
+
     #[serde(default)]
     pub modules: ModulesConfig,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spec_path: Option<String>,
 }
 
 pub fn default_schema() -> String {
-    "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json".to_string()
+    "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json"
+        .to_string()
 }
 
 fn default_root_dir() -> String {
@@ -33,7 +34,7 @@ fn default_root_dir() -> String {
 pub struct SchemasConfig {
     #[serde(default = "default_schemas_output")]
     pub output: String,
-    
+
     #[serde(default = "default_naming")]
     pub naming: String,
 }
@@ -50,13 +51,13 @@ fn default_schemas_output() -> String {
 pub struct ApisConfig {
     #[serde(default = "default_apis_output")]
     pub output: String,
-    
+
     #[serde(default = "default_style")]
     pub style: String,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
-    
+
     #[serde(default = "default_header_strategy")]
     pub header_strategy: String,
 }
@@ -77,7 +78,7 @@ fn default_style() -> String {
 pub struct ModulesConfig {
     #[serde(default)]
     pub ignore: Vec<String>,
-    
+
     #[serde(default)]
     pub selected: Vec<String>,
 }
@@ -153,7 +154,7 @@ mod tests {
     fn test_config_serialization() {
         let config = Config::default();
         let json = serde_json::to_string_pretty(&config).unwrap();
-        
+
         assert!(json.contains("\"root_dir\""));
         assert!(json.contains("\"schemas\""));
         assert!(json.contains("\"apis\""));
@@ -181,7 +182,7 @@ mod tests {
             }
         }
         "#;
-        
+
         let config: Config = serde_json::from_str(json).unwrap();
         assert_eq!(config.root_dir, "test");
         assert_eq!(config.schemas.output, "test/schemas");
@@ -194,7 +195,7 @@ mod tests {
     fn test_config_with_base_url() {
         let mut config = Config::default();
         config.apis.base_url = Some("/api/v1".to_string());
-        
+
         let json = serde_json::to_string_pretty(&config).unwrap();
         assert!(json.contains("\"base_url\""));
         assert!(json.contains("/api/v1"));
@@ -204,9 +205,8 @@ mod tests {
     fn test_config_schema_field() {
         let config = Config::default();
         let json = serde_json::to_string_pretty(&config).unwrap();
-        
+
         // Check that $schema is included
         assert!(json.contains("\"$schema\""));
     }
 }
-

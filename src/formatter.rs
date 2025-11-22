@@ -15,12 +15,12 @@ impl FormatterManager {
         if Self::has_prettier() {
             return Some(Formatter::Prettier);
         }
-        
+
         // Check for biome
         if Self::has_biome() {
             return Some(Formatter::Biome);
         }
-        
+
         None
     }
 
@@ -33,7 +33,7 @@ impl FormatterManager {
                 }
             }
         }
-        
+
         // Check for prettier config files
         Path::new(".prettierrc").exists()
             || Path::new(".prettierrc.json").exists()
@@ -43,8 +43,7 @@ impl FormatterManager {
 
     fn has_biome() -> bool {
         // Check for biome.json
-        Path::new("biome.json").exists()
-            || Path::new("biome.jsonc").exists()
+        Path::new("biome.json").exists() || Path::new("biome.jsonc").exists()
     }
 
     pub fn format_files(files: &[std::path::PathBuf], formatter: Formatter) -> Result<()> {
@@ -107,4 +106,3 @@ impl FormatterManager {
         }
     }
 }
-

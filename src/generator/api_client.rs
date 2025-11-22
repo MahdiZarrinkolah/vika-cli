@@ -1,8 +1,11 @@
 use crate::error::Result;
-use openapiv3::{Operation, Parameter, ReferenceOr};
-use crate::generator::swagger_parser::{get_schema_name_from_ref, OperationInfo, resolve_parameter_ref, resolve_request_body_ref, resolve_response_ref};
+use crate::generator::swagger_parser::{
+    get_schema_name_from_ref, resolve_parameter_ref, resolve_request_body_ref,
+    resolve_response_ref, OperationInfo,
+};
 use crate::generator::utils::{to_camel_case, to_pascal_case};
 use openapiv3::OpenAPI;
+use openapiv3::{Operation, Parameter, ReferenceOr};
 
 pub struct ApiFunction {
     pub content: String,
@@ -32,7 +35,7 @@ fn generate_function_for_operation(
 ) -> Result<ApiFunction> {
     let operation = &op_info.operation;
     let method = op_info.method.to_lowercase();
-    
+
     // Generate function name from operation ID or path
     let func_name = if let Some(operation_id) = &operation.operation_id {
         to_camel_case(operation_id)
@@ -42,16 +45,16 @@ fn generate_function_for_operation(
 
     // Extract path parameters
     let path_params = extract_path_parameters(openapi, operation)?;
-    
+
     // Extract query parameters
     let query_params = extract_query_parameters(openapi, operation)?;
-    
+
     // Extract request body
     let request_body = extract_request_body(openapi, operation)?;
-    
+
     // Extract response type
     let response_type = extract_response_type(openapi, operation)?;
-    
+
     // Calculate namespace name for qualified type access
     // Replace slashes with underscore and convert to PascalCase (e.g., "tenant/auth" -> "TenantAuth")
     let namespace_name = to_pascal_case(&module_name.replace("/", "_"));
@@ -63,7 +66,8 @@ fn generate_function_for_operation(
     // Add path parameters
     for param in &path_params {
         params.push(format!("{}: string", param));
-        path_template = path_template.replace(&format!("{{{}}}", param), &format!("${{{}}}", param));
+        path_template =
+            path_template.replace(&format!("{{{}}}", param), &format!("${{{}}}", param));
     }
 
     // Add query parameters
@@ -95,21 +99,27 @@ fn generate_function_for_operation(
 
     // Build function body
     let mut body_lines = Vec::new();
-    
+
     // Build URL with path parameters
     let mut url_template = op_info.path.clone();
     for param in &path_params {
         url_template = url_template.replace(&format!("{{{}}}", param), &format!("${{{}}}", param));
     }
-    
+
     // Build URL with query parameters
     if !query_params.is_empty() {
         body_lines.push("    const queryString = new URLSearchParams();".to_string());
         for param in &query_params {
-            body_lines.push(format!("    if (query?.{}) queryString.append(\"{}\", query.{});", param, param, param));
+            body_lines.push(format!(
+                "    if (query?.{}) queryString.append(\"{}\", query.{});",
+                param, param, param
+            ));
         }
         body_lines.push("    const queryStr = queryString.toString();".to_string());
-        body_lines.push(format!("    const url = `{}` + (queryStr ? `?${{queryStr}}` : '');", url_template));
+        body_lines.push(format!(
+            "    const url = `{}` + (queryStr ? `?${{queryStr}}` : '');",
+            url_template
+        ));
     } else {
         body_lines.push(format!("    const url = `{}`;", url_template));
     }
@@ -125,7 +135,7 @@ fn generate_function_for_operation(
         "OPTIONS" => "options",
         _ => "get",
     };
-    
+
     // Use qualified type for generic parameter (check if it's common or module-specific)
     let qualified_response_type_for_generic = if response_type != "any" {
         let is_common = common_schemas.contains(&response_type);
@@ -137,17 +147,20 @@ fn generate_function_for_operation(
     } else {
         response_type.clone()
     };
-    
+
     if let Some(_body_type) = &request_body {
         body_lines.push(format!("    return http.{}(url, body);", http_method));
     } else {
-        body_lines.push(format!("    return http.{}<{}>(url);", http_method, qualified_response_type_for_generic));
+        body_lines.push(format!(
+            "    return http.{}<{}>(url);",
+            http_method, qualified_response_type_for_generic
+        ));
     }
 
     // HTTP client is at apis/http.ts, and we're generating apis/<module>/index.ts
     // So the relative path is ../http
     let http_import = "../http";
-    
+
     // Determine if response type is in common schemas or module-specific
     let (type_imports, qualified_type) = if response_type != "any" {
         let is_common = common_schemas.contains(&response_type);
@@ -155,28 +168,34 @@ fn generate_function_for_operation(
             // Import from common module
             let common_import = "../../schemas/common";
             let common_namespace = "Common";
-            let imports = format!("import * as {} from \"{}\";\n", common_namespace, common_import);
+            let imports = format!(
+                "import * as {} from \"{}\";\n",
+                common_namespace, common_import
+            );
             let qualified = format!("{}.{}", common_namespace, response_type);
             (imports, qualified)
         } else {
             // Import from module-specific schemas
             let schemas_import = format!("../../schemas/{}", module_name);
-            let imports = format!("import * as {} from \"{}\";\n", namespace_name, schemas_import);
+            let imports = format!(
+                "import * as {} from \"{}\";\n",
+                namespace_name, schemas_import
+            );
             let qualified = format!("{}.{}", namespace_name, response_type);
             (imports, qualified)
         }
     } else {
         (String::new(), String::new())
     };
-    
+
     let return_type = if response_type == "any" {
         String::new()
     } else {
         format!(": Promise<{}>", qualified_type)
     };
-    
+
     let function_body = body_lines.join("\n");
-    
+
     let content = if params_str.is_empty() {
         format!(
             "import {{ http }} from \"{}\";\n{}\
@@ -191,14 +210,12 @@ fn generate_function_for_operation(
         )
     };
 
-    Ok(ApiFunction {
-        content,
-    })
+    Ok(ApiFunction { content })
 }
 
 fn extract_path_parameters(openapi: &OpenAPI, operation: &Operation) -> Result<Vec<String>> {
     let mut params = Vec::new();
-    
+
     for param_ref in &operation.parameters {
         match param_ref {
             ReferenceOr::Reference { reference } => {
@@ -216,7 +233,9 @@ fn extract_path_parameters(openapi: &OpenAPI, operation: &Operation) -> Result<V
                             }
                             break;
                         }
-                        Ok(ReferenceOr::Reference { reference: nested_ref }) => {
+                        Ok(ReferenceOr::Reference {
+                            reference: nested_ref,
+                        }) => {
                             current_ref = Some(nested_ref);
                             depth += 1;
                         }
@@ -234,13 +253,13 @@ fn extract_path_parameters(openapi: &OpenAPI, operation: &Operation) -> Result<V
             }
         }
     }
-    
+
     Ok(params)
 }
 
 fn extract_query_parameters(openapi: &OpenAPI, operation: &Operation) -> Result<Vec<String>> {
     let mut params = Vec::new();
-    
+
     for param_ref in &operation.parameters {
         match param_ref {
             ReferenceOr::Reference { reference } => {
@@ -258,7 +277,9 @@ fn extract_query_parameters(openapi: &OpenAPI, operation: &Operation) -> Result<
                             }
                             break;
                         }
-                        Ok(ReferenceOr::Reference { reference: nested_ref }) => {
+                        Ok(ReferenceOr::Reference {
+                            reference: nested_ref,
+                        }) => {
                             current_ref = Some(nested_ref);
                             depth += 1;
                         }
@@ -276,14 +297,11 @@ fn extract_query_parameters(openapi: &OpenAPI, operation: &Operation) -> Result<
             }
         }
     }
-    
+
     Ok(params)
 }
 
-fn extract_request_body(
-    openapi: &OpenAPI,
-    operation: &Operation,
-) -> Result<Option<String>> {
+fn extract_request_body(openapi: &OpenAPI, operation: &Operation) -> Result<Option<String>> {
     if let Some(request_body) = &operation.request_body {
         match request_body {
             ReferenceOr::Reference { reference } => {
@@ -294,7 +312,8 @@ fn extract_request_body(
                             if let Some(schema_ref) = &json_media.schema {
                                 match schema_ref {
                                     ReferenceOr::Reference { reference } => {
-                                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                        if let Some(ref_name) = get_schema_name_from_ref(&reference)
+                                        {
                                             Ok(Some(to_pascal_case(&ref_name)))
                                         } else {
                                             Ok(Some("any".to_string()))
@@ -359,12 +378,13 @@ fn extract_request_body(
     }
 }
 
-fn extract_response_type(
-    openapi: &OpenAPI,
-    operation: &Operation,
-) -> Result<String> {
+fn extract_response_type(openapi: &OpenAPI, operation: &Operation) -> Result<String> {
     // Try to get 200 response
-    if let Some(success_response) = operation.responses.responses.get(&openapiv3::StatusCode::Code(200)) {
+    if let Some(success_response) = operation
+        .responses
+        .responses
+        .get(&openapiv3::StatusCode::Code(200))
+    {
         match success_response {
             ReferenceOr::Reference { reference } => {
                 // Resolve response reference
@@ -374,15 +394,14 @@ fn extract_response_type(
                             if let Some(schema_ref) = &json_media.schema {
                                 match schema_ref {
                                     ReferenceOr::Reference { reference } => {
-                                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                        if let Some(ref_name) = get_schema_name_from_ref(&reference)
+                                        {
                                             Ok(to_pascal_case(&ref_name))
                                         } else {
                                             Ok("any".to_string())
                                         }
                                     }
-                                    ReferenceOr::Item(_) => {
-                                        Ok("any".to_string())
-                                    }
+                                    ReferenceOr::Item(_) => Ok("any".to_string()),
                                 }
                             } else {
                                 Ok("any".to_string())
@@ -412,9 +431,7 @@ fn extract_response_type(
                                     Ok("any".to_string())
                                 }
                             }
-                            ReferenceOr::Item(_) => {
-                                Ok("any".to_string())
-                            }
+                            ReferenceOr::Item(_) => Ok("any".to_string()),
                         }
                     } else {
                         Ok("any".to_string())
@@ -435,7 +452,7 @@ fn generate_function_name_from_path(path: &str, method: &str) -> String {
         .split('/')
         .filter(|p| !p.starts_with('{'))
         .collect();
-    
+
     // Map HTTP methods to common prefixes
     let method_upper = method.to_uppercase();
     let method_lower = method.to_lowercase();
@@ -447,7 +464,7 @@ fn generate_function_name_from_path(path: &str, method: &str) -> String {
         "PATCH" => "patch",
         _ => method_lower.as_str(),
     };
-    
+
     let base_name = if path_parts.is_empty() {
         method_prefix.to_string()
     } else {
@@ -458,7 +475,7 @@ fn generate_function_name_from_path(path: &str, method: &str) -> String {
         } else {
             path_parts.first().unwrap_or(&"")
         };
-        
+
         // Handle common patterns
         if resource_name.ends_with("s") && path.contains('{') {
             // Plural resource with ID: /products/{id} -> getProductById
@@ -472,7 +489,6 @@ fn generate_function_name_from_path(path: &str, method: &str) -> String {
             format!("{}{}", method_prefix, to_pascal_case(resource_name))
         }
     };
-    
+
     to_camel_case(&base_name)
 }
-

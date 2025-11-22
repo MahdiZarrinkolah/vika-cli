@@ -1,7 +1,7 @@
 use crate::error::Result;
+use crate::generator::swagger_parser::{get_schema_name_from_ref, resolve_ref};
 use openapiv3::{OpenAPI, ReferenceOr, Schema, SchemaKind, Type};
 use std::collections::{HashMap, HashSet};
-use crate::generator::swagger_parser::{get_schema_name_from_ref, resolve_ref};
 
 #[allow(dead_code)]
 pub struct SchemaResolver {
@@ -28,7 +28,7 @@ impl SchemaResolver {
         } else {
             return Ok(());
         };
-        
+
         for schema_name in schema_names {
             self.extract_dependencies(&schema_name, &mut HashSet::new())?;
         }
@@ -62,7 +62,8 @@ impl SchemaResolver {
         }
 
         visited.remove(schema_name);
-        self.dependency_graph.insert(schema_name.to_string(), dependencies.clone());
+        self.dependency_graph
+            .insert(schema_name.to_string(), dependencies.clone());
         Ok(dependencies)
     }
 
@@ -74,49 +75,55 @@ impl SchemaResolver {
         let mut deps = Vec::new();
 
         match &schema.schema_kind {
-            SchemaKind::Type(type_) => {
-                match type_ {
-                    Type::Array(array) => {
-                        if let Some(items) = &array.items {
-                            if let ReferenceOr::Reference { reference } = items {
+            SchemaKind::Type(type_) => match type_ {
+                Type::Array(array) => {
+                    if let Some(items) = &array.items {
+                        if let ReferenceOr::Reference { reference } = items {
+                            if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                deps.push(ref_name.clone());
+                                if !visited.contains(&ref_name) {
+                                    deps.extend(self.extract_schema_dependencies_from_ref(
+                                        &ref_name, visited,
+                                    )?);
+                                }
+                            }
+                        } else if let ReferenceOr::Item(item_schema) = items {
+                            deps.extend(self.extract_schema_dependencies(item_schema, visited)?);
+                        }
+                    }
+                }
+                Type::Object(object_type) => {
+                    for (_, prop_schema_ref) in object_type.properties.iter() {
+                        match prop_schema_ref {
+                            ReferenceOr::Reference { reference } => {
                                 if let Some(ref_name) = get_schema_name_from_ref(&reference) {
                                     deps.push(ref_name.clone());
                                     if !visited.contains(&ref_name) {
-                                        deps.extend(self.extract_schema_dependencies_from_ref(&ref_name, visited)?);
+                                        deps.extend(self.extract_schema_dependencies_from_ref(
+                                            &ref_name, visited,
+                                        )?);
                                     }
                                 }
-                            } else if let ReferenceOr::Item(item_schema) = items {
-                                deps.extend(self.extract_schema_dependencies(item_schema, visited)?);
+                            }
+                            ReferenceOr::Item(prop_schema) => {
+                                deps.extend(
+                                    self.extract_schema_dependencies(prop_schema, visited)?,
+                                );
                             }
                         }
                     }
-                    Type::Object(object_type) => {
-                        for (_, prop_schema_ref) in object_type.properties.iter() {
-                            match prop_schema_ref {
-                                ReferenceOr::Reference { reference } => {
-                                    if let Some(ref_name) = get_schema_name_from_ref(&reference) {
-                                        deps.push(ref_name.clone());
-                                        if !visited.contains(&ref_name) {
-                                            deps.extend(self.extract_schema_dependencies_from_ref(&ref_name, visited)?);
-                                        }
-                                    }
-                                }
-                                ReferenceOr::Item(prop_schema) => {
-                                    deps.extend(self.extract_schema_dependencies(prop_schema, visited)?);
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
                 }
-            }
+                _ => {}
+            },
             SchemaKind::OneOf { one_of, .. } => {
                 for item in one_of {
                     if let ReferenceOr::Reference { reference } = item {
                         if let Some(ref_name) = get_schema_name_from_ref(&reference) {
                             deps.push(ref_name.clone());
                             if !visited.contains(&ref_name) {
-                                deps.extend(self.extract_schema_dependencies_from_ref(&ref_name, visited)?);
+                                deps.extend(
+                                    self.extract_schema_dependencies_from_ref(&ref_name, visited)?,
+                                );
                             }
                         }
                     } else if let ReferenceOr::Item(item_schema) = item {
@@ -130,7 +137,9 @@ impl SchemaResolver {
                         if let Some(ref_name) = get_schema_name_from_ref(&reference) {
                             deps.push(ref_name.clone());
                             if !visited.contains(&ref_name) {
-                                deps.extend(self.extract_schema_dependencies_from_ref(&ref_name, visited)?);
+                                deps.extend(
+                                    self.extract_schema_dependencies_from_ref(&ref_name, visited)?,
+                                );
                             }
                         }
                     } else if let ReferenceOr::Item(item_schema) = item {
@@ -144,7 +153,9 @@ impl SchemaResolver {
                         if let Some(ref_name) = get_schema_name_from_ref(&reference) {
                             deps.push(ref_name.clone());
                             if !visited.contains(&ref_name) {
-                                deps.extend(self.extract_schema_dependencies_from_ref(&ref_name, visited)?);
+                                deps.extend(
+                                    self.extract_schema_dependencies_from_ref(&ref_name, visited)?,
+                                );
                             }
                         }
                     } else if let ReferenceOr::Item(item_schema) = item {
@@ -188,13 +199,14 @@ impl SchemaResolver {
         }
 
         let resolved = resolve_ref(&self.openapi, ref_path)?;
-        self.resolved_cache.insert(ref_path.to_string(), resolved.clone());
+        self.resolved_cache
+            .insert(ref_path.to_string(), resolved.clone());
         Ok(resolved)
     }
 
     pub fn resolve_with_dependencies(&mut self, schema_name: &str) -> Result<Vec<String>> {
         let mut all_schemas = vec![schema_name.to_string()];
-        
+
         if let Some(deps) = self.dependency_graph.get(schema_name) {
             for dep in deps {
                 if !all_schemas.contains(dep) {
@@ -267,35 +279,35 @@ impl SchemaResolver {
 
     pub fn classify_schema(&self, schema: &Schema) -> SchemaType {
         match &schema.schema_kind {
-            SchemaKind::Type(type_) => {
-                match type_ {
-                    Type::String(string_type) => {
-                        if !string_type.enumeration.is_empty() {
-                            let enum_values: Vec<String> = string_type.enumeration.iter()
-                                .filter_map(|v| v.as_ref().cloned())
-                                .collect();
-                            if !enum_values.is_empty() {
-                                return SchemaType::Enum { values: enum_values };
-                            }
+            SchemaKind::Type(type_) => match type_ {
+                Type::String(string_type) => {
+                    if !string_type.enumeration.is_empty() {
+                        let enum_values: Vec<String> = string_type
+                            .enumeration
+                            .iter()
+                            .filter_map(|v| v.as_ref().cloned())
+                            .collect();
+                        if !enum_values.is_empty() {
+                            return SchemaType::Enum {
+                                values: enum_values,
+                            };
                         }
-                        SchemaType::Primitive(PrimitiveType::String)
                     }
-                    Type::Number(_) => SchemaType::Primitive(PrimitiveType::Number),
-                    Type::Integer(_) => SchemaType::Primitive(PrimitiveType::Integer),
-                    Type::Boolean(_) => SchemaType::Primitive(PrimitiveType::Boolean),
-                    Type::Array(_) => SchemaType::Array { item_type: Box::new(SchemaType::Primitive(PrimitiveType::Any)) },
-                    Type::Object(_) => SchemaType::Object { properties: HashMap::new() },
+                    SchemaType::Primitive(PrimitiveType::String)
                 }
-            }
-            SchemaKind::OneOf { .. } => {
-                SchemaType::OneOf { variants: vec![] }
-            }
-            SchemaKind::AllOf { .. } => {
-                SchemaType::AllOf { all: vec![] }
-            }
-            SchemaKind::AnyOf { .. } => {
-                SchemaType::AnyOf { any: vec![] }
-            }
+                Type::Number(_) => SchemaType::Primitive(PrimitiveType::Number),
+                Type::Integer(_) => SchemaType::Primitive(PrimitiveType::Integer),
+                Type::Boolean(_) => SchemaType::Primitive(PrimitiveType::Boolean),
+                Type::Array(_) => SchemaType::Array {
+                    item_type: Box::new(SchemaType::Primitive(PrimitiveType::Any)),
+                },
+                Type::Object(_) => SchemaType::Object {
+                    properties: HashMap::new(),
+                },
+            },
+            SchemaKind::OneOf { .. } => SchemaType::OneOf { variants: vec![] },
+            SchemaKind::AllOf { .. } => SchemaType::AllOf { all: vec![] },
+            SchemaKind::AnyOf { .. } => SchemaType::AnyOf { any: vec![] },
             SchemaKind::Any(_) => SchemaType::Primitive(PrimitiveType::Any),
             SchemaKind::Not { .. } => SchemaType::Primitive(PrimitiveType::Any),
         }
@@ -306,13 +318,27 @@ impl SchemaResolver {
 #[derive(Debug, Clone)]
 pub enum SchemaType {
     Primitive(PrimitiveType),
-    Array { item_type: Box<SchemaType> },
-    Object { properties: HashMap<String, SchemaType> },
-    Enum { values: Vec<String> },
-    Reference { ref_path: String },
-    OneOf { variants: Vec<SchemaType> },
-    AllOf { all: Vec<SchemaType> },
-    AnyOf { any: Vec<SchemaType> },
+    Array {
+        item_type: Box<SchemaType>,
+    },
+    Object {
+        properties: HashMap<String, SchemaType>,
+    },
+    Enum {
+        values: Vec<String>,
+    },
+    Reference {
+        ref_path: String,
+    },
+    OneOf {
+        variants: Vec<SchemaType>,
+    },
+    AllOf {
+        all: Vec<SchemaType>,
+    },
+    AnyOf {
+        any: Vec<SchemaType>,
+    },
     Nullable(Box<SchemaType>),
 }
 
@@ -325,4 +351,3 @@ pub enum PrimitiveType {
     Boolean,
     Any,
 }
-

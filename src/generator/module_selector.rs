@@ -1,8 +1,11 @@
-use dialoguer::MultiSelect;
+use crate::error::{GenerationError, Result};
 use colored::*;
-use crate::error::{Result, GenerationError};
+use dialoguer::MultiSelect;
 
-pub fn select_modules(available_modules: &[String], ignored_modules: &[String]) -> Result<Vec<String>> {
+pub fn select_modules(
+    available_modules: &[String],
+    ignored_modules: &[String],
+) -> Result<Vec<String>> {
     let filtered_modules: Vec<String> = available_modules
         .iter()
         .filter(|m| !ignored_modules.contains(m))
@@ -35,4 +38,3 @@ pub fn select_modules(available_modules: &[String], ignored_modules: &[String]) 
 
     Ok(selected)
 }
-

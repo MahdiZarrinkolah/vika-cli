@@ -1,13 +1,13 @@
-use crate::error::Result;
-use colored::*;
-use std::path::PathBuf;
 use crate::config::loader::load_config;
 use crate::config::validator::validate_config;
+use crate::error::Result;
 use crate::generator::api_client::generate_api_client;
 use crate::generator::swagger_parser::{fetch_and_parse_spec, filter_common_schemas};
 use crate::generator::ts_typings::generate_typings_with_registry;
 use crate::generator::writer::{write_api_client, write_schemas};
 use crate::generator::zod_schema::generate_zod_schemas_with_registry;
+use colored::*;
+use std::path::PathBuf;
 
 pub async fn run() -> Result<()> {
     println!("{}", "🔄 Updating generated code...".bright_cyan());
@@ -20,7 +20,8 @@ pub async fn run() -> Result<()> {
     use crate::error::GenerationError;
 
     // Get spec path from config
-    let spec_path = config.spec_path
+    let spec_path = config
+        .spec_path
         .ok_or_else(|| GenerationError::SpecPathRequired)?;
 
     // Get selected modules from config
@@ -30,15 +31,30 @@ pub async fn run() -> Result<()> {
         config.modules.selected.clone()
     };
 
-    println!("{}", format!("📥 Fetching spec from: {}", spec_path).bright_blue());
+    println!(
+        "{}",
+        format!("📥 Fetching spec from: {}", spec_path).bright_blue()
+    );
     let parsed = fetch_and_parse_spec(&spec_path).await?;
-    println!("{}", format!("✅ Parsed spec with {} modules", parsed.modules.len()).green());
+    println!(
+        "{}",
+        format!("✅ Parsed spec with {} modules", parsed.modules.len()).green()
+    );
     println!();
-    println!("{}", format!("📦 Updating {} module(s): {}", selected_modules.len(), selected_modules.join(", ")).bright_green());
+    println!(
+        "{}",
+        format!(
+            "📦 Updating {} module(s): {}",
+            selected_modules.len(),
+            selected_modules.join(", ")
+        )
+        .bright_green()
+    );
     println!();
 
     // Filter common schemas based on selected modules only
-    let (filtered_module_schemas, common_schemas) = filter_common_schemas(&parsed.module_schemas, &selected_modules);
+    let (filtered_module_schemas, common_schemas) =
+        filter_common_schemas(&parsed.module_schemas, &selected_modules);
 
     // Generate code for each module
     let schemas_dir = PathBuf::from(&config.schemas.output);
@@ -49,34 +65,55 @@ pub async fn run() -> Result<()> {
 
     // Generate common module first if there are shared schemas
     if !common_schemas.is_empty() {
-        println!("{}", format!("🔨 Regenerating common schemas...").bright_cyan());
-        
+        println!(
+            "{}",
+            format!("🔨 Regenerating common schemas...").bright_cyan()
+        );
+
         // Shared enum registry to ensure consistent naming between TypeScript and Zod
         let mut shared_enum_registry = std::collections::HashMap::new();
-        
+
         // Generate TypeScript typings for common schemas
-        let common_types = generate_typings_with_registry(&parsed.openapi, &parsed.schemas, &common_schemas, &mut shared_enum_registry)?;
-        
+        let common_types = generate_typings_with_registry(
+            &parsed.openapi,
+            &parsed.schemas,
+            &common_schemas,
+            &mut shared_enum_registry,
+        )?;
+
         // Generate Zod schemas for common schemas (using same registry)
-        let common_zod_schemas = generate_zod_schemas_with_registry(&parsed.openapi, &parsed.schemas, &common_schemas, &mut shared_enum_registry)?;
-        
+        let common_zod_schemas = generate_zod_schemas_with_registry(
+            &parsed.openapi,
+            &parsed.schemas,
+            &common_schemas,
+            &mut shared_enum_registry,
+        )?;
+
         // Write common schemas
-        let common_files = write_schemas(&schemas_dir, "common", &common_types, &common_zod_schemas)?;
+        let common_files =
+            write_schemas(&schemas_dir, "common", &common_types, &common_zod_schemas)?;
         total_files += common_files.len();
         module_summary.push(("common".to_string(), common_files.len()));
     }
 
     for module in &selected_modules {
-        println!("{}", format!("🔨 Regenerating code for module: {}", module).bright_cyan());
+        println!(
+            "{}",
+            format!("🔨 Regenerating code for module: {}", module).bright_cyan()
+        );
 
         // Get operations for this module
-        let operations = parsed.operations_by_tag
+        let operations = parsed
+            .operations_by_tag
             .get(module)
             .cloned()
             .unwrap_or_default();
 
         if operations.is_empty() {
-            println!("{}", format!("⚠️  No operations found for module: {}", module).yellow());
+            println!(
+                "{}",
+                format!("⚠️  No operations found for module: {}", module).yellow()
+            );
             continue;
         }
 
@@ -88,23 +125,34 @@ pub async fn run() -> Result<()> {
 
         // Shared enum registry to ensure consistent naming between TypeScript and Zod
         let mut shared_enum_registry = std::collections::HashMap::new();
-        
+
         // Generate TypeScript typings
         let types = if !module_schema_names.is_empty() {
-            generate_typings_with_registry(&parsed.openapi, &parsed.schemas, &module_schema_names, &mut shared_enum_registry)?
+            generate_typings_with_registry(
+                &parsed.openapi,
+                &parsed.schemas,
+                &module_schema_names,
+                &mut shared_enum_registry,
+            )?
         } else {
             Vec::new()
         };
 
         // Generate Zod schemas (using same registry)
         let zod_schemas = if !module_schema_names.is_empty() {
-            generate_zod_schemas_with_registry(&parsed.openapi, &parsed.schemas, &module_schema_names, &mut shared_enum_registry)?
+            generate_zod_schemas_with_registry(
+                &parsed.openapi,
+                &parsed.schemas,
+                &module_schema_names,
+                &mut shared_enum_registry,
+            )?
         } else {
             Vec::new()
         };
 
         // Generate API client
-        let api_functions = generate_api_client(&parsed.openapi, &operations, module, &common_schemas)?;
+        let api_functions =
+            generate_api_client(&parsed.openapi, &operations, module, &common_schemas)?;
 
         // Write schemas
         let schema_files = write_schemas(&schemas_dir, module, &types, &zod_schemas)?;
@@ -116,11 +164,21 @@ pub async fn run() -> Result<()> {
 
         let module_file_count = schema_files.len() + api_files.len();
         module_summary.push((module.clone(), module_file_count));
-        println!("{}", format!("✅ Regenerated {} files for module: {}", module_file_count, module).green());
+        println!(
+            "{}",
+            format!(
+                "✅ Regenerated {} files for module: {}",
+                module_file_count, module
+            )
+            .green()
+        );
     }
 
     println!();
-    println!("{}", format!("✨ Successfully updated {} files!", total_files).bright_green());
+    println!(
+        "{}",
+        format!("✨ Successfully updated {} files!", total_files).bright_green()
+    );
     println!();
     println!("{}", "Updated files:".bright_cyan());
     println!("  📁 Schemas: {}", config.schemas.output);
