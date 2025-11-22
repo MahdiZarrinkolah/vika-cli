@@ -7,7 +7,7 @@ description = "Generate TypeScript types, Zod schemas, and Fetch-based API clien
 repository = "https://github.com/MahdiZarrinkolah/vika-cli"
 license = "MIT"
 readme = "README.md"
-keywords = ["openapi", "swagger", "typescript", "code-generation", "api-client", "zod", "cli"]
+keywords = ["openapi", "swagger", "typescript", "code-generation", "cli"]
 categories = ["development-tools", "web-programming"]
 authors = ["Mahdi Zarrinkolah <mz.goldenhat@gmail.com>"]
 
