@@ -1,0 +1,14 @@
+---
+source: tests/snapshot_api_test.rs
+expression: output
+---
+import { http } from "../http";
+export const getTest = async (query?: { page?: string, limit?: string, search?: string }) => {
+    const queryString = new URLSearchParams();
+    if (query?.page) queryString.append("page", query.page);
+    if (query?.limit) queryString.append("limit", query.limit);
+    if (query?.search) queryString.append("search", query.search);
+    const queryStr = queryString.toString();
+    const url = `/test` + (queryStr ? `?${queryStr}` : '');
+    return http.get<any>(url);
+};

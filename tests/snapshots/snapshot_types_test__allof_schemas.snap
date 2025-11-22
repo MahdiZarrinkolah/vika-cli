@@ -1,0 +1,7 @@
+---
+source: tests/snapshot_types_test.rs
+expression: output
+---
+export interface Base {
+id?: string;
+}

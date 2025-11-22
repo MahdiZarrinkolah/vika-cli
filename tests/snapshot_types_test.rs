@@ -11,6 +11,7 @@ async fn test_complex_nested_objects() {
     {
         "openapi": "3.0.0",
         "info": {"title": "Test", "version": "1.0.0"},
+        "paths": {},
         "components": {
             "schemas": {
                 "ComplexObject": {
@@ -55,6 +56,7 @@ async fn test_union_types() {
     {
         "openapi": "3.0.0",
         "info": {"title": "Test", "version": "1.0.0"},
+        "paths": {},
         "components": {
             "schemas": {
                 "UnionType": {
@@ -89,6 +91,7 @@ async fn test_enum_types() {
     {
         "openapi": "3.0.0",
         "info": {"title": "Test", "version": "1.0.0"},
+        "paths": {},
         "components": {
             "schemas": {
                 "StatusEnum": {
@@ -121,6 +124,7 @@ async fn test_optional_vs_required_fields() {
     {
         "openapi": "3.0.0",
         "info": {"title": "Test", "version": "1.0.0"},
+        "paths": {},
         "components": {
             "schemas": {
                 "User": {
@@ -159,6 +163,7 @@ async fn test_array_types() {
     {
         "openapi": "3.0.0",
         "info": {"title": "Test", "version": "1.0.0"},
+        "paths": {},
         "components": {
             "schemas": {
                 "NestedArray": {
@@ -194,6 +199,7 @@ async fn test_allof_schemas() {
     {
         "openapi": "3.0.0",
         "info": {"title": "Test", "version": "1.0.0"},
+        "paths": {},
         "components": {
             "schemas": {
                 "Base": {

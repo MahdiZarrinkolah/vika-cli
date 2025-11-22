@@ -1,0 +1,10 @@
+---
+source: tests/snapshot_types_test.rs
+expression: output
+---
+export interface User {
+id: string;
+name: string;
+email?: string;
+age?: number;
+}

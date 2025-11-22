@@ -11,6 +11,7 @@ async fn test_zod_validation_rules() {
     {
         "openapi": "3.0.0",
         "info": {"title": "Test", "version": "1.0.0"},
+        "paths": {},
         "components": {
             "schemas": {
                 "Validated": {
@@ -60,6 +61,7 @@ async fn test_zod_nested_validation() {
     {
         "openapi": "3.0.0",
         "info": {"title": "Test", "version": "1.0.0"},
+        "paths": {},
         "components": {
             "schemas": {
                 "Outer": {

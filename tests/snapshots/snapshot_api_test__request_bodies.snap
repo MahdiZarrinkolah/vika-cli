@@ -1,0 +1,9 @@
+---
+source: tests/snapshot_api_test.rs
+expression: output
+---
+import { http } from "../http";
+export const createTest = async (body: Test.User) => {
+    const url = `/test`;
+    return http.post(url, body);
+};

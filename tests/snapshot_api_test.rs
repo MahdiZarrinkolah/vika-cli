@@ -119,7 +119,7 @@ async fn test_path_parameters() {
 #[tokio::test]
 async fn test_request_bodies() {
     let temp_dir = TempDir::new().unwrap();
-    let spec_json = r#"
+    let spec_json = r##"
     {
         "openapi": "3.0.0",
         "info": {"title": "Test", "version": "1.0.0"},
@@ -152,7 +152,7 @@ async fn test_request_bodies() {
             }
         }
     }
-    "#;
+    "##;
 
     let spec_path = temp_dir.path().join("spec.json");
     fs::write(&spec_path, spec_json).unwrap();

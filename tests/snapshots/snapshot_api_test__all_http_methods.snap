@@ -1,0 +1,45 @@
+---
+source: tests/snapshot_api_test.rs
+expression: output
+---
+import { http } from "../http";
+export const getTest = async () => {
+    const url = `/test`;
+    return http.get<any>(url);
+};
+
+import { http } from "../http";
+export const postTest = async () => {
+    const url = `/test`;
+    return http.post<any>(url);
+};
+
+import { http } from "../http";
+export const putTest = async () => {
+    const url = `/test`;
+    return http.put<any>(url);
+};
+
+import { http } from "../http";
+export const deleteTest = async () => {
+    const url = `/test`;
+    return http.delete<any>(url);
+};
+
+import { http } from "../http";
+export const patchTest = async () => {
+    const url = `/test`;
+    return http.patch<any>(url);
+};
+
+import { http } from "../http";
+export const headTest = async () => {
+    const url = `/test`;
+    return http.head<any>(url);
+};
+
+import { http } from "../http";
+export const optionsTest = async () => {
+    const url = `/test`;
+    return http.options<any>(url);
+};
