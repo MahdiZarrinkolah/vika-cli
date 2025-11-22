@@ -1,8 +1,8 @@
 use insta::assert_snapshot;
-use vika_cli::generator::zod_schema::generate_zod_schemas;
-use vika_cli::generator::swagger_parser::fetch_and_parse_spec;
-use tempfile::TempDir;
 use std::fs;
+use tempfile::TempDir;
+use vika_cli::generator::swagger_parser::fetch_and_parse_spec;
+use vika_cli::generator::zod_schema::generate_zod_schemas;
 
 #[tokio::test]
 async fn test_zod_validation_rules() {
@@ -47,10 +47,14 @@ async fn test_zod_validation_rules() {
         .await
         .unwrap();
 
-    let zod_schemas = generate_zod_schemas(&parsed.openapi, &parsed.schemas, &["Validated".to_string()])
-        .unwrap();
+    let zod_schemas =
+        generate_zod_schemas(&parsed.openapi, &parsed.schemas, &["Validated".to_string()]).unwrap();
 
-    let output: String = zod_schemas.iter().map(|z| z.content.clone()).collect::<Vec<_>>().join("\n\n");
+    let output: String = zod_schemas
+        .iter()
+        .map(|z| z.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     assert_snapshot!("zod_validation_rules", output);
 }
 
@@ -89,10 +93,13 @@ async fn test_zod_nested_validation() {
         .await
         .unwrap();
 
-    let zod_schemas = generate_zod_schemas(&parsed.openapi, &parsed.schemas, &["Outer".to_string()])
-        .unwrap();
+    let zod_schemas =
+        generate_zod_schemas(&parsed.openapi, &parsed.schemas, &["Outer".to_string()]).unwrap();
 
-    let output: String = zod_schemas.iter().map(|z| z.content.clone()).collect::<Vec<_>>().join("\n\n");
+    let output: String = zod_schemas
+        .iter()
+        .map(|z| z.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     assert_snapshot!("zod_nested_validation", output);
 }
-

@@ -1,8 +1,8 @@
 use insta::assert_snapshot;
+use std::fs;
+use tempfile::TempDir;
 use vika_cli::generator::api_client::generate_api_client;
 use vika_cli::generator::swagger_parser::fetch_and_parse_spec;
-use tempfile::TempDir;
-use std::fs;
 
 #[tokio::test]
 async fn test_all_http_methods() {
@@ -36,7 +36,11 @@ async fn test_all_http_methods() {
     let operations = parsed.operations_by_tag.get("test").unwrap();
     let api_functions = generate_api_client(&parsed.openapi, operations, "test", &[]).unwrap();
 
-    let output: String = api_functions.iter().map(|f| f.content.clone()).collect::<Vec<_>>().join("\n\n");
+    let output: String = api_functions
+        .iter()
+        .map(|f| f.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     assert_snapshot!("all_http_methods", output);
 }
 
@@ -75,7 +79,11 @@ async fn test_query_parameters() {
     let operations = parsed.operations_by_tag.get("test").unwrap();
     let api_functions = generate_api_client(&parsed.openapi, operations, "test", &[]).unwrap();
 
-    let output: String = api_functions.iter().map(|f| f.content.clone()).collect::<Vec<_>>().join("\n\n");
+    let output: String = api_functions
+        .iter()
+        .map(|f| f.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     assert_snapshot!("query_parameters", output);
 }
 
@@ -112,7 +120,11 @@ async fn test_path_parameters() {
     let operations = parsed.operations_by_tag.get("test").unwrap();
     let api_functions = generate_api_client(&parsed.openapi, operations, "test", &[]).unwrap();
 
-    let output: String = api_functions.iter().map(|f| f.content.clone()).collect::<Vec<_>>().join("\n\n");
+    let output: String = api_functions
+        .iter()
+        .map(|f| f.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     assert_snapshot!("path_parameters", output);
 }
 
@@ -164,7 +176,10 @@ async fn test_request_bodies() {
     let operations = parsed.operations_by_tag.get("test").unwrap();
     let api_functions = generate_api_client(&parsed.openapi, operations, "test", &[]).unwrap();
 
-    let output: String = api_functions.iter().map(|f| f.content.clone()).collect::<Vec<_>>().join("\n\n");
+    let output: String = api_functions
+        .iter()
+        .map(|f| f.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     assert_snapshot!("request_bodies", output);
 }
-

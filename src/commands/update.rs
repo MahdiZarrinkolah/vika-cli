@@ -20,9 +20,7 @@ pub async fn run() -> Result<()> {
     use crate::error::GenerationError;
 
     // Get spec path from config
-    let spec_path = config
-        .spec_path
-        .ok_or(GenerationError::SpecPathRequired)?;
+    let spec_path = config.spec_path.ok_or(GenerationError::SpecPathRequired)?;
 
     // Get selected modules from config
     let selected_modules = if config.modules.selected.is_empty() {

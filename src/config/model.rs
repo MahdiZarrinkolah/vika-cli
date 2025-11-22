@@ -149,7 +149,6 @@ impl Default for ApisConfig {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

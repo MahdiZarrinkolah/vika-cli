@@ -1,8 +1,8 @@
 use insta::assert_snapshot;
-use vika_cli::generator::ts_typings::generate_typings;
-use vika_cli::generator::swagger_parser::fetch_and_parse_spec;
-use tempfile::TempDir;
 use std::fs;
+use tempfile::TempDir;
+use vika_cli::generator::swagger_parser::fetch_and_parse_spec;
+use vika_cli::generator::ts_typings::generate_typings;
 
 #[tokio::test]
 async fn test_complex_nested_objects() {
@@ -42,10 +42,18 @@ async fn test_complex_nested_objects() {
         .await
         .unwrap();
 
-    let types = generate_typings(&parsed.openapi, &parsed.schemas, &["ComplexObject".to_string()])
-        .unwrap();
+    let types = generate_typings(
+        &parsed.openapi,
+        &parsed.schemas,
+        &["ComplexObject".to_string()],
+    )
+    .unwrap();
 
-    let output: String = types.iter().map(|t| t.content.clone()).collect::<Vec<_>>().join("\n\n");
+    let output: String = types
+        .iter()
+        .map(|t| t.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     assert_snapshot!("complex_nested_objects", output);
 }
 
@@ -77,10 +85,14 @@ async fn test_union_types() {
         .await
         .unwrap();
 
-    let types = generate_typings(&parsed.openapi, &parsed.schemas, &["UnionType".to_string()])
-        .unwrap();
+    let types =
+        generate_typings(&parsed.openapi, &parsed.schemas, &["UnionType".to_string()]).unwrap();
 
-    let output: String = types.iter().map(|t| t.content.clone()).collect::<Vec<_>>().join("\n\n");
+    let output: String = types
+        .iter()
+        .map(|t| t.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     assert_snapshot!("union_types", output);
 }
 
@@ -110,10 +122,18 @@ async fn test_enum_types() {
         .await
         .unwrap();
 
-    let types = generate_typings(&parsed.openapi, &parsed.schemas, &["StatusEnum".to_string()])
-        .unwrap();
+    let types = generate_typings(
+        &parsed.openapi,
+        &parsed.schemas,
+        &["StatusEnum".to_string()],
+    )
+    .unwrap();
 
-    let output: String = types.iter().map(|t| t.content.clone()).collect::<Vec<_>>().join("\n\n");
+    let output: String = types
+        .iter()
+        .map(|t| t.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     assert_snapshot!("enum_types", output);
 }
 
@@ -149,10 +169,13 @@ async fn test_optional_vs_required_fields() {
         .await
         .unwrap();
 
-    let types = generate_typings(&parsed.openapi, &parsed.schemas, &["User".to_string()])
-        .unwrap();
+    let types = generate_typings(&parsed.openapi, &parsed.schemas, &["User".to_string()]).unwrap();
 
-    let output: String = types.iter().map(|t| t.content.clone()).collect::<Vec<_>>().join("\n\n");
+    let output: String = types
+        .iter()
+        .map(|t| t.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     assert_snapshot!("optional_required_fields", output);
 }
 
@@ -185,10 +208,18 @@ async fn test_array_types() {
         .await
         .unwrap();
 
-    let types = generate_typings(&parsed.openapi, &parsed.schemas, &["NestedArray".to_string()])
-        .unwrap();
+    let types = generate_typings(
+        &parsed.openapi,
+        &parsed.schemas,
+        &["NestedArray".to_string()],
+    )
+    .unwrap();
 
-    let output: String = types.iter().map(|t| t.content.clone()).collect::<Vec<_>>().join("\n\n");
+    let output: String = types
+        .iter()
+        .map(|t| t.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     assert_snapshot!("array_types", output);
 }
 
@@ -231,10 +262,17 @@ async fn test_allof_schemas() {
         .await
         .unwrap();
 
-    let types = generate_typings(&parsed.openapi, &parsed.schemas, &["Base".to_string(), "Extended".to_string()])
-        .unwrap();
+    let types = generate_typings(
+        &parsed.openapi,
+        &parsed.schemas,
+        &["Base".to_string(), "Extended".to_string()],
+    )
+    .unwrap();
 
-    let output: String = types.iter().map(|t| t.content.clone()).collect::<Vec<_>>().join("\n\n");
+    let output: String = types
+        .iter()
+        .map(|t| t.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     assert_snapshot!("allof_schemas", output);
 }
-
