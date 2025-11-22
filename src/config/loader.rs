@@ -38,3 +38,27 @@ pub fn save_config(config: &Config) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_save_and_load_config() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let original_dir = env::current_dir().unwrap();
+        
+        env::set_current_dir(&temp_dir).unwrap();
+        
+        let config = Config::default();
+        save_config(&config).unwrap();
+        
+        let loaded = load_config().unwrap();
+        assert_eq!(loaded.root_dir, config.root_dir);
+        assert_eq!(loaded.schemas.output, config.schemas.output);
+        
+        env::set_current_dir(original_dir).unwrap();
+    }
+}
+
+

@@ -54,3 +54,26 @@ fn validate_safe_path(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::model::Config;
+
+    #[test]
+    fn test_validate_config_valid() {
+        let config = Config::default();
+        assert!(validate_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_config_invalid_style() {
+        let mut config = Config::default();
+        config.apis.style = "invalid".to_string();
+        
+        let result = validate_config(&config);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Unsupported API style"));
+    }
+}
+

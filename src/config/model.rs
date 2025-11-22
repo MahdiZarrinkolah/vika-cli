@@ -135,3 +135,78 @@ impl Default for ModulesConfig {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_default_config() {
+        let config = Config::default();
+        assert_eq!(config.root_dir, "src");
+        assert_eq!(config.schemas.output, "src/schemas");
+        assert_eq!(config.apis.output, "src/apis");
+        assert_eq!(config.apis.style, "fetch");
+        assert!(!config.schema.is_empty());
+    }
+
+    #[test]
+    fn test_config_serialization() {
+        let config = Config::default();
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        
+        assert!(json.contains("\"root_dir\""));
+        assert!(json.contains("\"schemas\""));
+        assert!(json.contains("\"apis\""));
+        assert!(json.contains("\"$schema\""));
+    }
+
+    #[test]
+    fn test_config_deserialization() {
+        let json = r#"
+        {
+            "$schema": "https://example.com/schema.json",
+            "root_dir": "test",
+            "schemas": {
+                "output": "test/schemas",
+                "naming": "camelCase"
+            },
+            "apis": {
+                "output": "test/apis",
+                "style": "fetch",
+                "header_strategy": "bearerToken"
+            },
+            "modules": {
+                "ignore": ["test"],
+                "selected": []
+            }
+        }
+        "#;
+        
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.root_dir, "test");
+        assert_eq!(config.schemas.output, "test/schemas");
+        assert_eq!(config.schemas.naming, "camelCase");
+        assert_eq!(config.apis.header_strategy, "bearerToken");
+        assert_eq!(config.modules.ignore, vec!["test"]);
+    }
+
+    #[test]
+    fn test_config_with_base_url() {
+        let mut config = Config::default();
+        config.apis.base_url = Some("/api/v1".to_string());
+        
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        assert!(json.contains("\"base_url\""));
+        assert!(json.contains("/api/v1"));
+    }
+
+    #[test]
+    fn test_config_schema_field() {
+        let config = Config::default();
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        
+        // Check that $schema is included
+        assert!(json.contains("\"$schema\""));
+    }
+}
+

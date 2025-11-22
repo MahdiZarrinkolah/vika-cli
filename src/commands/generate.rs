@@ -5,7 +5,7 @@ use crate::config::loader::{load_config, save_config};
 use crate::config::validator::validate_config;
 use crate::generator::api_client::generate_api_client;
 use crate::generator::module_selector::select_modules;
-use crate::generator::swagger_parser::{fetch_and_parse_spec, filter_common_schemas};
+use crate::generator::swagger_parser::filter_common_schemas;
 use crate::generator::ts_typings::generate_typings_with_registry;
 use crate::generator::writer::{write_api_client_with_options, write_schemas_with_options};
 use crate::generator::zod_schema::generate_zod_schemas_with_registry;

@@ -1,11 +1,14 @@
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::error::{Result, FileSystemError};
 
 const CACHE_DIR: &str = ".vika-cache";
 const SPEC_CACHE_FILE: &str = "spec.json";
 const SPEC_META_FILE: &str = "spec.meta.json";
+
+#[cfg(test)]
+static TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SpecMetadata {
@@ -20,13 +23,12 @@ pub struct CacheManager;
 impl CacheManager {
     pub fn ensure_cache_dir() -> Result<PathBuf> {
         let cache_dir = PathBuf::from(CACHE_DIR);
-        if !cache_dir.exists() {
-            std::fs::create_dir_all(&cache_dir)
-                .map_err(|e| FileSystemError::CreateDirectoryFailed {
-                    path: CACHE_DIR.to_string(),
-                    source: e,
-                })?;
-        }
+        // create_dir_all succeeds if directory already exists
+        std::fs::create_dir_all(&cache_dir)
+            .map_err(|e| FileSystemError::CreateDirectoryFailed {
+                path: CACHE_DIR.to_string(),
+                source: e,
+            })?;
         Ok(cache_dir)
     }
 
@@ -69,6 +71,7 @@ impl CacheManager {
     }
 
     pub fn cache_spec(url: &str, content: &str) -> Result<()> {
+        // Ensure cache directory exists before writing
         let cache_dir = Self::ensure_cache_dir()?;
         let meta_path = cache_dir.join(SPEC_META_FILE);
         let spec_path = cache_dir.join(SPEC_CACHE_FILE);
@@ -127,6 +130,91 @@ impl CacheManager {
                 })?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_cache_spec() {
+        let _lock = TEST_MUTEX.lock().unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let original_dir = env::current_dir().unwrap();
+        env::set_current_dir(&temp_dir).unwrap();
+        
+        let url = "https://example.com/spec.json";
+        let content = r#"{"openapi": "3.0.0", "info": {"title": "Test", "version": "1.0.0"}}"#;
+        
+        let result = CacheManager::cache_spec(url, content);
+        assert!(result.is_ok(), "Failed to cache spec: {:?}", result.err());
+        
+        env::set_current_dir(&original_dir).unwrap();
+    }
+
+    #[test]
+    fn test_get_cached_spec() {
+        let _lock = TEST_MUTEX.lock().unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let original_dir = env::current_dir().unwrap();
+        env::set_current_dir(&temp_dir).unwrap();
+        
+        let url = "https://example.com/spec.json";
+        let content = r#"{"openapi": "3.0.0", "info": {"title": "Test", "version": "1.0.0"}}"#;
+        
+        // Cache first
+        let cache_result = CacheManager::cache_spec(url, content);
+        assert!(cache_result.is_ok(), "Failed to cache: {:?}", cache_result.err());
+        
+        // Verify files were created
+        let cache_dir = CacheManager::ensure_cache_dir().unwrap();
+        let spec_file = cache_dir.join("spec.json");
+        let meta_file = cache_dir.join("spec.meta.json");
+        assert!(spec_file.exists(), "Cache file should exist at: {}", spec_file.display());
+        assert!(meta_file.exists(), "Metadata file should exist at: {}", meta_file.display());
+        
+        // Then retrieve
+        let cached = CacheManager::get_cached_spec(url).unwrap();
+        assert!(cached.is_some(), "Cached spec should be found");
+        assert_eq!(cached.unwrap(), content);
+        
+        env::set_current_dir(&original_dir).unwrap();
+    }
+
+    #[test]
+    fn test_get_cached_spec_miss() {
+        let _lock = TEST_MUTEX.lock().unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let original_dir = env::current_dir().unwrap();
+        env::set_current_dir(&temp_dir).unwrap();
+        
+        let url = "https://example.com/spec.json";
+        
+        let cached = CacheManager::get_cached_spec(url).unwrap();
+        assert!(cached.is_none());
+        
+        env::set_current_dir(&original_dir).unwrap();
+    }
+
+    #[test]
+    fn test_get_cached_spec_wrong_url() {
+        let _lock = TEST_MUTEX.lock().unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let original_dir = env::current_dir().unwrap();
+        env::set_current_dir(&temp_dir).unwrap();
+        
+        let url1 = "https://example.com/spec1.json";
+        let url2 = "https://example.com/spec2.json";
+        let content = r#"{"openapi": "3.0.0"}"#;
+        
+        CacheManager::cache_spec(url1, content).unwrap();
+        
+        let cached = CacheManager::get_cached_spec(url2).unwrap();
+        assert!(cached.is_none()); // Different URL should not match
+        
+        env::set_current_dir(&original_dir).unwrap();
     }
 }
 

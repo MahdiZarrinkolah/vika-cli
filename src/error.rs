@@ -160,3 +160,71 @@ pub enum ValidationError {
 
 pub type Result<T> = std::result::Result<T, VikaError>;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_schema_error_display() {
+        let error = SchemaError::NotFound {
+            name: "User".to_string(),
+        };
+        let error_msg = error.to_string();
+        assert!(error_msg.contains("User"));
+        assert!(error_msg.contains("not found"));
+    }
+
+    #[test]
+    fn test_config_error_display() {
+        let error = ConfigError::Invalid {
+            message: "Test error".to_string(),
+        };
+        let error_msg = error.to_string();
+        assert!(error_msg.contains("Test error"));
+    }
+
+    #[test]
+    fn test_network_error_display() {
+        let error = NetworkError::InvalidUrl {
+            url: "invalid-url".to_string(),
+        };
+        let error_msg = error.to_string();
+        assert!(error_msg.contains("invalid-url"));
+    }
+
+    #[test]
+    fn test_file_system_error_display() {
+        let error = FileSystemError::FileNotFound {
+            path: "/test/path".to_string(),
+        };
+        let error_msg = error.to_string();
+        assert!(error_msg.contains("/test/path"));
+    }
+
+    #[test]
+    fn test_generation_error_display() {
+        let error = GenerationError::NoModulesAvailable;
+        let error_msg = error.to_string();
+        assert!(error_msg.contains("No modules available"));
+    }
+
+    #[test]
+    fn test_error_conversion() {
+        let schema_error = SchemaError::NotFound {
+            name: "Test".to_string(),
+        };
+        let vika_error: VikaError = schema_error.into();
+        let error_msg = vika_error.to_string();
+        assert!(error_msg.contains("Schema error"));
+    }
+
+    #[test]
+    fn test_error_context_preservation() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "File not found");
+        let config_error = ConfigError::ReadError(io_error);
+        let vika_error: VikaError = config_error.into();
+        let error_msg = vika_error.to_string();
+        assert!(error_msg.contains("Config error"));
+    }
+}
+

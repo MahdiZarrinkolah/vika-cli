@@ -13,7 +13,7 @@ struct ModuleInfo {
     schemas: usize,
 }
 
-pub async fn run(spec: Option<String>, module: Option<String>, schemas: bool, graph: bool, json: bool) -> Result<()> {
+pub async fn run(spec: Option<String>, module: Option<String>, schemas: bool, _graph: bool, json: bool) -> Result<()> {
     use crate::error::GenerationError;
     
     let spec_path = spec.ok_or_else(|| GenerationError::SpecPathRequired)?;
