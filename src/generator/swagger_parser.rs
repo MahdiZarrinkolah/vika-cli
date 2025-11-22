@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{Result, SchemaError, NetworkError, FileSystemError};
 use openapiv3::{OpenAPI, Operation, Parameter, PathItem, ReferenceOr, Schema};
 use std::collections::HashMap;
 
@@ -19,19 +19,49 @@ pub struct OperationInfo {
 }
 
 pub async fn fetch_and_parse_spec(spec_path: &str) -> Result<ParsedSpec> {
+    fetch_and_parse_spec_with_cache(spec_path, false).await
+}
+
+pub async fn fetch_and_parse_spec_with_cache(spec_path: &str, use_cache: bool) -> Result<ParsedSpec> {
     let content = if spec_path.starts_with("http://") || spec_path.starts_with("https://") {
-        fetch_remote_spec(spec_path).await?
+        // Try cache first if enabled
+        if use_cache {
+            if let Some(cached) = crate::cache::CacheManager::get_cached_spec(spec_path)? {
+                return parse_spec_content(&cached, spec_path);
+            }
+        }
+        
+        let content = fetch_remote_spec(spec_path).await?;
+        
+        // Cache the content
+        if use_cache {
+            crate::cache::CacheManager::cache_spec(spec_path, &content)?;
+        }
+        
+        content
     } else {
         std::fs::read_to_string(spec_path)
-            .with_context(|| format!("Failed to read spec file: {}", spec_path))?
+            .map_err(|e| FileSystemError::ReadFileFailed {
+                path: spec_path.to_string(),
+                source: e,
+            })?
     };
 
+    parse_spec_content(&content, spec_path)
+}
+
+fn parse_spec_content(content: &str, spec_path: &str) -> Result<ParsedSpec> {
+
     let openapi: OpenAPI = if spec_path.ends_with(".yaml") || spec_path.ends_with(".yml") {
-        serde_yaml::from_str(&content)
-            .context("Failed to parse YAML spec")?
+        serde_yaml::from_str(content)
+            .map_err(|e| SchemaError::UnsupportedType {
+                schema_type: format!("Failed to parse YAML spec: {}", e),
+            })?
     } else {
-        serde_json::from_str(&content)
-            .context("Failed to parse JSON spec")?
+        serde_json::from_str(content)
+            .map_err(|e| SchemaError::UnsupportedType {
+                schema_type: format!("Failed to parse JSON spec: {}", e),
+            })?
     };
 
     let modules = extract_modules(&openapi);
@@ -52,11 +82,17 @@ pub async fn fetch_and_parse_spec(spec_path: &str) -> Result<ParsedSpec> {
 async fn fetch_remote_spec(url: &str) -> Result<String> {
     let response = reqwest::get(url)
         .await
-        .with_context(|| format!("Failed to fetch spec from: {}", url))?;
+        .map_err(|e| NetworkError::FetchFailed {
+            url: url.to_string(),
+            source: e,
+        })?;
     
     response.text()
         .await
-        .with_context(|| format!("Failed to read response from: {}", url))
+        .map_err(|e| NetworkError::ReadResponseFailed {
+            url: url.to_string(),
+            source: e,
+        }.into())
 }
 
 pub fn extract_modules(openapi: &OpenAPI) -> Vec<String> {
@@ -162,7 +198,9 @@ pub fn extract_schemas(openapi: &OpenAPI) -> HashMap<String, Schema> {
 
 pub fn resolve_ref(openapi: &OpenAPI, ref_path: &str) -> Result<ReferenceOr<Schema>> {
     if !ref_path.starts_with("#/") {
-        return Err(anyhow::anyhow!("Invalid reference path: {}", ref_path));
+        return Err(SchemaError::InvalidReference {
+            ref_path: ref_path.to_string(),
+        }.into());
     }
 
     let parts: Vec<&str> = ref_path.trim_start_matches("#/").split('/').collect();
@@ -174,15 +212,21 @@ pub fn resolve_ref(openapi: &OpenAPI, ref_path: &str) -> Result<ReferenceOr<Sche
                     return Ok(schema_ref.clone());
                 }
             }
-            Err(anyhow::anyhow!("Schema not found: {}", name))
+            Err(SchemaError::NotFound {
+                name: name.to_string(),
+            }.into())
         }
-        _ => Err(anyhow::anyhow!("Unsupported reference path: {}", ref_path)),
+        _ => Err(SchemaError::UnsupportedReferencePath {
+            ref_path: ref_path.to_string(),
+        }.into()),
     }
 }
 
 pub fn resolve_parameter_ref(openapi: &OpenAPI, ref_path: &str) -> Result<ReferenceOr<Parameter>> {
     if !ref_path.starts_with("#/") {
-        return Err(anyhow::anyhow!("Invalid reference path: {}", ref_path));
+        return Err(SchemaError::InvalidReference {
+            ref_path: ref_path.to_string(),
+        }.into());
     }
 
     let parts: Vec<&str> = ref_path.trim_start_matches("#/").split('/').collect();
@@ -194,15 +238,21 @@ pub fn resolve_parameter_ref(openapi: &OpenAPI, ref_path: &str) -> Result<Refere
                     return Ok(param_ref.clone());
                 }
             }
-            Err(anyhow::anyhow!("Parameter not found: {}", name))
+            Err(SchemaError::ParameterNotFound {
+                name: name.to_string(),
+            }.into())
         }
-        _ => Err(anyhow::anyhow!("Unsupported reference path: {}", ref_path)),
+        _ => Err(SchemaError::UnsupportedReferencePath {
+            ref_path: ref_path.to_string(),
+        }.into()),
     }
 }
 
 pub fn resolve_request_body_ref(openapi: &OpenAPI, ref_path: &str) -> Result<ReferenceOr<openapiv3::RequestBody>> {
     if !ref_path.starts_with("#/") {
-        return Err(anyhow::anyhow!("Invalid reference path: {}", ref_path));
+        return Err(SchemaError::InvalidReference {
+            ref_path: ref_path.to_string(),
+        }.into());
     }
 
     let parts: Vec<&str> = ref_path.trim_start_matches("#/").split('/').collect();
@@ -214,15 +264,21 @@ pub fn resolve_request_body_ref(openapi: &OpenAPI, ref_path: &str) -> Result<Ref
                     return Ok(body_ref.clone());
                 }
             }
-            Err(anyhow::anyhow!("Request body not found: {}", name))
+            Err(SchemaError::RequestBodyNotFound {
+                name: name.to_string(),
+            }.into())
         }
-        _ => Err(anyhow::anyhow!("Unsupported reference path: {}", ref_path)),
+        _ => Err(SchemaError::UnsupportedReferencePath {
+            ref_path: ref_path.to_string(),
+        }.into()),
     }
 }
 
 pub fn resolve_response_ref(openapi: &OpenAPI, ref_path: &str) -> Result<ReferenceOr<openapiv3::Response>> {
     if !ref_path.starts_with("#/") {
-        return Err(anyhow::anyhow!("Invalid reference path: {}", ref_path));
+        return Err(SchemaError::InvalidReference {
+            ref_path: ref_path.to_string(),
+        }.into());
     }
 
     let parts: Vec<&str> = ref_path.trim_start_matches("#/").split('/').collect();
@@ -234,9 +290,13 @@ pub fn resolve_response_ref(openapi: &OpenAPI, ref_path: &str) -> Result<Referen
                     return Ok(response_ref.clone());
                 }
             }
-            Err(anyhow::anyhow!("Response not found: {}", name))
+            Err(SchemaError::ResponseNotFound {
+                name: name.to_string(),
+            }.into())
         }
-        _ => Err(anyhow::anyhow!("Unsupported reference path: {}", ref_path)),
+        _ => Err(SchemaError::UnsupportedReferencePath {
+            ref_path: ref_path.to_string(),
+        }.into()),
     }
 }
 

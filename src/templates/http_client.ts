@@ -68,5 +68,27 @@ export const http = {
     }
     return response.json();
   },
+
+  async head(url: string, options: RequestInit = {}): Promise<Response> {
+    const response = await fetch(url, {
+      ...options,
+      method: "HEAD",
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response;
+  },
+
+  async options<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+    const response = await fetch(url, {
+      ...options,
+      method: "OPTIONS",
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  },
 };
 

@@ -1,14 +1,19 @@
-use anyhow::{Context, Result};
+use crate::error::{Result, FileSystemError};
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use crate::generator::api_client::ApiFunction;
 use crate::generator::ts_typings::TypeScriptType;
 use crate::generator::zod_schema::ZodSchema;
-use crate::generator::utils::to_pascal_case;
 
 pub fn ensure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
         std::fs::create_dir_all(path)
-            .with_context(|| format!("Failed to create directory: {}", path.display()))?;
+            .map_err(|e| FileSystemError::CreateDirectoryFailed {
+                path: path.display().to_string(),
+                source: e,
+            })?;
     }
     Ok(())
 }
@@ -18,6 +23,17 @@ pub fn write_schemas(
     module_name: &str,
     types: &[TypeScriptType],
     zod_schemas: &[ZodSchema],
+) -> Result<Vec<PathBuf>> {
+    write_schemas_with_options(output_dir, module_name, types, zod_schemas, false, false)
+}
+
+pub fn write_schemas_with_options(
+    output_dir: &Path,
+    module_name: &str,
+    types: &[TypeScriptType],
+    zod_schemas: &[ZodSchema],
+    backup: bool,
+    force: bool,
 ) -> Result<Vec<PathBuf>> {
     let module_dir = output_dir.join(module_name);
     ensure_directory(&module_dir)?;
@@ -35,7 +51,7 @@ pub fn write_schemas(
         ));
         
         let types_file = module_dir.join("types.ts");
-        write_file_safe(&types_file, &types_content)?;
+        write_file_with_backup(&types_file, &types_content, backup, force)?;
         written_files.push(types_file);
     }
 
@@ -50,7 +66,7 @@ pub fn write_schemas(
         ));
         
         let zod_file = module_dir.join("schemas.ts");
-        write_file_safe(&zod_file, &zod_content)?;
+        write_file_with_backup(&zod_file, &zod_content, backup, force)?;
         written_files.push(zod_file);
     }
 
@@ -69,7 +85,7 @@ pub fn write_schemas(
         // and import as namespace in API clients for better organization
         let index_content = format_typescript_code(&(index_exports.join("\n") + "\n"));
         let index_file = module_dir.join("index.ts");
-        write_file_safe(&index_file, &index_content)?;
+        write_file_with_backup(&index_file, &index_content, backup, force)?;
         written_files.push(index_file);
     }
 
@@ -80,6 +96,16 @@ pub fn write_api_client(
     output_dir: &Path,
     module_name: &str,
     functions: &[ApiFunction],
+) -> Result<Vec<PathBuf>> {
+    write_api_client_with_options(output_dir, module_name, functions, false, false)
+}
+
+pub fn write_api_client_with_options(
+    output_dir: &Path,
+    module_name: &str,
+    functions: &[ApiFunction],
+    backup: bool,
+    force: bool,
 ) -> Result<Vec<PathBuf>> {
     let module_dir = output_dir.join(module_name);
     ensure_directory(&module_dir)?;
@@ -125,7 +151,7 @@ pub fn write_api_client(
         let functions_content = format_typescript_code(&combined_content);
 
         let api_file = module_dir.join("index.ts");
-        write_file_safe(&api_file, &functions_content)?;
+        write_file_with_backup(&api_file, &functions_content, backup, force)?;
         written_files.push(api_file);
     }
 
@@ -240,20 +266,198 @@ fn format_typescript_code(code: &str) -> String {
     formatted.join("\n")
 }
 
-fn write_file_safe(path: &Path, content: &str) -> Result<()> {
+pub fn write_file_safe(path: &Path, content: &str) -> Result<()> {
+    write_file_with_backup(path, content, false, false)
+}
+
+pub fn write_file_with_backup(
+    path: &Path,
+    content: &str,
+    backup: bool,
+    force: bool,
+) -> Result<()> {
     // Check if file exists and content is different
-    if path.exists() {
+    let file_exists = path.exists();
+    let should_write = if file_exists {
         if let Ok(existing_content) = std::fs::read_to_string(path) {
-            if existing_content == content {
-                // Content is the same, skip writing
-                return Ok(());
+            existing_content != content
+        } else {
+            true
+        }
+    } else {
+        true
+    };
+
+    if !should_write {
+        // Content is the same, skip writing
+        return Ok(());
+    }
+
+    // Create backup if requested and file exists
+    if backup && file_exists {
+        create_backup(path)?;
+    }
+
+    // Check for conflicts (user modifications) if not forcing
+    if !force && file_exists {
+        if let Ok(metadata) = load_file_metadata(path) {
+            let current_hash = compute_content_hash(content);
+            let file_hash = compute_file_hash(path)?;
+            if metadata.hash != current_hash && metadata.hash != file_hash {
+                // File was modified by user
+                return Err(FileSystemError::FileModifiedByUser {
+                    path: path.display().to_string(),
+                }.into());
             }
         }
     }
-    
+
+    // Write the file
     std::fs::write(path, content)
-        .with_context(|| format!("Failed to write file: {}", path.display()))?;
-    
+        .map_err(|e| FileSystemError::WriteFileFailed {
+            path: path.display().to_string(),
+            source: e,
+        })?;
+
+    // Save metadata
+    save_file_metadata(path, content)?;
+
     Ok(())
+}
+
+fn create_backup(path: &Path) -> Result<()> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    
+    let backup_dir = PathBuf::from(format!(".vika-backup/{}", timestamp));
+    std::fs::create_dir_all(&backup_dir)
+        .map_err(|e| FileSystemError::CreateDirectoryFailed {
+            path: backup_dir.display().to_string(),
+            source: e,
+        })?;
+
+    // Preserve directory structure
+    let relative_path = path.strip_prefix(".")
+        .unwrap_or(path);
+    let backup_path = backup_dir.join(relative_path);
+    
+    if let Some(parent) = backup_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| FileSystemError::CreateDirectoryFailed {
+                path: parent.display().to_string(),
+                source: e,
+            })?;
+    }
+
+    std::fs::copy(path, &backup_path)
+        .map_err(|e| FileSystemError::WriteFileFailed {
+            path: backup_path.display().to_string(),
+            source: e,
+        })?;
+
+    Ok(())
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct FileMetadata {
+    hash: String,
+    generated_at: u64,
+    generated_by: String,
+}
+
+fn compute_content_hash(content: &str) -> String {
+    let mut hasher = DefaultHasher::new();
+    content.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
+}
+
+fn compute_file_hash(path: &Path) -> Result<String> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| FileSystemError::ReadFileFailed {
+            path: path.display().to_string(),
+            source: e,
+        })?;
+    Ok(compute_content_hash(&content))
+}
+
+fn save_file_metadata(path: &Path, content: &str) -> Result<()> {
+    let metadata_dir = PathBuf::from(".vika-cache");
+    std::fs::create_dir_all(&metadata_dir)
+        .map_err(|e| FileSystemError::CreateDirectoryFailed {
+            path: metadata_dir.display().to_string(),
+            source: e,
+        })?;
+
+    let metadata_file = metadata_dir.join("file-metadata.json");
+    let mut metadata_map: std::collections::HashMap<String, FileMetadata> = if metadata_file.exists() {
+        let content = std::fs::read_to_string(&metadata_file)
+            .map_err(|e| FileSystemError::ReadFileFailed {
+                path: metadata_file.display().to_string(),
+                source: e,
+            })?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        std::collections::HashMap::new()
+    };
+
+    let hash = compute_content_hash(content);
+    let generated_at = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    metadata_map.insert(
+        path.display().to_string(),
+        FileMetadata {
+            hash,
+            generated_at,
+            generated_by: "vika-cli".to_string(),
+        },
+    );
+
+    let json = serde_json::to_string_pretty(&metadata_map)
+        .map_err(|e| FileSystemError::WriteFileFailed {
+            path: metadata_file.display().to_string(),
+            source: std::io::Error::new(std::io::ErrorKind::InvalidData, format!("{}", e)),
+        })?;
+
+    std::fs::write(&metadata_file, json)
+        .map_err(|e| FileSystemError::WriteFileFailed {
+            path: metadata_file.display().to_string(),
+            source: e,
+        })?;
+
+    Ok(())
+}
+
+fn load_file_metadata(path: &Path) -> Result<FileMetadata> {
+    let metadata_file = PathBuf::from(".vika-cache/file-metadata.json");
+    if !metadata_file.exists() {
+        return Err(FileSystemError::FileNotFound {
+            path: metadata_file.display().to_string(),
+        }.into());
+    }
+
+    let content = std::fs::read_to_string(&metadata_file)
+        .map_err(|e| FileSystemError::ReadFileFailed {
+            path: metadata_file.display().to_string(),
+            source: e,
+        })?;
+
+    let metadata_map: std::collections::HashMap<String, FileMetadata> = serde_json::from_str(&content)
+        .map_err(|e| FileSystemError::ReadFileFailed {
+            path: metadata_file.display().to_string(),
+            source: std::io::Error::new(std::io::ErrorKind::InvalidData, format!("{}", e)),
+        })?;
+
+    metadata_map
+        .get(&path.display().to_string())
+        .cloned()
+        .ok_or_else(|| FileSystemError::FileNotFound {
+            path: path.display().to_string(),
+        }.into())
 }
 

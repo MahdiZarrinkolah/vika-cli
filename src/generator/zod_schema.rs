@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::Result;
 use openapiv3::{OpenAPI, ReferenceOr, Schema, SchemaKind, Type};
 use std::collections::HashMap;
 use crate::generator::swagger_parser::{get_schema_name_from_ref, resolve_ref};
@@ -319,7 +319,9 @@ fn schema_to_zod(
                                         format!("{}z.lazy(() => {}Schema)", indent_str, to_pascal_case(&ref_name))
                                     } else {
                                         let resolved = resolve_ref(openapi, &reference)
-                                            .context("Failed to resolve schema reference")?;
+                                            .map_err(|e| crate::error::SchemaError::InvalidReference {
+                                                ref_path: format!("Failed to resolve: {}", e),
+                                            })?;
                                         if let ReferenceOr::Item(item_schema) = resolved {
                                             // Check if it's an object that needs to be extracted
                                             if matches!(&item_schema.schema_kind, SchemaKind::Type(Type::Object(_))) {

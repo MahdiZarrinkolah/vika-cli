@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use colored::*;
 use std::path::PathBuf;
 use crate::config::loader::load_config;
@@ -17,17 +17,15 @@ pub async fn run() -> Result<()> {
     let config = load_config()?;
     validate_config(&config)?;
 
+    use crate::error::GenerationError;
+
     // Get spec path from config
     let spec_path = config.spec_path
-        .ok_or_else(|| anyhow::anyhow!(
-            "No spec path found in config. Please run 'vika-cli generate --spec <path-or-url>' first."
-        ))?;
+        .ok_or_else(|| GenerationError::SpecPathRequired)?;
 
     // Get selected modules from config
     let selected_modules = if config.modules.selected.is_empty() {
-        return Err(anyhow::anyhow!(
-            "No modules selected in config. Please run 'vika-cli generate --spec <path-or-url>' first."
-        ));
+        return Err(GenerationError::NoModulesSelected.into());
     } else {
         config.modules.selected.clone()
     };

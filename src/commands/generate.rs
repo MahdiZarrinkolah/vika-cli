@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use colored::*;
 use std::path::PathBuf;
 use crate::config::loader::{load_config, save_config};
@@ -7,24 +7,42 @@ use crate::generator::api_client::generate_api_client;
 use crate::generator::module_selector::select_modules;
 use crate::generator::swagger_parser::{fetch_and_parse_spec, filter_common_schemas};
 use crate::generator::ts_typings::generate_typings_with_registry;
-use crate::generator::writer::{write_api_client, write_schemas};
+use crate::generator::writer::{write_api_client_with_options, write_schemas_with_options};
 use crate::generator::zod_schema::generate_zod_schemas_with_registry;
+use crate::progress::ProgressReporter;
+use tabled::{Table, Tabled};
 
-pub async fn run(spec: Option<String>) -> Result<()> {
-    println!("{}", "🚀 Starting code generation...".bright_cyan());
+#[derive(Tabled)]
+struct ModuleSummary {
+    #[tabled(rename = "Module")]
+    module: String,
+    #[tabled(rename = "Files")]
+    files: usize,
+    #[tabled(rename = "Status")]
+    status: String,
+}
+
+pub async fn run(spec: Option<String>, verbose: bool, _cache: bool, _backup: bool, _force: bool) -> Result<()> {
+    let mut progress = ProgressReporter::new(verbose);
+    
+    progress.success("Starting code generation...");
     println!();
 
     // Load config
+    progress.start_spinner("Loading configuration...");
     let mut config = load_config()?;
     validate_config(&config)?;
+    progress.finish_spinner("Configuration loaded");
+
+    use crate::error::GenerationError;
 
     // Get spec path
-    let spec_path = spec.ok_or_else(|| anyhow::anyhow!("Spec path or URL is required. Use --spec <path-or-url>"))?;
+    let spec_path = spec.ok_or_else(|| GenerationError::SpecPathRequired)?;
 
     // Fetch and parse Swagger spec
-    println!("{}", format!("📥 Fetching spec from: {}", spec_path).bright_blue());
-    let parsed = fetch_and_parse_spec(&spec_path).await?;
-    println!("{}", format!("✅ Parsed spec with {} modules", parsed.modules.len()).green());
+    progress.start_spinner(&format!("Fetching spec from: {}", spec_path));
+    let parsed = crate::generator::swagger_parser::fetch_and_parse_spec_with_cache(&spec_path, _cache).await?;
+    progress.finish_spinner(&format!("Parsed spec with {} modules", parsed.modules.len()));
     println!();
 
     // Filter out ignored modules
@@ -35,13 +53,17 @@ pub async fn run(spec: Option<String>) -> Result<()> {
         .collect();
 
     if available_modules.is_empty() {
-        return Err(anyhow::anyhow!("No modules available after filtering"));
+        return Err(GenerationError::NoModulesAvailable.into());
     }
 
     // Select modules interactively
     let selected_modules = select_modules(&available_modules, &config.modules.ignore)?;
     println!();
-    println!("{}", format!("📦 Selected {} module(s): {}", selected_modules.len(), selected_modules.join(", ")).bright_green());
+    
+    // Display module selection summary
+    if verbose {
+        progress.info(&format!("Selected {} module(s): {}", selected_modules.len(), selected_modules.join(", ")));
+    }
     println!();
 
     // Save spec path and selected modules to config
@@ -69,25 +91,26 @@ pub async fn run(spec: Option<String>) -> Result<()> {
 
     // Generate common module first if there are shared schemas
     if !common_schemas.is_empty() {
-        println!("{}", format!("🔨 Generating common schemas...").bright_cyan());
+        progress.start_spinner("Generating common schemas...");
         
         // Shared enum registry to ensure consistent naming between TypeScript and Zod
         let mut shared_enum_registry = std::collections::HashMap::new();
         
         // Generate TypeScript typings for common schemas
-        let common_types = generate_typings_with_registry(&parsed.openapi, &parsed.schemas, &parsed.common_schemas, &mut shared_enum_registry)?;
+        let common_types = generate_typings_with_registry(&parsed.openapi, &parsed.schemas, &common_schemas, &mut shared_enum_registry)?;
         
         // Generate Zod schemas for common schemas (using same registry)
-        let common_zod_schemas = generate_zod_schemas_with_registry(&parsed.openapi, &parsed.schemas, &parsed.common_schemas, &mut shared_enum_registry)?;
+        let common_zod_schemas = generate_zod_schemas_with_registry(&parsed.openapi, &parsed.schemas, &common_schemas, &mut shared_enum_registry)?;
         
         // Write common schemas
-        let common_files = write_schemas(&schemas_dir, "common", &common_types, &common_zod_schemas)?;
+        let common_files = write_schemas_with_options(&schemas_dir, "common", &common_types, &common_zod_schemas, _backup, _force)?;
         total_files += common_files.len();
         module_summary.push(("common".to_string(), common_files.len()));
+        progress.finish_spinner(&format!("Generated {} common schema files", common_files.len()));
     }
 
     for module in &selected_modules {
-        println!("{}", format!("🔨 Generating code for module: {}", module).bright_cyan());
+        progress.start_spinner(&format!("Generating code for module: {}", module));
 
         // Get operations for this module
         let operations = parsed.operations_by_tag
@@ -96,7 +119,7 @@ pub async fn run(spec: Option<String>) -> Result<()> {
             .unwrap_or_default();
 
         if operations.is_empty() {
-            println!("{}", format!("⚠️  No operations found for module: {}", module).yellow());
+            progress.warning(&format!("No operations found for module: {}", module));
             continue;
         }
 
@@ -126,31 +149,42 @@ pub async fn run(spec: Option<String>) -> Result<()> {
         // Generate API client
         let api_functions = generate_api_client(&parsed.openapi, &operations, module, &common_schemas)?;
 
-        // Write schemas
-        let schema_files = write_schemas(&schemas_dir, module, &types, &zod_schemas)?;
+        // Write schemas (with backup and conflict detection)
+        let schema_files = write_schemas_with_options(&schemas_dir, module, &types, &zod_schemas, _backup, _force)?;
         total_files += schema_files.len();
 
-        // Write API client
-        let api_files = write_api_client(&apis_dir, module, &api_functions)?;
+        // Write API client (with backup and conflict detection)
+        let api_files = write_api_client_with_options(&apis_dir, module, &api_functions, _backup, _force)?;
         total_files += api_files.len();
 
         let module_file_count = schema_files.len() + api_files.len();
         module_summary.push((module.clone(), module_file_count));
-        println!("{}", format!("✅ Generated {} files for module: {}", module_file_count, module).green());
+        progress.finish_spinner(&format!("Generated {} files for module: {}", module_file_count, module));
     }
 
     println!();
-    println!("{}", format!("✨ Successfully generated {} files!", total_files).bright_green());
+    progress.success(&format!("Successfully generated {} files!", total_files));
     println!();
     println!("{}", "Generated files:".bright_cyan());
     println!("  📁 Schemas: {}", config.schemas.output);
     println!("  📁 APIs: {}", config.apis.output);
     println!();
+    
+    // Display module summary table
     if !module_summary.is_empty() {
+        let table_data: Vec<ModuleSummary> = module_summary
+            .iter()
+            .map(|(module, count)| ModuleSummary {
+                module: module.clone(),
+                files: *count,
+                status: "✅".to_string(),
+            })
+            .collect();
+        
+        let table = Table::new(table_data);
         println!("{}", "Module breakdown:".bright_cyan());
-        for (module, count) in &module_summary {
-            println!("  • {}: {} files", module, count);
-        }
+        println!("{}", table);
+        println!();
     }
 
     Ok(())

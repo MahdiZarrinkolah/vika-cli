@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use openapiv3::{Operation, Parameter, ReferenceOr};
 use crate::generator::swagger_parser::{get_schema_name_from_ref, OperationInfo, resolve_parameter_ref, resolve_request_body_ref, resolve_response_ref};
 use crate::generator::utils::{to_camel_case, to_pascal_case};
@@ -121,6 +121,8 @@ fn generate_function_for_operation(
         "PUT" => "put",
         "DELETE" => "delete",
         "PATCH" => "patch",
+        "HEAD" => "head",
+        "OPTIONS" => "options",
         _ => "get",
     };
     

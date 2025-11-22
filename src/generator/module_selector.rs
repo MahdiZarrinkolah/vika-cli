@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
 use dialoguer::MultiSelect;
 use colored::*;
+use crate::error::{Result, GenerationError};
 
 pub fn select_modules(available_modules: &[String], ignored_modules: &[String]) -> Result<Vec<String>> {
     let filtered_modules: Vec<String> = available_modules
@@ -10,7 +10,7 @@ pub fn select_modules(available_modules: &[String], ignored_modules: &[String]) 
         .collect();
 
     if filtered_modules.is_empty() {
-        return Err(anyhow::anyhow!("No modules available after filtering"));
+        return Err(GenerationError::NoModulesAvailable.into());
     }
 
     println!("{}", "Which modules do you want to generate?".bright_cyan());
@@ -20,10 +20,12 @@ pub fn select_modules(available_modules: &[String], ignored_modules: &[String]) 
         .with_prompt("Select modules (use space to toggle, enter to confirm)")
         .items(&filtered_modules)
         .interact()
-        .context("Failed to get user selection")?;
+        .map_err(|e| GenerationError::InvalidOperation {
+            message: format!("Failed to get user selection: {}", e),
+        })?;
 
     if selections.is_empty() {
-        return Err(anyhow::anyhow!("No modules selected"));
+        return Err(GenerationError::NoModulesSelected.into());
     }
 
     let selected: Vec<String> = selections

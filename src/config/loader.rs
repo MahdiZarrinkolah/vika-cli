@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
 use std::path::PathBuf;
 use crate::config::model::Config;
+use crate::error::{Result, ConfigError, VikaError};
 
 const CONFIG_FILE: &str = ".vika.json";
 
@@ -12,21 +12,28 @@ pub fn load_config() -> Result<Config> {
     }
     
     let content = std::fs::read_to_string(&config_path)
-        .with_context(|| format!("Failed to read config file: {}", CONFIG_FILE))?;
+        .map_err(|e| VikaError::from(ConfigError::ReadError(e)))?;
     
     let config: Config = serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse config file: {}", CONFIG_FILE))?;
+        .map_err(|e| VikaError::from(ConfigError::ParseError(e)))?;
     
     Ok(config)
 }
 
 pub fn save_config(config: &Config) -> Result<()> {
     let config_path = PathBuf::from(CONFIG_FILE);
-    let content = serde_json::to_string_pretty(config)
-        .context("Failed to serialize config")?;
+    
+    // Ensure $schema is set (use default if not present)
+    let mut config_to_save = config.clone();
+    if config_to_save.schema.is_empty() {
+        config_to_save.schema = crate::config::model::default_schema();
+    }
+    
+    let content = serde_json::to_string_pretty(&config_to_save)
+        .map_err(|e| VikaError::from(ConfigError::ParseError(e)))?;
     
     std::fs::write(&config_path, content)
-        .with_context(|| format!("Failed to write config file: {}", CONFIG_FILE))?;
+        .map_err(|e| VikaError::from(ConfigError::ReadError(e)))?;
     
     Ok(())
 }

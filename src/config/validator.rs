@@ -1,15 +1,14 @@
-use anyhow::Result;
 use std::path::PathBuf;
 use crate::config::model::Config;
+use crate::error::{Result, ConfigError};
 
 pub fn validate_config(config: &Config) -> Result<()> {
     // Validate root_dir
     let root_dir = PathBuf::from(&config.root_dir);
     if root_dir.is_absolute() && !root_dir.exists() {
-        return Err(anyhow::anyhow!(
-            "Root directory does not exist: {}",
-            config.root_dir
-        ));
+        return Err(ConfigError::Invalid {
+            message: format!("Root directory does not exist: {}", config.root_dir),
+        }.into());
     }
     
     // Validate schemas output path
@@ -26,10 +25,9 @@ pub fn validate_config(config: &Config) -> Result<()> {
     
     // Validate style
     if config.apis.style != "fetch" {
-        return Err(anyhow::anyhow!(
-            "Unsupported API style: {}. Only 'fetch' is supported.",
-            config.apis.style
-        ));
+        return Err(ConfigError::Invalid {
+            message: format!("Unsupported API style: {}. Only 'fetch' is supported.", config.apis.style),
+        }.into());
     }
     
     Ok(())
@@ -48,10 +46,9 @@ fn validate_safe_path(path: &PathBuf) -> Result<()> {
         || path_str == "/"
         || path_str == "/root"
     {
-        return Err(anyhow::anyhow!(
-            "Unsafe output path detected: {}. Cannot write to system directories.",
-            path_str
-        ));
+        return Err(ConfigError::InvalidOutputDirectory {
+            path: path_str.to_string(),
+        }.into());
     }
     
     Ok(())

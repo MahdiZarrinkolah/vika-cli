@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use colored::*;
 use std::path::PathBuf;
 use crate::config::loader::save_config;

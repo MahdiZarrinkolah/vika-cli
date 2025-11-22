@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use openapiv3::{OpenAPI, ReferenceOr, Schema, SchemaKind, Type};
 use std::collections::{HashMap, HashSet};
 use crate::generator::swagger_parser::{get_schema_name_from_ref, resolve_ref};
