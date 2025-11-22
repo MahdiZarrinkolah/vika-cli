@@ -10,10 +10,17 @@ use thiserror::Error;
 /// ```no_run
 /// use vika_cli::error::VikaError;
 ///
-/// match result {
-///     Ok(value) => println!("Success: {:?}", value),
-///     Err(VikaError::Schema(e)) => eprintln!("Schema error: {}", e),
-///     Err(e) => eprintln!("Other error: {}", e),
+/// fn example() -> Result<(), VikaError> {
+///     // Some operation that might fail
+///     let result: Result<String, VikaError> = Ok("success".to_string());
+///     
+///     match result {
+///         Ok(value) => println!("Success: {:?}", value),
+///         Err(VikaError::Schema(e)) => eprintln!("Schema error: {}", e),
+///         Err(e) => eprintln!("Other error: {}", e),
+///     }
+///     
+///     Ok(())
 /// }
 /// ```
 #[derive(Debug, Error)]

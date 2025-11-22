@@ -46,7 +46,7 @@ mod tests {
     #[test]
     fn test_save_and_load_config() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let original_dir = env::current_dir().unwrap();
+        let original_dir = env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
 
         env::set_current_dir(&temp_dir).unwrap();
 
