@@ -45,7 +45,7 @@ cargo install vika-cli
 
 ```bash
 git clone https://github.com/MahdiZarrinkolah/vika-cli.git
-cd vika
+cd vika-cli
 cargo build --release
 ```
 
