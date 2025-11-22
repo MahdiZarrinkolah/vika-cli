@@ -28,7 +28,7 @@ fn test_filter_ignored_modules() {
     assert_eq!(modules.len(), 3);
 
     // Simulate filtering
-    let ignored = vec!["admin".to_string()];
+    let ignored = ["admin".to_string()];
     let filtered: Vec<String> = modules
         .iter()
         .filter(|m| !ignored.contains(m))
@@ -62,7 +62,7 @@ fn test_all_modules_ignored() {
     });
 
     let modules = extract_modules(&openapi);
-    let ignored = vec!["users".to_string()];
+    let ignored = ["users".to_string()];
     let filtered: Vec<String> = modules
         .iter()
         .filter(|m| !ignored.contains(m))

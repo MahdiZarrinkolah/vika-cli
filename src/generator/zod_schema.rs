@@ -128,6 +128,7 @@ fn generate_zod_for_schema(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn schema_to_zod(
     openapi: &OpenAPI,
     schema: &Schema,
@@ -240,7 +241,7 @@ fn schema_to_zod(
                                 } else {
                                     format!("{}Enum", prop_pascal)
                                 }
-                            } else if enum_values.len() > 0 {
+                            } else if !enum_values.is_empty() {
                                 // Fallback: use first value to create name
                                 let first_value = &enum_values[0];
                                 let base_name = first_value
@@ -350,7 +351,7 @@ fn schema_to_zod(
                     let item_zod = if let Some(items) = &array_type.items {
                         match items {
                             ReferenceOr::Reference { reference } => {
-                                if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                     // If already processed, use lazy reference to avoid infinite recursion
                                     if processed.contains(&ref_name) {
                                         format!(
@@ -360,7 +361,7 @@ fn schema_to_zod(
                                         )
                                     } else {
                                         let resolved =
-                                            resolve_ref(openapi, &reference).map_err(|e| {
+                                            resolve_ref(openapi, reference).map_err(|e| {
                                                 crate::error::SchemaError::InvalidReference {
                                                     ref_path: format!("Failed to resolve: {}", e),
                                                 }
@@ -484,25 +485,25 @@ fn schema_to_zod(
                             let prop_zod = match prop_schema_ref {
                                 ReferenceOr::Reference { reference } => {
                                     // For $ref properties, always use the schema name (don't inline)
-                                    if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                    if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                         // Generate the referenced schema if not already processed
                                         if !processed.contains(&ref_name) {
-                                            if let Ok(resolved) = resolve_ref(openapi, &reference) {
-                                                if let ReferenceOr::Item(ref_schema) = resolved {
-                                                    if matches!(
-                                                        &ref_schema.schema_kind,
-                                                        SchemaKind::Type(Type::Object(_))
-                                                    ) {
-                                                        generate_zod_for_schema(
-                                                            openapi,
-                                                            &ref_name,
-                                                            &ref_schema,
-                                                            zod_schemas,
-                                                            processed,
-                                                            enum_registry,
-                                                            Some(&parent_schema_for_props),
-                                                        )?;
-                                                    }
+                                            if let Ok(ReferenceOr::Item(ref_schema)) =
+                                                resolve_ref(openapi, reference)
+                                            {
+                                                if matches!(
+                                                    &ref_schema.schema_kind,
+                                                    SchemaKind::Type(Type::Object(_))
+                                                ) {
+                                                    generate_zod_for_schema(
+                                                        openapi,
+                                                        &ref_name,
+                                                        &ref_schema,
+                                                        zod_schemas,
+                                                        processed,
+                                                        enum_registry,
+                                                        Some(&parent_schema_for_props),
+                                                    )?;
                                                 }
                                             }
                                         }
@@ -562,7 +563,7 @@ fn schema_to_zod(
             for item in one_of {
                 match item {
                     ReferenceOr::Reference { reference } => {
-                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                        if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             variant_schemas.push(format!(
                                 "{}z.lazy(() => {}Schema)",
                                 indent_str,
@@ -602,7 +603,7 @@ fn schema_to_zod(
             for item in all_of {
                 match item {
                     ReferenceOr::Reference { reference } => {
-                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                        if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             all_schemas.push(format!(
                                 "{}z.lazy(() => {}Schema)",
                                 indent_str,
@@ -647,7 +648,7 @@ fn schema_to_zod(
             for item in any_of {
                 match item {
                     ReferenceOr::Reference { reference } => {
-                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                        if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             variant_schemas.push(format!(
                                 "{}z.lazy(() => {}Schema)",
                                 indent_str,

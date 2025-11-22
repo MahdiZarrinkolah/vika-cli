@@ -1,5 +1,4 @@
 use clap::Parser;
-use tracing_subscriber;
 
 #[tokio::main]
 async fn main() {

@@ -54,10 +54,8 @@ impl SchemaResolver {
         let mut dependencies = Vec::new();
 
         if let Some(components) = &self.openapi.components {
-            if let Some(schema_ref) = components.schemas.get(schema_name) {
-                if let ReferenceOr::Item(schema) = schema_ref {
-                    dependencies.extend(self.extract_schema_dependencies(schema, visited)?);
-                }
+            if let Some(ReferenceOr::Item(schema)) = components.schemas.get(schema_name) {
+                dependencies.extend(self.extract_schema_dependencies(schema, visited)?);
             }
         }
 
@@ -96,7 +94,7 @@ impl SchemaResolver {
                     for (_, prop_schema_ref) in object_type.properties.iter() {
                         match prop_schema_ref {
                             ReferenceOr::Reference { reference } => {
-                                if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                     deps.push(ref_name.clone());
                                     if !visited.contains(&ref_name) {
                                         deps.extend(self.extract_schema_dependencies_from_ref(
@@ -118,7 +116,7 @@ impl SchemaResolver {
             SchemaKind::OneOf { one_of, .. } => {
                 for item in one_of {
                     if let ReferenceOr::Reference { reference } = item {
-                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                        if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             deps.push(ref_name.clone());
                             if !visited.contains(&ref_name) {
                                 deps.extend(
@@ -134,7 +132,7 @@ impl SchemaResolver {
             SchemaKind::AllOf { all_of, .. } => {
                 for item in all_of {
                     if let ReferenceOr::Reference { reference } = item {
-                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                        if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             deps.push(ref_name.clone());
                             if !visited.contains(&ref_name) {
                                 deps.extend(
@@ -150,7 +148,7 @@ impl SchemaResolver {
             SchemaKind::AnyOf { any_of, .. } => {
                 for item in any_of {
                     if let ReferenceOr::Reference { reference } = item {
-                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                        if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             deps.push(ref_name.clone());
                             if !visited.contains(&ref_name) {
                                 deps.extend(
@@ -182,10 +180,8 @@ impl SchemaResolver {
         let mut deps = vec![ref_name.to_string()];
 
         if let Some(components) = &self.openapi.components {
-            if let Some(schema_ref) = components.schemas.get(ref_name) {
-                if let ReferenceOr::Item(schema) = schema_ref {
-                    deps.extend(self.extract_schema_dependencies(schema, visited)?);
-                }
+            if let Some(ReferenceOr::Item(schema)) = components.schemas.get(ref_name) {
+                deps.extend(self.extract_schema_dependencies(schema, visited)?);
             }
         }
 

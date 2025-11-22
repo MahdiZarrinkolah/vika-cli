@@ -41,14 +41,14 @@ pub fn write_schemas_with_options(
 
     // Write TypeScript types
     if !types.is_empty() {
-        let types_content = format_typescript_code(&format!(
-            "{}",
-            types
+        let types_content = format_typescript_code(
+            &types
                 .iter()
                 .map(|t| t.content.clone())
                 .collect::<Vec<_>>()
                 .join("\n\n")
-        ));
+                .to_string(),
+        );
 
         let types_file = module_dir.join("types.ts");
         write_file_with_backup(&types_file, &types_content, backup, force)?;

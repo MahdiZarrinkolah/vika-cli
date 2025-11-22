@@ -59,7 +59,7 @@ pub fn organize_types_by_module(
     // Organize types by module. Currently, all types are included in each module
     // since schemas can be shared across modules. This could be enhanced to filter
     // types based on actual usage per module for better code organization.
-    for (module, _schema_names) in module_schemas {
+    for module in module_schemas.keys() {
         organized.insert(module.clone(), types.clone());
     }
 
@@ -129,7 +129,7 @@ fn generate_type_for_schema(
                             .trim_end_matches("Response")
                             .to_string();
                         format!("{}Enum", parent_clean)
-                    } else if enum_values.len() > 0 {
+                    } else if !enum_values.is_empty() {
                         let first_value = &enum_values[0];
                         let base_name = first_value
                             .chars()
@@ -141,7 +141,7 @@ fn generate_type_for_schema(
                     } else {
                         "UnknownEnum".to_string()
                     }
-                } else if enum_values.len() > 0 {
+                } else if !enum_values.is_empty() {
                     let first_value = &enum_values[0];
                     let base_name = first_value
                         .chars()
@@ -186,6 +186,7 @@ fn generate_type_for_schema(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn schema_to_typescript(
     openapi: &OpenAPI,
     schema: &Schema,
@@ -284,7 +285,7 @@ fn schema_to_typescript(
                                 } else {
                                     format!("{}Enum", prop_pascal)
                                 }
-                            } else if enum_values.len() > 0 {
+                            } else if !enum_values.is_empty() {
                                 // Fallback: use first value to create name
                                 let first_value = &enum_values[0];
                                 let base_name = first_value
@@ -319,12 +320,12 @@ fn schema_to_typescript(
                     let item_type = if let Some(items) = &array.items {
                         match items {
                             ReferenceOr::Reference { reference } => {
-                                if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                     // For $ref, always use the type name (don't inline)
                                     // Generate the referenced schema if not already processed
                                     if !processed.contains(&ref_name) {
                                         if let Ok(ReferenceOr::Item(ref_schema)) =
-                                            resolve_ref(openapi, &reference)
+                                            resolve_ref(openapi, reference)
                                         {
                                             generate_type_for_schema(
                                                 openapi,
@@ -392,27 +393,27 @@ fn schema_to_typescript(
                                 }
                             })
                             .or_else(|| current_schema_name.map(|s| s.to_string()))
-                            .unwrap_or_else(|| String::new());
+                            .unwrap_or_default();
 
                         for (prop_name, prop_schema_ref) in object_type.properties.iter() {
                             let prop_type = match prop_schema_ref {
                                 ReferenceOr::Reference { reference } => {
                                     // For $ref properties, always use the type name (don't inline)
-                                    if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                    if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                         // Generate the referenced schema if not already processed
                                         if !processed.contains(&ref_name) {
-                                            if let Ok(resolved) = resolve_ref(openapi, &reference) {
-                                                if let ReferenceOr::Item(ref_schema) = resolved {
-                                                    generate_type_for_schema(
-                                                        openapi,
-                                                        &ref_name,
-                                                        &ref_schema,
-                                                        types,
-                                                        processed,
-                                                        enum_registry,
-                                                        Some(&parent_schema_for_props),
-                                                    )?;
-                                                }
+                                            if let Ok(ReferenceOr::Item(ref_schema)) =
+                                                resolve_ref(openapi, reference)
+                                            {
+                                                generate_type_for_schema(
+                                                    openapi,
+                                                    &ref_name,
+                                                    &ref_schema,
+                                                    types,
+                                                    processed,
+                                                    enum_registry,
+                                                    Some(&parent_schema_for_props),
+                                                )?;
                                             }
                                         }
                                         to_pascal_case(&ref_name)
@@ -460,7 +461,7 @@ fn schema_to_typescript(
             for item in one_of {
                 match item {
                     ReferenceOr::Reference { reference } => {
-                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                        if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             variant_types.push(to_pascal_case(&ref_name));
                         } else {
                             variant_types.push("any".to_string());
@@ -492,7 +493,7 @@ fn schema_to_typescript(
             for item in all_of {
                 match item {
                     ReferenceOr::Reference { reference } => {
-                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                        if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             all_types.push(to_pascal_case(&ref_name));
                         } else {
                             all_types.push("any".to_string());
@@ -525,7 +526,7 @@ fn schema_to_typescript(
             for item in any_of {
                 match item {
                     ReferenceOr::Reference { reference } => {
-                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                        if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             variant_types.push(to_pascal_case(&ref_name));
                         } else {
                             variant_types.push("any".to_string());

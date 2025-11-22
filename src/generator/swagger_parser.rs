@@ -170,14 +170,11 @@ fn add_operation(
                 });
         } else {
             for tag in tags {
-                result
-                    .entry(tag.clone())
-                    .or_insert_with(Vec::new)
-                    .push(OperationInfo {
-                        method: method.to_string(),
-                        path: path.to_string(),
-                        operation: op.clone(),
-                    });
+                result.entry(tag.clone()).or_default().push(OperationInfo {
+                    method: method.to_string(),
+                    path: path.to_string(),
+                    operation: op.clone(),
+                });
             }
         }
     }
@@ -341,7 +338,7 @@ pub fn extract_schemas_for_operation(
     if let Some(request_body) = &operation.request_body {
         match request_body {
             ReferenceOr::Reference { reference } => {
-                if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                if let Some(ref_name) = get_schema_name_from_ref(reference) {
                     schema_names.push(ref_name);
                 }
             }
@@ -350,7 +347,7 @@ pub fn extract_schemas_for_operation(
                     if let Some(schema_ref) = &json_media.schema {
                         match schema_ref {
                             ReferenceOr::Reference { reference } => {
-                                if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                     schema_names.push(ref_name);
                                 }
                             }
@@ -377,7 +374,7 @@ pub fn extract_schemas_for_operation(
                         if let Some(schema_ref) = &json_media.schema {
                             match schema_ref {
                                 ReferenceOr::Reference { reference } => {
-                                    if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                    if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                         if !schema_names.contains(&ref_name) {
                                             schema_names.push(ref_name);
                                         }
@@ -396,7 +393,7 @@ pub fn extract_schemas_for_operation(
                     if let Some(schema_ref) = &json_media.schema {
                         match schema_ref {
                             ReferenceOr::Reference { reference } => {
-                                if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                     if !schema_names.contains(&ref_name) {
                                         schema_names.push(ref_name);
                                     }
@@ -469,12 +466,12 @@ fn extract_schema_refs_recursive(
                 if let Some(items) = &array.items {
                     match items {
                         ReferenceOr::Reference { reference } => {
-                            if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                            if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                 if !visited.contains(&ref_name) {
                                     visited.insert(ref_name.clone());
                                     deps.push(ref_name.clone());
                                     if let Ok(ReferenceOr::Item(dep_schema)) =
-                                        resolve_ref(openapi, &reference)
+                                        resolve_ref(openapi, reference)
                                     {
                                         extract_schema_refs_recursive(
                                             &dep_schema,
@@ -496,12 +493,12 @@ fn extract_schema_refs_recursive(
                 for (_, prop_schema_ref) in object_type.properties.iter() {
                     match prop_schema_ref {
                         ReferenceOr::Reference { reference } => {
-                            if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                            if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                 if !visited.contains(&ref_name) {
                                     visited.insert(ref_name.clone());
                                     deps.push(ref_name.clone());
                                     if let Ok(ReferenceOr::Item(dep_schema)) =
-                                        resolve_ref(openapi, &reference)
+                                        resolve_ref(openapi, reference)
                                     {
                                         extract_schema_refs_recursive(
                                             &dep_schema,
@@ -525,12 +522,12 @@ fn extract_schema_refs_recursive(
             for item in one_of {
                 match item {
                     ReferenceOr::Reference { reference } => {
-                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                        if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             if !visited.contains(&ref_name) {
                                 visited.insert(ref_name.clone());
                                 deps.push(ref_name.clone());
                                 if let Ok(ReferenceOr::Item(dep_schema)) =
-                                    resolve_ref(openapi, &reference)
+                                    resolve_ref(openapi, reference)
                                 {
                                     extract_schema_refs_recursive(
                                         &dep_schema,
@@ -552,12 +549,12 @@ fn extract_schema_refs_recursive(
             for item in all_of {
                 match item {
                     ReferenceOr::Reference { reference } => {
-                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                        if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             if !visited.contains(&ref_name) {
                                 visited.insert(ref_name.clone());
                                 deps.push(ref_name.clone());
                                 if let Ok(ReferenceOr::Item(dep_schema)) =
-                                    resolve_ref(openapi, &reference)
+                                    resolve_ref(openapi, reference)
                                 {
                                     extract_schema_refs_recursive(
                                         &dep_schema,
@@ -579,12 +576,12 @@ fn extract_schema_refs_recursive(
             for item in any_of {
                 match item {
                     ReferenceOr::Reference { reference } => {
-                        if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                        if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             if !visited.contains(&ref_name) {
                                 visited.insert(ref_name.clone());
                                 deps.push(ref_name.clone());
                                 if let Ok(ReferenceOr::Item(dep_schema)) =
-                                    resolve_ref(openapi, &reference)
+                                    resolve_ref(openapi, reference)
                                 {
                                     extract_schema_refs_recursive(
                                         &dep_schema,
@@ -607,6 +604,7 @@ fn extract_schema_refs_recursive(
     Ok(())
 }
 
+#[allow(clippy::type_complexity)]
 pub fn map_modules_to_schemas(
     openapi: &OpenAPI,
     operations_by_tag: &HashMap<String, Vec<OperationInfo>>,
@@ -627,7 +625,7 @@ pub fn map_modules_to_schemas(
                     // Track schema usage
                     schema_usage
                         .entry(schema_name.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(module.clone());
                 }
             }
@@ -641,7 +639,7 @@ pub fn map_modules_to_schemas(
         for dep in &all_dependencies {
             schema_usage
                 .entry(dep.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(module.clone());
         }
 
@@ -673,7 +671,7 @@ pub fn filter_common_schemas(
             for schema_name in schemas {
                 schema_usage
                     .entry(schema_name.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(module.clone());
             }
         }

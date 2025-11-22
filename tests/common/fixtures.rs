@@ -4,11 +4,15 @@ use openapiv3::{ObjectType, OpenAPI, Schema, SchemaData, SchemaKind, Tag, Type};
 // Test fixtures - allow dead_code as they're utilities for future tests
 #[allow(dead_code)]
 pub fn create_minimal_openapi_spec() -> OpenAPI {
-    let mut openapi = OpenAPI::default();
-    openapi.openapi = "3.0.0".to_string();
-    openapi.info.title = "Test API".to_string();
-    openapi.info.version = "1.0.0".to_string();
-    openapi
+    OpenAPI {
+        openapi: "3.0.0".to_string(),
+        info: openapiv3::Info {
+            title: "Test API".to_string(),
+            version: "1.0.0".to_string(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 /// Create an OpenAPI spec with multiple modules/tags
@@ -83,12 +87,14 @@ pub fn create_common_schema_spec() -> OpenAPI {
 /// Create a schema with enum values
 #[allow(dead_code)]
 pub fn create_enum_schema() -> Schema {
-    let mut string_type = openapiv3::StringType::default();
-    string_type.enumeration = vec![
-        Some("active".to_string()),
-        Some("inactive".to_string()),
-        Some("pending".to_string()),
-    ];
+    let string_type = openapiv3::StringType {
+        enumeration: vec![
+            Some("active".to_string()),
+            Some("inactive".to_string()),
+            Some("pending".to_string()),
+        ],
+        ..Default::default()
+    };
 
     Schema {
         schema_data: SchemaData::default(),
