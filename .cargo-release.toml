@@ -1,0 +1,56 @@
+# Configuration for cargo-release
+# See: https://github.com/crate-ci/cargo-release
+# Docs: https://github.com/crate-ci/cargo-release/blob/master/docs/configuration.md
+
+[workspace]
+# Don't release workspace members individually
+members = []
+
+[release]
+# Pre-release commit message
+pre-release-commit-message = "chore: release {{crate_name}} {{version}}"
+# Post-release commit message  
+post-release-commit-message = "chore: release {{crate_name}} {{version}}"
+
+# Sign commits and tags (optional, requires GPG)
+sign-commit = false
+sign-tag = false
+
+# Push to remote after release
+push = true
+
+# Publish to crates.io (set to true when ready)
+publish = false
+
+# Changelog configuration
+changelog = true
+changelog-path = "CHANGELOG.md"
+
+# Version bump rules
+# Options: "none", "patch", "minor", "major", or "auto"
+# "auto" will determine version from conventional commits
+auto-version = "none"  # Set to "auto" for automatic version detection from commits
+
+# Tag configuration
+tag = true
+tag-name = "v{{version}}"
+tag-message = "Release {{crate_name}} {{version}}"
+
+# Allow dirty working directory (useful for CI)
+allow-dirty = false
+
+# Allow branch (default: only main/master)
+allow-branch = ["main", "master"]
+
+[release.pre-release-commands]
+# Run tests before release
+test = ["cargo", "test", "--all-features"]
+# Run clippy before release
+clippy = ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+# Check formatting
+fmt = ["cargo", "fmt", "--", "--check"]
+
+[release.post-release-commands]
+# Commands to run after release (e.g., publish to crates.io)
+# publish = ["cargo", "publish"]
+
