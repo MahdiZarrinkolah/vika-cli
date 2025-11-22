@@ -72,6 +72,9 @@ jobs:
     name: Create Release
     needs: release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
