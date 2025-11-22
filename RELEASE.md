@@ -292,16 +292,12 @@ After the release is complete:
 
 When you push a tag matching `v*`:
 
-1. **Release Workflow** (`.github/workflows/release.yml`):
-   - Builds binaries for all platforms
-   - Generates checksums
-   - Creates GitHub Release
-   - Uploads all artifacts
-
-2. **Version Bump Workflow** (`.github/workflows/version-bump.yml`):
-   - Detects version changes in `Cargo.toml`
-   - Automatically creates and pushes tag
-   - Triggers release workflow
+**Release Workflow** (`.github/workflows/release.yml`):
+- Triggers automatically when you push a tag (e.g., `v1.0.1`)
+- Builds binaries for all platforms (Linux, macOS, Windows)
+- Generates checksums for all binaries
+- Creates GitHub Release
+- Uploads all artifacts
 
 ### Workflow Diagram
 
@@ -539,12 +535,12 @@ Then use `cargo-release` with `auto-version = "auto"` to automatically determine
 
 ### GitHub Actions Automation
 
-The `.github/workflows/version-bump.yml` workflow:
-- Detects when version changes in Cargo.toml
-- Automatically creates and pushes a Git tag
-- Triggers the release workflow
+The `.github/workflows/release.yml` workflow automatically:
+- Builds binaries for all platforms when you push a tag
+- Generates checksums
+- Creates GitHub Release with all artifacts
 
-This means you can just update the version and push, and the tag will be created automatically!
+Use `cargo release patch` to create the tag - GitHub Actions handles the rest automatically!
 
 ## Support
 

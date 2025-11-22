@@ -46,19 +46,17 @@ This guide explains how to set up automated version bumping and changelog manage
    git push origin main --tags
    ```
 
-## GitHub Actions (Fully Automated)
+## GitHub Actions (Automated Build & Release)
 
-The `.github/workflows/version-bump.yml` workflow:
-- Detects version changes in `Cargo.toml`
-- Automatically creates and pushes Git tag
-- Triggers release workflow
+The `.github/workflows/release.yml` workflow:
+- Triggers automatically when you push a tag (e.g., `v1.0.1`)
+- Builds binaries for all platforms (Linux, macOS, Windows)
+- Generates checksums for all binaries
+- Creates GitHub Release with all artifacts
 
 **Workflow**:
-1. Update version in `Cargo.toml`
-2. Update `CHANGELOG.md`
-3. Commit and push to main
-4. GitHub Actions creates tag automatically
-5. Release workflow builds and publishes
+1. Use `cargo release patch` (or minor/major) - this creates and pushes the tag
+2. GitHub Actions automatically builds binaries and creates the release
 
 ## Recommended Workflow
 
