@@ -1,5 +1,9 @@
 # Testing Guide
 
+This document covers the practical aspects of running and organizing tests in `vika-cli`.
+
+> **For testing philosophy and strategies**, see [testing-approach.md](testing-approach.md).
+
 ## Test Structure
 
 This project follows Rust's standard test organization:

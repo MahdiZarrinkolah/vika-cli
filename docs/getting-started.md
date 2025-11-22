@@ -30,13 +30,6 @@ irm https://github.com/MahdiZarrinkolah/vika-cli/releases/latest/download/instal
 cargo install vika-cli
 ```
 
-### Homebrew (macOS)
-
-```bash
-brew tap MahdiZarrinkolah/vika
-brew install vika-cli
-```
-
 ## Quick Start
 
 ### Step 1: Initialize Your Project

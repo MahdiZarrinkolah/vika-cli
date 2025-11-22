@@ -41,13 +41,6 @@ irm https://github.com/MahdiZarrinkolah/vika-cli/releases/latest/download/instal
 cargo install vika-cli
 ```
 
-### Homebrew (macOS)
-
-```bash
-brew tap MahdiZarrinkolah/vika
-brew install vika-cli
-```
-
 ### Build from Source
 
 ```bash
@@ -349,6 +342,21 @@ See [docs/architecture.md](docs/architecture.md) for detailed architecture docum
 - **Major (x.0.0)**: Breaking changes to generated code format, CLI interface changes
 - **Minor (0.x.0)**: New features, new generation options, backward-compatible additions
 - **Patch (0.0.x)**: Bug fixes, performance improvements, documentation updates
+
+### Automated Versioning
+
+Version bumping and changelog updates are automated:
+
+```bash
+# Using cargo-release (recommended)
+cargo release patch   # or minor, major
+```
+
+**📖 See [RELEASE.md](RELEASE.md) for complete release process documentation.**
+
+Quick references:
+- [docs/development/release-quick-start.md](docs/development/release-quick-start.md) - Quick start guide
+- [docs/development/release-setup.md](docs/development/release-setup.md) - Setup instructions
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 

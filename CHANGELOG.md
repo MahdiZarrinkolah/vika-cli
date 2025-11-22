@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Circular dependency detection and handling
 - Deep nesting support (unlimited depth)
 - Environment variable substitution in configuration
-- Multiple installation methods (install script, cargo, Homebrew)
+- Multiple installation methods (install script, cargo)
 - Comprehensive documentation
 - CI/CD workflows for testing and releases
 - Multi-platform binary releases (Linux, macOS Intel/ARM, Windows)

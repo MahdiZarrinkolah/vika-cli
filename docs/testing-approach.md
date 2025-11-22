@@ -2,6 +2,8 @@
 
 This document explains the testing strategies and methodologies used in `vika-cli`.
 
+> **For practical testing instructions**, see [testing.md](testing.md).
+
 ## Testing Philosophy
 
 We use a **multi-layered testing approach** combining unit tests, integration tests, and property-based testing to ensure reliability and correctness.

@@ -133,7 +133,7 @@ All errors implement `std::error::Error` and provide context.
 - **Integration tests**: Test full workflows end-to-end
 - **Snapshot tests**: Verify generated code format using `insta`
 
-See [TESTING.md](../TESTING.md) for details.
+See [testing.md](testing.md) for details.
 
 ## Performance Considerations
 
