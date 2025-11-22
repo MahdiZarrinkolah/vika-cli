@@ -55,6 +55,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - N/A (initial release)
 
+## [1.0.2] - 2025-11-22
+
+### Fixed
+
+- Fixed release workflow to use correct binary name (`vika-cli` instead of platform-specific names)
+- Fixed README.md with correct directory name for cloning (`cd vika-cli` instead of `cd vika`)
+
+### Changed
+
+- Removed redundant version-bump workflow (using cargo-release instead)
+- Updated GitHub Actions workflows to explicitly set permissions for releases
+
+## [1.0.1] - 2025-11-22
+
+### Fixed
+
+- Fixed GitHub Actions release workflow permissions
+- Fixed release workflow binary path issue
+- Initial multi-platform release workflow setup
+
 ## [Unreleased]
 
 ### Planned
