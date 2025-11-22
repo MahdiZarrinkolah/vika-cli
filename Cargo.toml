@@ -1,7 +1,15 @@
 [package]
 name = "vika-cli"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
+rust-version = "1.70"
+description = "Generate TypeScript types, Zod schemas, and Fetch-based API clients from OpenAPI/Swagger specifications"
+repository = "https://github.com/MahdiZarrinkolah/vika-cli"
+license = "MIT"
+readme = "README.md"
+keywords = ["openapi", "swagger", "typescript", "code-generation", "api-client", "zod", "cli"]
+categories = ["development-tools", "web-programming"]
+authors = ["Mahdi Zarrinkolah <mz.goldenhat@gmail.com>"]
 
 [lib]
 name = "vika_cli"

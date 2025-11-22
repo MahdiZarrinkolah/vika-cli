@@ -1,5 +1,18 @@
 use serde::{Deserialize, Serialize};
 
+/// Main configuration structure for vika-cli.
+///
+/// Represents the `.vika.json` configuration file that controls
+/// code generation behavior, output directories, and module selection.
+///
+/// # Example
+///
+/// ```no_run
+/// use vika_cli::Config;
+///
+/// let config = Config::default();
+/// println!("Root directory: {}", config.root_dir);
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(rename = "$schema", default = "default_schema")]
@@ -30,6 +43,9 @@ fn default_root_dir() -> String {
     "src".to_string()
 }
 
+/// Configuration for schema generation (TypeScript types and Zod schemas).
+///
+/// Controls where schemas are generated and how they are named.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SchemasConfig {
     #[serde(default = "default_schemas_output")]
@@ -47,6 +63,9 @@ fn default_schemas_output() -> String {
     "src/schemas".to_string()
 }
 
+/// Configuration for API client generation.
+///
+/// Controls API client output location, style, base URL, and header strategy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApisConfig {
     #[serde(default = "default_apis_output")]
@@ -74,7 +93,10 @@ fn default_style() -> String {
     "fetch".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configuration for module selection and filtering.
+///
+/// Controls which OpenAPI tags/modules are included or excluded from generation.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ModulesConfig {
     #[serde(default)]
     pub ignore: Vec<String>,
@@ -127,14 +149,6 @@ impl Default for ApisConfig {
     }
 }
 
-impl Default for ModulesConfig {
-    fn default() -> Self {
-        Self {
-            ignore: vec![],
-            selected: vec![],
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {

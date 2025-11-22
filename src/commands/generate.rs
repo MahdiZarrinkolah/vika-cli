@@ -43,7 +43,7 @@ pub async fn run(
     use crate::error::GenerationError;
 
     // Get spec path
-    let spec_path = spec.ok_or_else(|| GenerationError::SpecPathRequired)?;
+    let spec_path = spec.ok_or(GenerationError::SpecPathRequired)?;
 
     // Fetch and parse Swagger spec
     progress.start_spinner(&format!("Fetching spec from: {}", spec_path));

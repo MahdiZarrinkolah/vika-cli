@@ -79,7 +79,7 @@ impl SchemaResolver {
                 Type::Array(array) => {
                     if let Some(items) = &array.items {
                         if let ReferenceOr::Reference { reference } = items {
-                            if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                            if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                 deps.push(ref_name.clone());
                                 if !visited.contains(&ref_name) {
                                     deps.extend(self.extract_schema_dependencies_from_ref(

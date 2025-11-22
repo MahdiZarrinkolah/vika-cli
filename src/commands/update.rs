@@ -22,7 +22,7 @@ pub async fn run() -> Result<()> {
     // Get spec path from config
     let spec_path = config
         .spec_path
-        .ok_or_else(|| GenerationError::SpecPathRequired)?;
+        .ok_or(GenerationError::SpecPathRequired)?;
 
     // Get selected modules from config
     let selected_modules = if config.modules.selected.is_empty() {
@@ -65,10 +65,7 @@ pub async fn run() -> Result<()> {
 
     // Generate common module first if there are shared schemas
     if !common_schemas.is_empty() {
-        println!(
-            "{}",
-            format!("🔨 Regenerating common schemas...").bright_cyan()
-        );
+        println!("{}", "🔨 Regenerating common schemas...".bright_cyan());
 
         // Shared enum registry to ensure consistent naming between TypeScript and Zod
         let mut shared_enum_registry = std::collections::HashMap::new();

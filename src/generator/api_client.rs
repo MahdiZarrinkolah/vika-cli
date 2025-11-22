@@ -312,7 +312,7 @@ fn extract_request_body(openapi: &OpenAPI, operation: &Operation) -> Result<Opti
                             if let Some(schema_ref) = &json_media.schema {
                                 match schema_ref {
                                     ReferenceOr::Reference { reference } => {
-                                        if let Some(ref_name) = get_schema_name_from_ref(&reference)
+                                        if let Some(ref_name) = get_schema_name_from_ref(reference)
                                         {
                                             Ok(Some(to_pascal_case(&ref_name)))
                                         } else {
@@ -350,7 +350,7 @@ fn extract_request_body(openapi: &OpenAPI, operation: &Operation) -> Result<Opti
                     if let Some(schema_ref) = &json_media.schema {
                         match schema_ref {
                             ReferenceOr::Reference { reference } => {
-                                if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                     Ok(Some(to_pascal_case(&ref_name)))
                                 } else {
                                     Ok(Some("any".to_string()))
@@ -394,7 +394,7 @@ fn extract_response_type(openapi: &OpenAPI, operation: &Operation) -> Result<Str
                             if let Some(schema_ref) = &json_media.schema {
                                 match schema_ref {
                                     ReferenceOr::Reference { reference } => {
-                                        if let Some(ref_name) = get_schema_name_from_ref(&reference)
+                                        if let Some(ref_name) = get_schema_name_from_ref(reference)
                                         {
                                             Ok(to_pascal_case(&ref_name))
                                         } else {
@@ -425,7 +425,7 @@ fn extract_response_type(openapi: &OpenAPI, operation: &Operation) -> Result<Str
                     if let Some(schema_ref) = &json_media.schema {
                         match schema_ref {
                             ReferenceOr::Reference { reference } => {
-                                if let Some(ref_name) = get_schema_name_from_ref(&reference) {
+                                if let Some(ref_name) = get_schema_name_from_ref(reference) {
                                     Ok(to_pascal_case(&ref_name))
                                 } else {
                                     Ok("any".to_string())

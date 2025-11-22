@@ -1,5 +1,21 @@
 use thiserror::Error;
 
+/// Main error type for vika-cli operations.
+///
+/// This enum represents all possible errors that can occur during
+/// code generation, configuration loading, or file operations.
+///
+/// # Example
+///
+/// ```no_run
+/// use vika_cli::error::VikaError;
+///
+/// match result {
+///     Ok(value) => println!("Success: {:?}", value),
+///     Err(VikaError::Schema(e)) => eprintln!("Schema error: {}", e),
+///     Err(e) => eprintln!("Other error: {}", e),
+/// }
+/// ```
 #[derive(Debug, Error)]
 pub enum VikaError {
     #[error("Schema error: {0}")]

@@ -1,6 +1,6 @@
 use crate::config::model::Config;
 use crate::error::{ConfigError, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub fn validate_config(config: &Config) -> Result<()> {
     // Validate root_dir
@@ -38,7 +38,7 @@ pub fn validate_config(config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn validate_safe_path(path: &PathBuf) -> Result<()> {
+fn validate_safe_path(path: &Path) -> Result<()> {
     // Prevent writing to system directories
     let path_str = path.to_string_lossy();
 

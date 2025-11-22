@@ -323,18 +323,18 @@ fn schema_to_typescript(
                                     // For $ref, always use the type name (don't inline)
                                     // Generate the referenced schema if not already processed
                                     if !processed.contains(&ref_name) {
-                                        if let Ok(resolved) = resolve_ref(openapi, &reference) {
-                                            if let ReferenceOr::Item(ref_schema) = resolved {
-                                                generate_type_for_schema(
-                                                    openapi,
-                                                    &ref_name,
-                                                    &ref_schema,
-                                                    types,
-                                                    processed,
-                                                    enum_registry,
-                                                    current_schema_name,
-                                                )?;
-                                            }
+                                        if let Ok(ReferenceOr::Item(ref_schema)) =
+                                            resolve_ref(openapi, &reference)
+                                        {
+                                            generate_type_for_schema(
+                                                openapi,
+                                                &ref_name,
+                                                &ref_schema,
+                                                types,
+                                                processed,
+                                                enum_registry,
+                                                current_schema_name,
+                                            )?;
                                         }
                                     }
                                     to_pascal_case(&ref_name)

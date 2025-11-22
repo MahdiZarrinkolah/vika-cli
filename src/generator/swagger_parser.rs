@@ -162,7 +162,7 @@ fn add_operation(
             // If no tags, use "default" module
             result
                 .entry("default".to_string())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(OperationInfo {
                     method: method.to_string(),
                     path: path.to_string(),

@@ -22,7 +22,7 @@ pub async fn run(
 ) -> Result<()> {
     use crate::error::GenerationError;
 
-    let spec_path = spec.ok_or_else(|| GenerationError::SpecPathRequired)?;
+    let spec_path = spec.ok_or(GenerationError::SpecPathRequired)?;
 
     println!("{}", "🔍 Inspecting OpenAPI spec...".bright_cyan());
     println!();
@@ -55,7 +55,7 @@ pub async fn run(
         );
     } else {
         // Human-readable output
-        println!("{}", format!("📊 Spec Summary:").bright_cyan());
+        println!("{}", "📊 Spec Summary:".bright_cyan());
         println!("  • Total modules: {}", parsed.modules.len());
         println!(
             "  • Total endpoints: {}",
