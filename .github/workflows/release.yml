@@ -45,9 +45,9 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} ${{ matrix.asset_name }}
+            cp target/${{ matrix.target }}/release/vika-cli.exe ${{ matrix.asset_name }}
           else
-            cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} ${{ matrix.asset_name }}
+            cp target/${{ matrix.target }}/release/vika-cli ${{ matrix.asset_name }}
             chmod +x ${{ matrix.asset_name }}
           fi
 
