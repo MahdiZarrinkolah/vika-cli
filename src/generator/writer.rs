@@ -327,6 +327,9 @@ pub fn write_file_with_backup(
 
 fn create_backup(path: &Path) -> Result<()> {
     use std::time::{SystemTime, UNIX_EPOCH};
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -339,10 +342,24 @@ fn create_backup(path: &Path) -> Result<()> {
             source: e,
         })?;
 
-    // Preserve directory structure
-    let relative_path = path.strip_prefix(".")
-        .unwrap_or(path);
-    let backup_path = backup_dir.join(relative_path);
+    // Determine backup path
+    let backup_path = if path.is_absolute() {
+        // For absolute paths (e.g., from temp directories in tests),
+        // use a hash-based filename to avoid very long paths
+        let path_str = path.display().to_string();
+        let mut hasher = DefaultHasher::new();
+        path_str.hash(&mut hasher);
+        let hash = format!("{:x}", hasher.finish());
+        let filename = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("file");
+        backup_dir.join(format!("{}_{}", hash, filename))
+    } else {
+        // For relative paths, preserve directory structure
+        let relative_path = path.strip_prefix(".")
+            .unwrap_or(path);
+        backup_dir.join(relative_path)
+    };
     
     if let Some(parent) = backup_path.parent() {
         std::fs::create_dir_all(parent)

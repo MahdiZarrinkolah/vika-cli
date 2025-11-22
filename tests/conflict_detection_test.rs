@@ -1,5 +1,4 @@
 use vika_cli::generator::writer::{write_file_with_backup, write_file_safe};
-use tempfile::TempDir;
 use std::fs;
 
 #[test]
@@ -16,7 +15,7 @@ fn test_detect_user_modified_file() {
     
     // Try to write without force (should detect conflict)
     let new_content = "export const test = 3;";
-    let result = write_file_with_backup(&test_file, new_content, false, false);
+    let _result = write_file_with_backup(&test_file, new_content, false, false);
     
     // Should fail with conflict error (if metadata exists)
     // Note: This test may pass if metadata doesn't exist yet
@@ -75,11 +74,9 @@ fn test_create_backup() {
     
     let new_content = "export const test = 2;";
     let result = write_file_with_backup(&test_file, new_content, true, false);
-    assert!(result.is_ok());
+    assert!(result.is_ok(), "Backup creation failed: {:?}", result.err());
     
-    // Backup directory should exist (if backup was created)
-    let backup_dir = temp_dir.path().join(".vika-backup");
-    // Note: Backup is created in current directory, not temp_dir
-    // This test verifies the function doesn't error
+    // Note: Backup is created in current directory (.vika-backup), not in temp_dir
+    // This test verifies the function doesn't error when creating backups
 }
 

@@ -1,6 +1,6 @@
 pub mod fixtures;
 pub mod helpers;
 
-pub use fixtures::*;
+// Re-export commonly used items
 pub use helpers::*;
 

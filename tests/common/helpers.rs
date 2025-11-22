@@ -1,13 +1,17 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tempfile::TempDir;
 use vika_cli::config::model::Config;
 
+// Test helpers - allow dead_code as they're utilities for future tests
+
 /// Create a temporary directory for testing
+#[allow(dead_code)]
 pub fn create_temp_dir() -> TempDir {
     tempfile::tempdir().expect("Failed to create temp directory")
 }
 
 /// Assert file contents match expected
+#[allow(dead_code)]
 pub fn assert_file_contents(path: &Path, expected: &str) {
     let content = std::fs::read_to_string(path)
         .unwrap_or_else(|_| panic!("Failed to read file: {}", path.display()));
@@ -15,11 +19,13 @@ pub fn assert_file_contents(path: &Path, expected: &str) {
 }
 
 /// Create a mock config for testing
+#[allow(dead_code)]
 pub fn create_mock_config() -> Config {
     Config::default()
 }
 
 /// Create a mock config with custom paths
+#[allow(dead_code)]
 pub fn create_mock_config_with_paths(schemas_output: &str, apis_output: &str) -> Config {
     Config {
         root_dir: "src".to_string(),
@@ -48,11 +54,13 @@ pub fn setup_test_env() -> TempDir {
 }
 
 /// Cleanup test environment
+#[allow(dead_code)]
 pub fn cleanup_test_env(_dir: TempDir) {
     // TempDir automatically cleans up on drop
 }
 
 /// Assert error type matches expected
+#[allow(dead_code)]
 pub fn assert_error_type<T: std::fmt::Display>(result: Result<T, vika_cli::error::VikaError>, expected_error: &str) {
     match result {
         Ok(_) => panic!("Expected error but got Ok"),
@@ -69,11 +77,13 @@ pub fn assert_error_type<T: std::fmt::Display>(result: Result<T, vika_cli::error
 }
 
 /// Load a test OpenAPI spec from JSON string
+#[allow(dead_code)]
 pub fn load_test_spec_from_json(json: &str) -> openapiv3::OpenAPI {
     serde_json::from_str(json).expect("Failed to parse test spec")
 }
 
 /// Create a minimal OpenAPI spec JSON string
+#[allow(dead_code)]
 pub fn minimal_spec_json() -> &'static str {
     r#"
     {

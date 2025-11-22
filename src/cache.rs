@@ -138,28 +138,50 @@ mod tests {
     use super::*;
     use std::env;
 
+    // Helper to handle mutex poisoning gracefully
+    fn lock_test_mutex() -> std::sync::MutexGuard<'static, ()> {
+        TEST_MUTEX.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    // Helper to ensure cleanup happens even on panic
+    struct DirGuard {
+        original_dir: std::path::PathBuf,
+    }
+
+    impl Drop for DirGuard {
+        fn drop(&mut self) {
+            let _ = env::set_current_dir(&self.original_dir);
+        }
+    }
+
     #[test]
     fn test_cache_spec() {
-        let _lock = TEST_MUTEX.lock().unwrap();
+        let _lock = lock_test_mutex();
         let temp_dir = tempfile::tempdir().unwrap();
         let original_dir = env::current_dir().unwrap();
+        let _guard = DirGuard { original_dir: original_dir.clone() };
         env::set_current_dir(&temp_dir).unwrap();
+        
+        // Ensure cache directory exists
+        let _ = CacheManager::ensure_cache_dir();
         
         let url = "https://example.com/spec.json";
         let content = r#"{"openapi": "3.0.0", "info": {"title": "Test", "version": "1.0.0"}}"#;
         
         let result = CacheManager::cache_spec(url, content);
         assert!(result.is_ok(), "Failed to cache spec: {:?}", result.err());
-        
-        env::set_current_dir(&original_dir).unwrap();
     }
 
     #[test]
     fn test_get_cached_spec() {
-        let _lock = TEST_MUTEX.lock().unwrap();
+        let _lock = lock_test_mutex();
         let temp_dir = tempfile::tempdir().unwrap();
         let original_dir = env::current_dir().unwrap();
+        let _guard = DirGuard { original_dir: original_dir.clone() };
         env::set_current_dir(&temp_dir).unwrap();
+        
+        // Ensure cache directory exists
+        let _ = CacheManager::ensure_cache_dir();
         
         let url = "https://example.com/spec.json";
         let content = r#"{"openapi": "3.0.0", "info": {"title": "Test", "version": "1.0.0"}}"#;
@@ -179,31 +201,35 @@ mod tests {
         let cached = CacheManager::get_cached_spec(url).unwrap();
         assert!(cached.is_some(), "Cached spec should be found");
         assert_eq!(cached.unwrap(), content);
-        
-        env::set_current_dir(&original_dir).unwrap();
     }
 
     #[test]
     fn test_get_cached_spec_miss() {
-        let _lock = TEST_MUTEX.lock().unwrap();
+        let _lock = lock_test_mutex();
         let temp_dir = tempfile::tempdir().unwrap();
         let original_dir = env::current_dir().unwrap();
+        let _guard = DirGuard { original_dir: original_dir.clone() };
         env::set_current_dir(&temp_dir).unwrap();
+        
+        // Ensure cache directory exists
+        let _ = CacheManager::ensure_cache_dir();
         
         let url = "https://example.com/spec.json";
         
         let cached = CacheManager::get_cached_spec(url).unwrap();
         assert!(cached.is_none());
-        
-        env::set_current_dir(&original_dir).unwrap();
     }
 
     #[test]
     fn test_get_cached_spec_wrong_url() {
-        let _lock = TEST_MUTEX.lock().unwrap();
+        let _lock = lock_test_mutex();
         let temp_dir = tempfile::tempdir().unwrap();
         let original_dir = env::current_dir().unwrap();
+        let _guard = DirGuard { original_dir: original_dir.clone() };
         env::set_current_dir(&temp_dir).unwrap();
+        
+        // Ensure cache directory exists
+        let _ = CacheManager::ensure_cache_dir();
         
         let url1 = "https://example.com/spec1.json";
         let url2 = "https://example.com/spec2.json";
@@ -213,8 +239,6 @@ mod tests {
         
         let cached = CacheManager::get_cached_spec(url2).unwrap();
         assert!(cached.is_none()); // Different URL should not match
-        
-        env::set_current_dir(&original_dir).unwrap();
     }
 }
 

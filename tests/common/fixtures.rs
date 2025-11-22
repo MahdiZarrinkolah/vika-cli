@@ -1,7 +1,8 @@
 use openapiv3::{OpenAPI, Schema, SchemaKind, Type, ObjectType, SchemaData, Tag};
 use indexmap::IndexMap;
 
-/// Create a minimal valid OpenAPI 3.0 spec for testing
+// Test fixtures - allow dead_code as they're utilities for future tests
+#[allow(dead_code)]
 pub fn create_minimal_openapi_spec() -> OpenAPI {
     let mut openapi = OpenAPI::default();
     openapi.openapi = "3.0.0".to_string();
@@ -11,6 +12,7 @@ pub fn create_minimal_openapi_spec() -> OpenAPI {
 }
 
 /// Create an OpenAPI spec with multiple modules/tags
+#[allow(dead_code)]
 pub fn create_multi_module_spec() -> OpenAPI {
     let mut openapi = create_minimal_openapi_spec();
     
@@ -38,6 +40,7 @@ pub fn create_multi_module_spec() -> OpenAPI {
 }
 
 /// Create an OpenAPI spec with common schemas
+#[allow(dead_code)]
 pub fn create_common_schema_spec() -> OpenAPI {
     let mut openapi = create_minimal_openapi_spec();
     
@@ -69,6 +72,7 @@ pub fn create_common_schema_spec() -> OpenAPI {
 }
 
 /// Create a schema with enum values
+#[allow(dead_code)]
 pub fn create_enum_schema() -> Schema {
     let mut string_type = openapiv3::StringType::default();
     string_type.enumeration = vec![
@@ -110,6 +114,7 @@ pub fn create_user_schema() -> Schema {
 }
 
 /// Create a common schema (used by multiple modules)
+#[allow(dead_code)]
 pub fn create_common_schema() -> Schema {
     let mut object_type = ObjectType::default();
     object_type.properties.insert(
@@ -128,6 +133,7 @@ pub fn create_common_schema() -> Schema {
 }
 
 /// Create an array schema
+#[allow(dead_code)]
 pub fn create_array_schema() -> Schema {
     let array_type = openapiv3::ArrayType {
         items: Some(openapiv3::ReferenceOr::Item(Box::new(Schema {
@@ -146,6 +152,7 @@ pub fn create_array_schema() -> Schema {
 }
 
 /// Create a nested object schema
+#[allow(dead_code)]
 pub fn create_nested_schema() -> Schema {
     let mut inner_object = ObjectType::default();
     inner_object.properties.insert(
@@ -172,6 +179,7 @@ pub fn create_nested_schema() -> Schema {
 }
 
 /// Create a schema with nullable field
+#[allow(dead_code)]
 pub fn create_nullable_schema() -> Schema {
     let mut object_type = ObjectType::default();
     let nullable_schema = Schema {

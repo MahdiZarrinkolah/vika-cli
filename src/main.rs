@@ -1,8 +1,6 @@
 use clap::Parser;
 use tracing_subscriber;
 
-use vika_cli::cli::Cli;
-
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();

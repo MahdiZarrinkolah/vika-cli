@@ -7,3 +7,5 @@ Cargo.lock
 temp
 swagger-*.json
 .vika-cache
+.vika-backup
+.vika-cache
