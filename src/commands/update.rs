@@ -1,7 +1,7 @@
 use crate::config::loader::load_config;
 use crate::config::validator::validate_config;
 use crate::error::Result;
-use crate::generator::api_client::generate_api_client;
+use crate::generator::api_client::generate_api_client_with_registry;
 use crate::generator::swagger_parser::{fetch_and_parse_spec, filter_common_schemas};
 use crate::generator::ts_typings::generate_typings_with_registry;
 use crate::generator::writer::{write_api_client, write_schemas};
@@ -145,16 +145,25 @@ pub async fn run() -> Result<()> {
             Vec::new()
         };
 
-        // Generate API client
-        let api_functions =
-            generate_api_client(&parsed.openapi, &operations, module, &common_schemas)?;
+        // Generate API client (using same enum registry as schemas)
+        let api_result = generate_api_client_with_registry(
+            &parsed.openapi,
+            &operations,
+            module,
+            &common_schemas,
+            &mut shared_enum_registry,
+        )?;
+
+        // Combine response types with schema types
+        let mut all_types = types;
+        all_types.extend(api_result.response_types);
 
         // Write schemas
-        let schema_files = write_schemas(&schemas_dir, module, &types, &zod_schemas)?;
+        let schema_files = write_schemas(&schemas_dir, module, &all_types, &zod_schemas)?;
         total_files += schema_files.len();
 
         // Write API client
-        let api_files = write_api_client(&apis_dir, module, &api_functions)?;
+        let api_files = write_api_client(&apis_dir, module, &api_result.functions)?;
         total_files += api_files.len();
 
         let module_file_count = schema_files.len() + api_files.len();

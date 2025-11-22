@@ -41,13 +41,22 @@ pub fn write_schemas_with_options(
 
     // Write TypeScript types
     if !types.is_empty() {
+        let types_content_raw = types
+            .iter()
+            .map(|t| t.content.clone())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        
+        // Check if we need to import Common types
+        let needs_common_import = types_content_raw.contains("Common.");
+        let common_import = if needs_common_import {
+            "import * as Common from \"../common\";\n\n"
+        } else {
+            ""
+        };
+        
         let types_content = format_typescript_code(
-            &types
-                .iter()
-                .map(|t| t.content.clone())
-                .collect::<Vec<_>>()
-                .join("\n\n")
-                .to_string(),
+            &format!("{}{}", common_import, types_content_raw),
         );
 
         let types_file = module_dir.join("types.ts");
@@ -132,6 +141,7 @@ pub fn write_api_client_with_options(
                 } else if in_function {
                     func_lines.push(line);
                 }
+                // Skip type definitions - they're in types.ts now
             }
 
             if !func_lines.is_empty() {
@@ -139,7 +149,7 @@ pub fn write_api_client_with_options(
             }
         }
 
-        // Combine imports and function bodies
+        // Combine imports and function bodies (no type definitions)
         let imports_vec: Vec<String> = all_imports.iter().cloned().collect();
         let imports_str = imports_vec.join("\n");
         let functions_str = function_bodies.join("\n\n");

@@ -1,0 +1,12 @@
+---
+source: tests/snapshot_api_test.rs
+expression: output
+---
+import { http } from "../http";
+export const getProducts = async (status: StatusEnum, query?: { sort?: SortEnum }) => {
+    const queryString = new URLSearchParams();
+    if (query?.sort) queryString.append("sort", String(query.sort));
+    const queryStr = queryString.toString();
+    const url = `/products` + (queryStr ? `?${queryStr}` : '');
+    return http.get<any>(url);
+};

@@ -1,0 +1,15 @@
+---
+source: tests/snapshot_api_test.rs
+expression: output
+---
+import { http } from "../http";
+export const getProducts = async (query?: { tags?: string[], ids?: number[] }) => {
+    const queryString = new URLSearchParams();
+    if (query?.tags) {
+      query.tags.forEach((item) => queryString.append("tags", String(item)));
+    }
+    if (query?.ids) queryString.append("ids", query.ids.join(","));
+    const queryStr = queryString.toString();
+    const url = `/products` + (queryStr ? `?${queryStr}` : '');
+    return http.get<any>(url);
+};

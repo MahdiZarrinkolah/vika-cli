@@ -1,0 +1,28 @@
+---
+source: tests/snapshot_api_test.rs
+expression: output
+---
+export type GetProductErrors = {
+    /**
+     * Bad Request
+     */
+    400: Error;
+    /**
+     * Not Found
+     */
+    404: NotFoundError;
+    /**
+     * Internal Server Error
+     */
+    500: any;
+};
+
+export type GetProductError = GetProductErrors[keyof GetProductErrors];
+
+import { http } from "../http";
+import type { GetProductErrors, GetProductError } from "../../schemas/test";
+
+export const getProduct = async (id: string) => {
+    const url = `/products/${id}`;
+    return http.get<any>(url);
+};
