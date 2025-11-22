@@ -25,22 +25,25 @@ cargo test --lib
 ### Integration Tests (in `tests/` directory)
 Integration tests test the public API and how components work together.
 
-**Location:** `tests/integration/*.rs`
+**Location:** `tests/*.rs` (each file is a separate test binary)
 
 **Run integration tests:**
 ```bash
 # All integration tests
-cargo test --test '*'
+cargo test --tests
 
-# Specific integration test
-cargo test --test integration::generate_test
+# Specific integration test file
+cargo test --test generate_test
+cargo test --test common_schemas_test
+cargo test --test module_filtering_test
+cargo test --test conflict_detection_test
 ```
 
 **Test files:**
-- `tests/integration/generate_test.rs` - Full generation workflow
-- `tests/integration/common_schemas_test.rs` - Common schema detection
-- `tests/integration/module_filtering_test.rs` - Module filtering logic
-- `tests/integration/conflict_detection_test.rs` - File conflict detection
+- `tests/generate_test.rs` - Full generation workflow (parse → generate → write)
+- `tests/common_schemas_test.rs` - Common schema detection across modules
+- `tests/module_filtering_test.rs` - Module filtering logic
+- `tests/conflict_detection_test.rs` - File conflict detection and handling
 
 ### Shared Test Utilities (in `tests/common/`)
 Shared utilities for integration tests.
@@ -57,8 +60,8 @@ Shared utilities for integration tests.
 mod common;
 use common::*;  // Imports fixtures and helpers
 
-#[test]
-fn my_test() {
+#[tokio::test]
+async fn my_test() {
     let spec = create_minimal_openapi_spec();  // From fixtures
     let temp_dir = setup_test_env();           // From helpers
 }
@@ -66,7 +69,7 @@ fn my_test() {
 
 ## Running Tests
 
-### Run all tests
+### Run all tests (unit + integration)
 ```bash
 cargo test
 ```
@@ -78,19 +81,23 @@ cargo test --lib
 
 ### Run only integration tests
 ```bash
-cargo test --test '*'
-```
-
-### Run a specific test
-```bash
-# By name
-cargo test test_to_pascal_case
-
-# By module
-cargo test config::model::tests
+# All integration tests
+cargo test --tests
 
 # Specific integration test file
-cargo test --test integration::generate_test
+cargo test --test generate_test
+cargo test --test common_schemas_test
+cargo test --test module_filtering_test
+cargo test --test conflict_detection_test
+```
+
+### Run a specific test by name
+```bash
+# Searches across all tests (unit + integration)
+cargo test test_to_pascal_case
+
+# By module (unit tests only)
+cargo test config::model::tests
 ```
 
 ### Run tests with output
@@ -98,19 +105,57 @@ cargo test --test integration::generate_test
 cargo test -- --nocapture
 ```
 
-### Run tests in parallel (default) or sequentially
+### Run tests sequentially (for tests that change global state)
 ```bash
-# Parallel (default)
-cargo test
-
-# Sequential
+# Sequential execution
 cargo test -- --test-threads=1
+
+# Parallel execution (default)
+cargo test
+```
+
+## Integration Test Examples
+
+### Example: Run full generation workflow test
+```bash
+cargo test --test generate_test
+
+# With verbose output
+cargo test --test generate_test -- --nocapture
+```
+
+### Example: Run all integration tests
+```bash
+# Run all integration tests
+cargo test --tests
+
+# Run all integration tests sequentially
+cargo test --tests -- --test-threads=1
+```
+
+### Example: Run specific integration test
+```bash
+# Test common schema detection
+cargo test --test common_schemas_test
+
+# Test module filtering
+cargo test --test module_filtering_test
+
+# Test conflict detection
+cargo test --test conflict_detection_test
 ```
 
 ## Test Organization Benefits
 
-1. **Unit tests** test individual functions in isolation
-2. **Integration tests** test the full workflow end-to-end
-3. **Shared utilities** avoid code duplication across tests
-4. **Standard structure** follows Rust conventions, making it familiar to Rust developers
+1. **Unit tests** - Test individual functions in isolation, fast execution
+2. **Integration tests** - Test full workflows end-to-end, verify file I/O
+3. **Shared utilities** - Avoid code duplication, consistent test data
+4. **Standard structure** - Follows Rust conventions
 
+## Notes
+
+- Integration tests in `tests/` are compiled as separate binaries
+- Each `.rs` file in `tests/` becomes its own test binary
+- Subdirectories in `tests/` are NOT compiled as test binaries (only files directly in `tests/`)
+- Use `tests/common/` for shared utilities that other tests import with `mod common;`
+- Cache tests use a mutex to prevent parallel execution issues (they change the working directory)

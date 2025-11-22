@@ -1,6 +1,6 @@
 use vika_cli::generator::swagger_parser::extract_modules;
 use openapiv3::{OpenAPI, Tag};
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 #[test]
 fn test_filter_ignored_modules() {
@@ -9,19 +9,19 @@ fn test_filter_ignored_modules() {
         name: "users".to_string(),
         description: None,
         external_docs: None,
-        extensions: HashMap::new(),
+        extensions: IndexMap::new(),
     });
     openapi.tags.push(Tag {
         name: "products".to_string(),
         description: None,
         external_docs: None,
-        extensions: HashMap::new(),
+        extensions: IndexMap::new(),
     });
     openapi.tags.push(Tag {
         name: "admin".to_string(),
         description: None,
         external_docs: None,
-        extensions: HashMap::new(),
+        extensions: IndexMap::new(),
     });
     
     let modules = extract_modules(&openapi);
@@ -58,7 +58,7 @@ fn test_all_modules_ignored() {
         name: "users".to_string(),
         description: None,
         external_docs: None,
-        extensions: HashMap::new(),
+        extensions: IndexMap::new(),
     });
     
     let modules = extract_modules(&openapi);

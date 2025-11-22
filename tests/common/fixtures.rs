@@ -174,7 +174,7 @@ pub fn create_nested_schema() -> Schema {
 /// Create a schema with nullable field
 pub fn create_nullable_schema() -> Schema {
     let mut object_type = ObjectType::default();
-    let mut nullable_schema = Schema {
+    let nullable_schema = Schema {
         schema_data: SchemaData {
             nullable: true,
             ..Default::default()
