@@ -75,6 +75,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed release workflow binary path issue
 - Initial multi-platform release workflow setup
 
+## [1.0.3] - 2025-11-22
+
+### Fixed
+
+- Fixed release workflow to include install scripts (install.sh and install.ps1) in release assets
+
 ## [Unreleased]
 
 ### Planned
