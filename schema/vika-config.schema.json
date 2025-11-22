@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Vika CLI Configuration",
+  "description": "Configuration file for vika-cli code generation tool",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON schema reference URL",
+      "default": "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json"
+    },
+    "root_dir": {
+      "type": "string",
+      "description": "Root directory for all generated files",
+      "default": "src"
+    },
+    "schemas": {
+      "type": "object",
+      "description": "Configuration for schema generation (TypeScript types and Zod schemas)",
+      "properties": {
+        "output": {
+          "type": "string",
+          "description": "Output directory for TypeScript types and Zod schemas",
+          "default": "src/schemas"
+        },
+        "naming": {
+          "type": "string",
+          "description": "Naming convention for generated schema types",
+          "enum": ["PascalCase", "camelCase", "snake_case"],
+          "default": "PascalCase"
+        }
+      },
+      "additionalProperties": false
+    },
+    "apis": {
+      "type": "object",
+      "description": "Configuration for API client generation",
+      "properties": {
+        "output": {
+          "type": "string",
+          "description": "Output directory for API client functions",
+          "default": "src/apis"
+        },
+        "style": {
+          "type": "string",
+          "description": "API client style",
+          "enum": ["fetch"],
+          "default": "fetch"
+        },
+        "base_url": {
+          "type": "string",
+          "description": "Base URL prefix for API endpoints. Supports environment variable substitution (e.g., ${API_BASE_URL}/v1)"
+        },
+        "header_strategy": {
+          "type": "string",
+          "description": "How authentication headers are generated",
+          "enum": ["bearerToken", "fixed", "consumerInjected"],
+          "default": "consumerInjected"
+        }
+      },
+      "additionalProperties": false
+    },
+    "modules": {
+      "type": "object",
+      "description": "Configuration for module selection and filtering",
+      "properties": {
+        "ignore": {
+          "type": "array",
+          "description": "List of OpenAPI tags/modules to exclude from generation",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "selected": {
+          "type": "array",
+          "description": "List of OpenAPI tags/modules to include in generation (empty array means all modules)",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "spec_path": {
+      "type": "string",
+      "description": "Path or URL to the OpenAPI/Swagger specification file"
+    }
+  },
+  "additionalProperties": false
+}
+
