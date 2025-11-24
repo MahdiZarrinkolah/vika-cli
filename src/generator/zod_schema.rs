@@ -540,6 +540,57 @@ fn schema_to_zod(
                                         if let Some(enum_name) =
                                             enum_registry.get(&schema_enum_key)
                                         {
+                                            // Clone enum_name to avoid borrow checker issues
+                                            let enum_name = enum_name.clone();
+                                            
+                                            // Check if enum schema has already been generated
+                                            let schema_already_generated = zod_schemas.iter().any(|s| {
+                                                s.content.contains(&format!("{}Schema", enum_name))
+                                            });
+                                            
+                                            // If not generated yet, generate it
+                                            if !schema_already_generated {
+                                                if !processed.contains(&ref_name) {
+                                                    if let Ok(ReferenceOr::Item(ref_schema)) =
+                                                        resolve_ref(openapi, reference)
+                                                    {
+                                                        generate_zod_for_schema(
+                                                            openapi,
+                                                            &ref_name,
+                                                            &ref_schema,
+                                                            zod_schemas,
+                                                            processed,
+                                                            enum_registry,
+                                                            Some(&parent_schema_for_props),
+                                                            common_schemas,
+                                                        )?;
+                                                    }
+                                                } else {
+                                                    // Schema was processed but enum schema not generated
+                                                    // This can happen if the enum was registered from TypeScript generation
+                                                    // We need to resolve the schema and generate the enum schema
+                                                    if let Ok(ReferenceOr::Item(ref_schema)) =
+                                                        resolve_ref(openapi, reference)
+                                                    {
+                                                        // Extract enum values from the schema
+                                                        if let SchemaKind::Type(Type::String(string_type)) = &ref_schema.schema_kind {
+                                                            if !string_type.enumeration.is_empty() {
+                                                                let mut enum_values: Vec<String> = string_type
+                                                                    .enumeration
+                                                                    .iter()
+                                                                    .filter_map(|v| v.as_ref().cloned())
+                                                                    .collect();
+                                                                if !enum_values.is_empty() {
+                                                                    enum_values.sort();
+                                                                    let enum_schema = generate_enum_zod(&enum_name, &enum_values);
+                                                                    zod_schemas.push(enum_schema);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            
                                             let schema_ref =
                                                 if common_schemas.contains(&ref_name) {
                                                     format!(
