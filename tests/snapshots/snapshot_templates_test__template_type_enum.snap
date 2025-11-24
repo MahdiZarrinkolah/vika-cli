@@ -1,0 +1,11 @@
+---
+source: tests/snapshot_templates_test.rs
+expression: template_output
+---
+export type StatusEnumEnum =
+
+  "active" |
+
+  "inactive" |
+
+  "pending";

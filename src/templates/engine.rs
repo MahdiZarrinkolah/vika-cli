@@ -37,27 +37,21 @@ impl TemplateEngine {
     }
 
     /// Render a template with the given context.
-    pub fn render<T: Serialize>(
-        &self,
-        template_id: TemplateId,
-        context: &T,
-    ) -> Result<String> {
+    pub fn render<T: Serialize>(&self, template_id: TemplateId, context: &T) -> Result<String> {
         let template_name = template_id.filename();
 
-        let json_value = serde_json::to_value(context)
-            .map_err(|e| {
-                crate::error::GenerationError::Template(TemplateError::RenderFailed {
-                    name: template_name.to_string(),
-                    message: format!("Failed to serialize context: {}", e),
-                })
-            })?;
-        let tera_context = Context::from_serialize(&json_value)
-            .map_err(|e| {
-                crate::error::GenerationError::Template(TemplateError::RenderFailed {
-                    name: template_name.to_string(),
-                    message: format!("Failed to create Tera context: {}", e),
-                })
-            })?;
+        let json_value = serde_json::to_value(context).map_err(|e| {
+            crate::error::GenerationError::Template(TemplateError::RenderFailed {
+                name: template_name.to_string(),
+                message: format!("Failed to serialize context: {}", e),
+            })
+        })?;
+        let tera_context = Context::from_serialize(&json_value).map_err(|e| {
+            crate::error::GenerationError::Template(TemplateError::RenderFailed {
+                name: template_name.to_string(),
+                message: format!("Failed to create Tera context: {}", e),
+            })
+        })?;
 
         self.tera
             .render(&template_name, &tera_context)
@@ -95,7 +89,10 @@ mod tests {
     #[test]
     fn test_template_engine_render_enum() {
         let engine = TemplateEngine::new(None).unwrap();
-        let context = TypeContext::enum_type("TestEnum".to_string(), vec!["A".to_string(), "B".to_string()]);
+        let context = TypeContext::enum_type(
+            "TestEnum".to_string(),
+            vec!["A".to_string(), "B".to_string()],
+        );
         let result = engine.render(TemplateId::TypeEnum, &context);
         assert!(result.is_ok());
         let output = result.unwrap();
@@ -104,4 +101,3 @@ mod tests {
         assert!(output.contains("B"));
     }
 }
-

@@ -87,8 +87,10 @@ mod tests {
 
         env::set_current_dir(&temp_dir).unwrap();
 
-        let mut config = Config::default();
-        config.schema = String::new();
+        let config = Config {
+            schema: String::new(),
+            ..Default::default()
+        };
         save_config(&config).unwrap();
 
         let loaded = load_config().unwrap();

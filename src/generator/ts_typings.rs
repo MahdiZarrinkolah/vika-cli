@@ -1,9 +1,9 @@
 use crate::error::Result;
 use crate::generator::swagger_parser::{get_schema_name_from_ref, resolve_ref};
 use crate::generator::utils::{sanitize_property_name, to_pascal_case};
+use crate::templates::context::{Field, TypeContext};
 use crate::templates::engine::TemplateEngine;
 use crate::templates::registry::TemplateId;
-use crate::templates::context::{Field, TypeContext};
 use openapiv3::{OpenAPI, ReferenceOr, Schema, SchemaKind, Type};
 use std::collections::HashMap;
 
@@ -192,14 +192,16 @@ fn generate_type_for_schema(
                 }
 
                 if let Some(engine) = template_engine {
-                    let description = schema.schema_data.description.as_ref().map(|s| s.clone());
-                    let mut context = TypeContext::enum_type(enum_name.clone(), enum_values.clone());
+                    let description = schema.schema_data.description.clone();
+                    let mut context =
+                        TypeContext::enum_type(enum_name.clone(), enum_values.clone());
                     context.description = description;
                     let content = engine.render(TemplateId::TypeEnum, &context)?;
                     types.push(TypeScriptType { content });
                 } else {
                     let enum_type = generate_enum_type(&enum_name, &enum_values);
-                    let enum_with_desc = if let Some(desc) = schema.schema_data.description.as_ref() {
+                    let enum_with_desc = if let Some(desc) = schema.schema_data.description.as_ref()
+                    {
                         TypeScriptType {
                             content: format!("/**\n * {}\n */\n{}", desc, enum_type.content),
                         }
@@ -234,7 +236,8 @@ fn generate_type_for_schema(
             if obj.properties.is_empty() {
                 // Empty object with additionalProperties - use type alias for Record
                 if let Some(engine) = template_engine {
-                    let context = TypeContext::alias(type_name.clone(), "Record<string, any>".to_string());
+                    let context =
+                        TypeContext::alias(type_name.clone(), "Record<string, any>".to_string());
                     let content = engine.render(TemplateId::TypeAlias, &context)?;
                     types.push(TypeScriptType { content });
                 } else {
@@ -246,7 +249,7 @@ fn generate_type_for_schema(
                 // Regular object with properties - build fields for template
                 if let Some(engine) = template_engine {
                     let fields = build_fields_from_content(&content);
-                    let description = schema.schema_data.description.as_ref().map(|s| s.clone());
+                    let description = schema.schema_data.description.clone();
                     let context = TypeContext::interface(type_name.clone(), fields, description);
                     let content = engine.render(TemplateId::TypeInterface, &context)?;
                     types.push(TypeScriptType { content });
@@ -383,7 +386,8 @@ fn schema_to_typescript(
 
                             // Generate enum type
                             if let Some(engine) = template_engine {
-                                let context = TypeContext::enum_type(enum_name.clone(), enum_values.clone());
+                                let context =
+                                    TypeContext::enum_type(enum_name.clone(), enum_values.clone());
                                 let content = engine.render(TemplateId::TypeEnum, &context)?;
                                 types.push(TypeScriptType { content });
                             } else {
@@ -509,17 +513,17 @@ fn schema_to_typescript(
                                             if let Ok(ReferenceOr::Item(ref_schema)) =
                                                 resolve_ref(openapi, reference)
                                             {
-                                generate_type_for_schema(
-                                    openapi,
-                                    &ref_name,
-                                    &ref_schema,
-                                    types,
-                                    processed,
-                                    enum_registry,
-                                    Some(&parent_schema_for_props),
-                                    common_schemas,
-                                    template_engine,
-                                )?;
+                                                generate_type_for_schema(
+                                                    openapi,
+                                                    &ref_name,
+                                                    &ref_schema,
+                                                    types,
+                                                    processed,
+                                                    enum_registry,
+                                                    Some(&parent_schema_for_props),
+                                                    common_schemas,
+                                                    template_engine,
+                                                )?;
                                             }
                                         }
 
@@ -772,36 +776,32 @@ pub fn generate_enum_type(name: &str, values: &[String]) -> TypeScriptType {
 /// Format: "  fieldName?: type; // description" or "  fieldName: type;"
 fn build_fields_from_content(content: &str) -> Vec<Field> {
     let mut fields = Vec::new();
-    
+
     for line in content.lines() {
         let line = line.trim();
         if line.is_empty() || line == "{" || line == "}" {
             continue;
         }
-        
+
         // Parse: "fieldName?: type; // description" or "fieldName: type;"
         if let Some(colon_pos) = line.find(':') {
             let before_colon = &line[..colon_pos].trim();
             let after_colon = &line[colon_pos + 1..].trim();
-            
+
             let optional = before_colon.ends_with('?');
             let field_name = if optional {
                 before_colon[..before_colon.len() - 1].trim().to_string()
             } else {
                 before_colon.to_string()
             };
-            
+
             // Extract type and description
             let semicolon_pos = after_colon.find(';').unwrap_or(after_colon.len());
             let type_part = &after_colon[..semicolon_pos].trim();
             let rest = &after_colon[semicolon_pos + 1..].trim();
-            
-            let description = if rest.starts_with("//") {
-                Some(rest[2..].trim().to_string())
-            } else {
-                None
-            };
-            
+
+            let description = rest.strip_prefix("//").map(|s| s.trim().to_string());
+
             fields.push(Field::new(
                 field_name,
                 type_part.to_string(),
@@ -810,6 +810,6 @@ fn build_fields_from_content(content: &str) -> Vec<Field> {
             ));
         }
     }
-    
+
     fields
 }

@@ -97,4 +97,3 @@ mod tests {
         assert!(!templates.is_empty());
     }
 }
-

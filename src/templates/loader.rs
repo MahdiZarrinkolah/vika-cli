@@ -17,14 +17,13 @@ impl TemplateLoader {
         let filename = format!("{}.tera", template_name);
         BuiltinTemplates::get(&filename)
             .map(|file| {
-                String::from_utf8(file.data.to_vec())
-                    .map_err(|e| FileSystemError::ReadFileFailed {
-                        path: filename.clone(),
-                        source: std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            format!("Invalid UTF-8 in template: {}", e),
-                        ),
-                    })
+                String::from_utf8(file.data.to_vec()).map_err(|e| FileSystemError::ReadFileFailed {
+                    path: filename.clone(),
+                    source: std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("Invalid UTF-8 in template: {}", e),
+                    ),
+                })
             })
             .transpose()?
             .ok_or_else(|| FileSystemError::FileNotFound {
@@ -54,10 +53,7 @@ impl TemplateLoader {
     /// List all available built-in templates.
     pub fn list_builtin() -> Vec<String> {
         BuiltinTemplates::iter()
-            .filter_map(|path| {
-                path.strip_suffix(".tera")
-                    .map(|s| s.to_string())
-            })
+            .filter_map(|path| path.strip_suffix(".tera").map(|s| s.to_string()))
             .collect()
     }
 
@@ -70,12 +66,11 @@ impl TemplateLoader {
         }
 
         let mut templates = Vec::new();
-        let entries = std::fs::read_dir(&user_template_dir).map_err(|e| {
-            FileSystemError::ReadFileFailed {
+        let entries =
+            std::fs::read_dir(&user_template_dir).map_err(|e| FileSystemError::ReadFileFailed {
                 path: user_template_dir.to_string_lossy().to_string(),
                 source: e,
-            }
-        })?;
+            })?;
 
         for entry in entries {
             let entry = entry.map_err(|e| FileSystemError::ReadFileFailed {
@@ -127,4 +122,3 @@ mod tests {
         assert!(result.is_none());
     }
 }
-

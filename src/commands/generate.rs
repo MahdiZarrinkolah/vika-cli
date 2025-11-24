@@ -190,9 +190,8 @@ pub async fn run(
 
         // Initialize template engine
         let project_root = std::env::current_dir().ok();
-        let template_engine = crate::templates::engine::TemplateEngine::new(
-            project_root.as_deref()
-        )?;
+        let template_engine =
+            crate::templates::engine::TemplateEngine::new(project_root.as_deref())?;
 
         // Shared enum registry to ensure consistent naming between TypeScript and Zod
         let mut shared_enum_registry = std::collections::HashMap::new();
@@ -226,14 +225,15 @@ pub async fn run(
         };
 
         // Generate API client (using same enum registry as schemas)
-        let api_result = crate::generator::api_client::generate_api_client_with_registry_and_engine(
-            &parsed.openapi,
-            &operations,
-            module,
-            &common_schemas,
-            &mut shared_enum_registry,
-            Some(&template_engine),
-        )?;
+        let api_result =
+            crate::generator::api_client::generate_api_client_with_registry_and_engine(
+                &parsed.openapi,
+                &operations,
+                module,
+                &common_schemas,
+                &mut shared_enum_registry,
+                Some(&template_engine),
+            )?;
 
         // Combine response types with schema types
         let mut all_types = types;
@@ -272,12 +272,12 @@ pub async fn run(
     let mut all_generated_files = Vec::new();
     let schemas_dir = PathBuf::from(&config.schemas.output);
     let apis_dir = PathBuf::from(&config.apis.output);
-    
+
     // Collect schema files recursively
     if schemas_dir.exists() {
         collect_ts_files(&schemas_dir, &mut all_generated_files)?;
     }
-    
+
     // Collect API files recursively
     if apis_dir.exists() {
         collect_ts_files(&apis_dir, &mut all_generated_files)?;
@@ -288,53 +288,61 @@ pub async fn run(
     if !all_generated_files.is_empty() {
         // Find the common parent directory (where config files are likely located)
         // schemas_dir is "temp/src/schemas", so parent is "temp/src", parent of that is "temp"
-        let output_base = schemas_dir.parent()
+        let output_base = schemas_dir
+            .parent()
             .and_then(|p| p.parent())
             .or_else(|| apis_dir.parent().and_then(|p| p.parent()));
-        
+
         let formatter = if let Some(base_dir) = output_base {
             // Check in the base directory (e.g., temp/) where .prettierrc might be
             FormatterManager::detect_formatter_from_dir(base_dir)
-                .or_else(|| FormatterManager::detect_formatter())
+                .or_else(FormatterManager::detect_formatter)
         } else {
             FormatterManager::detect_formatter()
         };
-        
+
         if let Some(formatter) = formatter {
             progress.start_spinner("Formatting generated files...");
             // Change to output base directory so prettier can find config files
-            let original_dir = std::env::current_dir().map_err(|e| FileSystemError::ReadFileFailed {
-                path: ".".to_string(),
-                source: e,
-            })?;
-            
-            if let Some(output_base) = output_base {
-                std::env::set_current_dir(output_base).map_err(|e| FileSystemError::ReadFileFailed {
-                    path: output_base.display().to_string(),
+            let original_dir =
+                std::env::current_dir().map_err(|e| FileSystemError::ReadFileFailed {
+                    path: ".".to_string(),
                     source: e,
                 })?;
-                
+
+            if let Some(output_base) = output_base {
+                std::env::set_current_dir(output_base).map_err(|e| {
+                    FileSystemError::ReadFileFailed {
+                        path: output_base.display().to_string(),
+                        source: e,
+                    }
+                })?;
+
                 // Convert paths to relative paths from output base directory
                 let relative_files: Vec<PathBuf> = all_generated_files
                     .iter()
                     .filter_map(|p| p.strip_prefix(output_base).ok().map(|p| p.to_path_buf()))
                     .collect();
-                
+
                 if !relative_files.is_empty() {
                     let result = FormatterManager::format_files(&relative_files, formatter);
-                    
+
                     // Restore original directory
-                    std::env::set_current_dir(&original_dir).map_err(|e| FileSystemError::ReadFileFailed {
-                        path: original_dir.display().to_string(),
-                        source: e,
+                    std::env::set_current_dir(&original_dir).map_err(|e| {
+                        FileSystemError::ReadFileFailed {
+                            path: original_dir.display().to_string(),
+                            source: e,
+                        }
                     })?;
-                    
+
                     result?;
                 } else {
                     // Restore original directory
-                    std::env::set_current_dir(&original_dir).map_err(|e| FileSystemError::ReadFileFailed {
-                        path: original_dir.display().to_string(),
-                        source: e,
+                    std::env::set_current_dir(&original_dir).map_err(|e| {
+                        FileSystemError::ReadFileFailed {
+                            path: original_dir.display().to_string(),
+                            source: e,
+                        }
                     })?;
                 }
             } else {

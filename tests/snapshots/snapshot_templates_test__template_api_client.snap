@@ -1,0 +1,14 @@
+---
+source: tests/snapshot_templates_test.rs
+expression: template_output
+---
+import { http } from "../http";
+/**
+
+ * @param id
+
+ */
+export const getUser = async (id: string) => {
+    const url = `/users/${id}`;
+    return http.get<any>(url);
+};

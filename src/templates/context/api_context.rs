@@ -45,6 +45,7 @@ pub struct Response {
 
 impl ApiContext {
     /// Create a new ApiContext.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         function_name: String,
         operation_id: Option<String>,
@@ -84,7 +85,12 @@ impl ApiContext {
 
 impl Parameter {
     /// Create a new Parameter.
-    pub fn new(name: String, param_type: String, optional: bool, description: Option<String>) -> Self {
+    pub fn new(
+        name: String,
+        param_type: String,
+        optional: bool,
+        description: Option<String>,
+    ) -> Self {
         Self {
             name,
             param_type,
@@ -97,7 +103,10 @@ impl Parameter {
 impl RequestBody {
     /// Create a new RequestBody.
     pub fn new(type_name: String, description: Option<String>) -> Self {
-        Self { type_name, description }
+        Self {
+            type_name,
+            description,
+        }
     }
 }
 
@@ -110,4 +119,3 @@ impl Response {
         }
     }
 }
-

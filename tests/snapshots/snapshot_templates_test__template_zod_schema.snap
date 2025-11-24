@@ -1,0 +1,9 @@
+---
+source: tests/snapshot_templates_test.rs
+expression: template_output
+---
+
+export const UserSchema = z.object({
+  id: z.number().int(),
+  name: z.string().min(1),
+});

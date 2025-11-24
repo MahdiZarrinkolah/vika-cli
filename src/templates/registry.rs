@@ -70,10 +70,7 @@ mod tests {
 
     #[test]
     fn test_template_id_filename() {
-        assert_eq!(
-            TemplateId::TypeInterface.filename(),
-            "type-interface.tera"
-        );
+        assert_eq!(TemplateId::TypeInterface.filename(), "type-interface.tera");
     }
 
     #[test]
@@ -92,4 +89,3 @@ mod tests {
         assert!(all.contains(&TemplateId::TypeInterface));
     }
 }
-

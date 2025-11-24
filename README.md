@@ -32,6 +32,7 @@ Built in Rust for exceptional performance and reliability.
 - 🎨 Progress indicators and verbose logging
 - 🧠 Handles: oneOf, anyOf, allOf, enums, recursion, circular refs
 - 🌐 Supports HEAD, OPTIONS, PATCH, all HTTP verbs
+- 🎨 Customizable templates (Tera-based) with user overrides
 - 🛠 Multi-platform installers + CI/CD automation
 
 ---
@@ -223,6 +224,47 @@ Produces:
 | `modules.ignore` | Skip tagged modules |
 
 Full reference: [`docs/configuration.md`](docs/configuration.md)
+
+---
+
+# 🎨 Customizing Templates
+
+`vika-cli` uses **Tera templates** for code generation. You can customize the output format by overriding built-in templates.
+
+## Quick Start
+
+1. **Initialize templates** (copies built-in templates to `.vika/templates/`):
+   ```bash
+   vika-cli templates init
+   ```
+
+2. **List available templates**:
+   ```bash
+   vika-cli templates list
+   ```
+
+3. **Customize templates** in `.vika/templates/`:
+   ```bash
+   # Edit .vika/templates/type-interface.tera
+   # Edit .vika/templates/api-client-fetch.tera
+   # etc.
+   ```
+
+4. **Regenerate code** - your custom templates will be used automatically:
+   ```bash
+   vika-cli generate --spec your-spec.yaml
+   ```
+
+## Template Files
+
+- `type-interface.tera` - TypeScript interface generation
+- `type-enum.tera` - TypeScript enum generation
+- `zod-schema.tera` - Zod schema generation
+- `api-client-fetch.tera` - API client function generation
+
+**Template Resolution**: User templates in `.vika/templates/` override built-in templates automatically.
+
+Full documentation: [`docs/templates.md`](docs/templates.md)
 
 ---
 

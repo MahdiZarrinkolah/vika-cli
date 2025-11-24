@@ -19,18 +19,19 @@ pub async fn run() -> Result<()> {
 
     // Get spec path from config
     let spec_path = config.spec_path.ok_or(GenerationError::SpecPathRequired)?;
-    
+
     // Check if spec path is a temporary file that might not exist anymore
-    if !spec_path.starts_with("http://") && !spec_path.starts_with("https://") {
-        if !std::path::Path::new(&spec_path).exists() {
-            return Err(FileSystemError::FileNotFound {
-                path: format!(
-                    "{}\n  The spec file no longer exists. Please run 'vika-cli generate --spec <path-or-url>' again with a valid spec path.",
-                    spec_path
-                ),
-            }
-            .into());
+    if !spec_path.starts_with("http://")
+        && !spec_path.starts_with("https://")
+        && !std::path::Path::new(&spec_path).exists()
+    {
+        return Err(FileSystemError::FileNotFound {
+            path: format!(
+                "{}\n  The spec file no longer exists. Please run 'vika-cli generate --spec <path-or-url>' again with a valid spec path.",
+                spec_path
+            ),
         }
+        .into());
     }
 
     // Get selected modules from config
@@ -46,7 +47,9 @@ pub async fn run() -> Result<()> {
     );
     // Use caching for update command (same as generate)
     let use_cache = config.generation.enable_cache;
-    let parsed = crate::generator::swagger_parser::fetch_and_parse_spec_with_cache(&spec_path, use_cache).await?;
+    let parsed =
+        crate::generator::swagger_parser::fetch_and_parse_spec_with_cache(&spec_path, use_cache)
+            .await?;
     println!(
         "{}",
         format!("✅ Parsed spec with {} modules", parsed.modules.len()).green()
@@ -69,9 +72,7 @@ pub async fn run() -> Result<()> {
 
     // Initialize template engine once for all modules
     let project_root = std::env::current_dir().ok();
-    let template_engine = crate::templates::engine::TemplateEngine::new(
-        project_root.as_deref()
-    )?;
+    let template_engine = crate::templates::engine::TemplateEngine::new(project_root.as_deref())?;
 
     // Generate code for each module
     let schemas_dir = PathBuf::from(&config.schemas.output);
@@ -79,7 +80,7 @@ pub async fn run() -> Result<()> {
 
     let mut total_files = 0;
     let mut module_summary: Vec<(String, usize)> = Vec::new();
-    
+
     // Get force and backup settings from config
     let use_force = config.generation.conflict_strategy == "force";
     let use_backup = config.generation.enable_backup;
@@ -102,18 +103,25 @@ pub async fn run() -> Result<()> {
         )?;
 
         // Generate Zod schemas for common schemas (using same registry)
-        let common_zod_schemas = crate::generator::zod_schema::generate_zod_schemas_with_registry_and_engine(
-            &parsed.openapi,
-            &parsed.schemas,
-            &common_schemas,
-            &mut shared_enum_registry,
-            &common_schemas,
-            Some(&template_engine),
-        )?;
+        let common_zod_schemas =
+            crate::generator::zod_schema::generate_zod_schemas_with_registry_and_engine(
+                &parsed.openapi,
+                &parsed.schemas,
+                &common_schemas,
+                &mut shared_enum_registry,
+                &common_schemas,
+                Some(&template_engine),
+            )?;
 
         // Write common schemas (use force if config says so)
-        let common_files =
-            write_schemas_with_options(&schemas_dir, "common", &common_types, &common_zod_schemas, use_backup, use_force)?;
+        let common_files = write_schemas_with_options(
+            &schemas_dir,
+            "common",
+            &common_types,
+            &common_zod_schemas,
+            use_backup,
+            use_force,
+        )?;
         total_files += common_files.len();
         module_summary.push(("common".to_string(), common_files.len()));
     }
@@ -177,25 +185,39 @@ pub async fn run() -> Result<()> {
         };
 
         // Generate API client (using same enum registry as schemas)
-        let api_result = crate::generator::api_client::generate_api_client_with_registry_and_engine(
-            &parsed.openapi,
-            &operations,
-            module,
-            &common_schemas,
-            &mut shared_enum_registry,
-            Some(&template_engine),
-        )?;
+        let api_result =
+            crate::generator::api_client::generate_api_client_with_registry_and_engine(
+                &parsed.openapi,
+                &operations,
+                module,
+                &common_schemas,
+                &mut shared_enum_registry,
+                Some(&template_engine),
+            )?;
 
         // Combine response types with schema types
         let mut all_types = types;
         all_types.extend(api_result.response_types);
 
         // Write schemas (use force if config says so)
-        let schema_files = write_schemas_with_options(&schemas_dir, module, &all_types, &zod_schemas, use_backup, use_force)?;
+        let schema_files = write_schemas_with_options(
+            &schemas_dir,
+            module,
+            &all_types,
+            &zod_schemas,
+            use_backup,
+            use_force,
+        )?;
         total_files += schema_files.len();
 
         // Write API client (use force if config says so)
-        let api_files = write_api_client_with_options(&apis_dir, module, &api_result.functions, use_backup, use_force)?;
+        let api_files = write_api_client_with_options(
+            &apis_dir,
+            module,
+            &api_result.functions,
+            use_backup,
+            use_force,
+        )?;
         total_files += api_files.len();
 
         let module_file_count = schema_files.len() + api_files.len();
@@ -229,12 +251,12 @@ pub async fn run() -> Result<()> {
 
     // Format all generated files with prettier/biome if available
     let mut all_generated_files = Vec::new();
-    
+
     // Collect schema files recursively
     if schemas_dir.exists() {
         collect_ts_files(&schemas_dir, &mut all_generated_files)?;
     }
-    
+
     // Collect API files recursively
     if apis_dir.exists() {
         collect_ts_files(&apis_dir, &mut all_generated_files)?;
@@ -243,46 +265,54 @@ pub async fn run() -> Result<()> {
     // Format files if formatter is available
     if !all_generated_files.is_empty() {
         // Find the common parent directory (where config files are likely located)
-        let output_base = schemas_dir.parent()
+        let output_base = schemas_dir
+            .parent()
             .and_then(|p| p.parent())
             .or_else(|| apis_dir.parent().and_then(|p| p.parent()));
-        
+
         let formatter = if let Some(base_dir) = output_base {
             FormatterManager::detect_formatter_from_dir(base_dir)
-                .or_else(|| FormatterManager::detect_formatter())
+                .or_else(FormatterManager::detect_formatter)
         } else {
             FormatterManager::detect_formatter()
         };
-        
+
         if let Some(formatter) = formatter {
             println!("{}", "Formatting generated files...".bright_cyan());
-            let original_dir = std::env::current_dir().map_err(|e| FileSystemError::ReadFileFailed {
-                path: ".".to_string(),
-                source: e,
-            })?;
-            
-            if let Some(output_base) = output_base {
-                std::env::set_current_dir(output_base).map_err(|e| FileSystemError::ReadFileFailed {
-                    path: output_base.display().to_string(),
+            let original_dir =
+                std::env::current_dir().map_err(|e| FileSystemError::ReadFileFailed {
+                    path: ".".to_string(),
                     source: e,
                 })?;
-                
+
+            if let Some(output_base) = output_base {
+                std::env::set_current_dir(output_base).map_err(|e| {
+                    FileSystemError::ReadFileFailed {
+                        path: output_base.display().to_string(),
+                        source: e,
+                    }
+                })?;
+
                 let relative_files: Vec<PathBuf> = all_generated_files
                     .iter()
                     .filter_map(|p| p.strip_prefix(output_base).ok().map(|p| p.to_path_buf()))
                     .collect();
-                
+
                 if !relative_files.is_empty() {
                     let result = FormatterManager::format_files(&relative_files, formatter);
-                    std::env::set_current_dir(&original_dir).map_err(|e| FileSystemError::ReadFileFailed {
-                        path: original_dir.display().to_string(),
-                        source: e,
+                    std::env::set_current_dir(&original_dir).map_err(|e| {
+                        FileSystemError::ReadFileFailed {
+                            path: original_dir.display().to_string(),
+                            source: e,
+                        }
                     })?;
                     result?;
                 } else {
-                    std::env::set_current_dir(&original_dir).map_err(|e| FileSystemError::ReadFileFailed {
-                        path: original_dir.display().to_string(),
-                        source: e,
+                    std::env::set_current_dir(&original_dir).map_err(|e| {
+                        FileSystemError::ReadFileFailed {
+                            path: original_dir.display().to_string(),
+                            source: e,
+                        }
                     })?;
                 }
             } else {

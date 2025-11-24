@@ -279,7 +279,7 @@ pub fn write_api_client_with_options(
                     }
                     in_function = true;
                     // Add JSDoc comments before the function
-                    func_lines.extend(jsdoc_lines.drain(..));
+                    func_lines.append(&mut jsdoc_lines);
                     func_lines.push(line);
                 } else if in_function {
                     func_lines.push(line);

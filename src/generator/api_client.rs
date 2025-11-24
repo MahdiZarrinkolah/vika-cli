@@ -6,9 +6,11 @@ use crate::generator::swagger_parser::{
 };
 use crate::generator::ts_typings::TypeScriptType;
 use crate::generator::utils::{sanitize_module_name, to_camel_case, to_pascal_case};
+use crate::templates::context::{
+    ApiContext, Parameter as ApiParameter, RequestBody, Response as ApiResponse,
+};
 use crate::templates::engine::TemplateEngine;
 use crate::templates::registry::TemplateId;
-use crate::templates::context::{ApiContext, Parameter as ApiParameter, RequestBody, Response as ApiResponse};
 use openapiv3::OpenAPI;
 use openapiv3::{Operation, Parameter, ReferenceOr, SchemaKind, Type};
 
@@ -545,7 +547,9 @@ fn generate_function_for_operation(
         })
         .collect();
 
-    let api_request_body = request_body_info.as_ref().map(|(rb_type, rb_desc)| RequestBody::new(rb_type.clone(), rb_desc.clone()));
+    let api_request_body = request_body_info
+        .as_ref()
+        .map(|(rb_type, rb_desc)| RequestBody::new(rb_type.clone(), rb_desc.clone()));
     let api_responses: Vec<ApiResponse> = all_responses
         .iter()
         .map(|r| ApiResponse::new(r.status_code, r.body_type.clone()))
@@ -554,11 +558,13 @@ fn generate_function_for_operation(
     // Generate content using template or fallback to string formatting
     // Use description if available and non-empty, otherwise fall back to summary
     // Note: Both description and summary are Option<String> in the OpenAPI crate
-    let operation_description = operation.description.clone()
+    let operation_description = operation
+        .description
+        .clone()
         .or_else(|| operation.summary.clone())
         .filter(|s| !s.is_empty())
         .unwrap_or_default();
-    
+
     let content = if let Some(engine) = template_engine {
         let context = ApiContext::new(
             func_name.clone(),
@@ -577,7 +583,7 @@ fn generate_function_for_operation(
             params_str.clone(),
             operation_description.clone(),
         );
-        
+
         engine.render(TemplateId::ApiClientFetch, &context)?
     } else {
         // Fallback to string formatting
@@ -941,7 +947,10 @@ fn extract_parameter_info(
     }
 }
 
-fn extract_request_body(openapi: &OpenAPI, operation: &Operation) -> Result<Option<(String, Option<String>)>> {
+fn extract_request_body(
+    openapi: &OpenAPI,
+    operation: &Operation,
+) -> Result<Option<(String, Option<String>)>> {
     if let Some(request_body) = &operation.request_body {
         match request_body {
             ReferenceOr::Reference { reference } => {

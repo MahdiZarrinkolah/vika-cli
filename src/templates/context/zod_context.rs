@@ -13,11 +13,7 @@ pub struct ZodContext {
 
 impl ZodContext {
     /// Create a new ZodContext for a regular schema.
-    pub fn schema(
-        schema_name: String,
-        zod_expr: String,
-        description: Option<String>,
-    ) -> Self {
+    pub fn schema(schema_name: String, zod_expr: String, description: Option<String>) -> Self {
         Self {
             schema_name,
             zod_expr,
@@ -63,4 +59,3 @@ impl ZodContext {
         }
     }
 }
-

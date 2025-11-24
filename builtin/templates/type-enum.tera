@@ -3,6 +3,5 @@
  */
 {% endif %}export type {{ type_name }} =
 {% for value in enum_values %}
-  "{{ value }}"{% if not loop.last %} |{% endif %}
-{% endfor %};
-
+  "{{ value }}"{% if not loop.last %} |{% endif %}{% if loop.last %};{% endif %}
+{% endfor %}

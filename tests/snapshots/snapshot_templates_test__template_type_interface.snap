@@ -1,0 +1,14 @@
+---
+source: tests/snapshot_templates_test.rs
+expression: template_output
+---
+
+export interface User {
+
+  id: number;
+
+  name: string;
+
+  email?: string;
+
+}

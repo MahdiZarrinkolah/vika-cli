@@ -47,21 +47,19 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        vika_cli::cli::Commands::Templates { command } => {
-            match command {
-                vika_cli::cli::TemplateCommands::List => {
-                    if let Err(e) = vika_cli::commands::templates::list() {
-                        eprintln!("Error: {}", e);
-                        std::process::exit(1);
-                    }
-                }
-                vika_cli::cli::TemplateCommands::Init => {
-                    if let Err(e) = vika_cli::commands::templates::init() {
-                        eprintln!("Error: {}", e);
-                        std::process::exit(1);
-                    }
+        vika_cli::cli::Commands::Templates { command } => match command {
+            vika_cli::cli::TemplateCommands::List => {
+                if let Err(e) = vika_cli::commands::templates::list() {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
                 }
             }
-        }
+            vika_cli::cli::TemplateCommands::Init => {
+                if let Err(e) = vika_cli::commands::templates::init() {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        },
     }
 }

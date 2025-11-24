@@ -1,5 +1,7 @@
 use std::str::FromStr;
-use vika_cli::templates::context::{ApiContext, Parameter, RequestBody, Response, TypeContext, ZodContext};
+use vika_cli::templates::context::{
+    ApiContext, Parameter, RequestBody, Response, TypeContext, ZodContext,
+};
 use vika_cli::templates::engine::TemplateEngine;
 use vika_cli::templates::loader::TemplateLoader;
 use vika_cli::templates::registry::TemplateId;
@@ -183,10 +185,7 @@ fn test_template_registry_name() {
 
 #[test]
 fn test_template_registry_filename() {
-    assert_eq!(
-        TemplateId::TypeInterface.filename(),
-        "type-interface.tera"
-    );
+    assert_eq!(TemplateId::TypeInterface.filename(), "type-interface.tera");
     assert_eq!(TemplateId::ZodSchema.filename(), "zod-schema.tera");
 }
 
@@ -202,4 +201,3 @@ fn test_template_registry_from_str() {
     );
     assert!(TemplateId::from_str("unknown").is_err());
 }
-
