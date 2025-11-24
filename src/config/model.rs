@@ -30,6 +30,9 @@ pub struct Config {
     #[serde(default)]
     pub modules: ModulesConfig,
 
+    #[serde(default)]
+    pub generation: GenerationConfig,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spec_path: Option<String>,
 }
@@ -105,6 +108,43 @@ pub struct ModulesConfig {
     pub selected: Vec<String>,
 }
 
+/// Configuration for generation behavior and preferences.
+///
+/// Controls caching, backups, and conflict resolution strategy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GenerationConfig {
+    #[serde(default = "default_enable_cache")]
+    pub enable_cache: bool,
+
+    #[serde(default = "default_enable_backup")]
+    pub enable_backup: bool,
+
+    #[serde(default = "default_conflict_strategy")]
+    pub conflict_strategy: String,
+}
+
+fn default_enable_cache() -> bool {
+    true
+}
+
+fn default_enable_backup() -> bool {
+    false
+}
+
+fn default_conflict_strategy() -> String {
+    "ask".to_string()
+}
+
+impl Default for GenerationConfig {
+    fn default() -> Self {
+        Self {
+            enable_cache: default_enable_cache(),
+            enable_backup: default_enable_backup(),
+            conflict_strategy: default_conflict_strategy(),
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -124,6 +164,7 @@ impl Default for Config {
                 ignore: vec![],
                 selected: vec![],
             },
+            generation: GenerationConfig::default(),
             spec_path: None,
         }
     }
@@ -221,5 +262,46 @@ mod tests {
 
         // Check that $schema is included
         assert!(json.contains("\"$schema\""));
+    }
+
+    #[test]
+    fn test_generation_config_defaults() {
+        let config = Config::default();
+        assert_eq!(config.generation.enable_cache, true);
+        assert_eq!(config.generation.enable_backup, false);
+        assert_eq!(config.generation.conflict_strategy, "ask");
+    }
+
+    #[test]
+    fn test_config_with_generation_settings() {
+        let json = r#"
+        {
+            "$schema": "https://example.com/schema.json",
+            "root_dir": "test",
+            "schemas": {
+                "output": "test/schemas",
+                "naming": "camelCase"
+            },
+            "apis": {
+                "output": "test/apis",
+                "style": "fetch",
+                "header_strategy": "bearerToken"
+            },
+            "modules": {
+                "ignore": ["test"],
+                "selected": []
+            },
+            "generation": {
+                "enable_cache": false,
+                "enable_backup": true,
+                "conflict_strategy": "force"
+            }
+        }
+        "#;
+
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.generation.enable_cache, false);
+        assert_eq!(config.generation.enable_backup, true);
+        assert_eq!(config.generation.conflict_strategy, "force");
     }
 }

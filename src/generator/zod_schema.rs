@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::generator::swagger_parser::{get_schema_name_from_ref, resolve_ref};
-use crate::generator::utils::to_pascal_case;
+use crate::generator::utils::{to_pascal_case, sanitize_property_name};
 use openapiv3::{OpenAPI, ReferenceOr, Schema, SchemaKind, Type};
 use std::collections::HashMap;
 
@@ -18,6 +18,7 @@ pub fn generate_zod_schemas(
         schemas,
         schema_names,
         &mut std::collections::HashMap::new(),
+        &[],
     )
 }
 
@@ -26,6 +27,7 @@ pub fn generate_zod_schemas_with_registry(
     schemas: &HashMap<String, Schema>,
     schema_names: &[String],
     enum_registry: &mut std::collections::HashMap<String, String>,
+    common_schemas: &[String],
 ) -> Result<Vec<ZodSchema>> {
     let mut zod_schemas = Vec::new();
     let mut processed = std::collections::HashSet::new();
@@ -40,6 +42,7 @@ pub fn generate_zod_schemas_with_registry(
                 &mut processed,
                 enum_registry,
                 None,
+                common_schemas,
             )?;
         }
     }
@@ -55,6 +58,7 @@ fn generate_zod_for_schema(
     processed: &mut std::collections::HashSet<String>,
     enum_registry: &mut std::collections::HashMap<String, String>,
     parent_schema_name: Option<&str>,
+    common_schemas: &[String],
 ) -> Result<()> {
     if processed.contains(name) {
         return Ok(());
@@ -71,6 +75,7 @@ fn generate_zod_for_schema(
         enum_registry,
         None,
         parent_schema_name,
+        common_schemas,
     )?;
 
     // Handle enums at top level (when schema itself is an enum)
@@ -85,10 +90,8 @@ fn generate_zod_for_schema(
             if !enum_values.is_empty() {
                 enum_values.sort();
                 let enum_key = enum_values.join(",");
-
-                // Check if this enum already exists in registry
-                if enum_registry.get(&enum_key).is_some() {
-                    // Enum already generated, skip
+                let schema_context_key = format!("schema_enum:{}", name);
+                if enum_registry.get(&schema_context_key).is_some() {
                     return Ok(());
                 }
 
@@ -105,8 +108,14 @@ fn generate_zod_for_schema(
                     format!("Enum{}", value_hash)
                 };
 
-                // Store in registry
-                enum_registry.insert(enum_key, enum_name.clone());
+                // Store in registry (schema-specific + base key for reuse)
+                enum_registry.insert(schema_context_key, enum_name.clone());
+                if !enum_registry.contains_key(&enum_key) {
+                    enum_registry.insert(enum_key.clone(), enum_name.clone());
+                }
+                if !name.is_empty() {
+                    enum_registry.insert(format!("schema:{}", name), enum_name.clone());
+                }
 
                 let enum_schema = generate_enum_zod(&enum_name, &enum_values);
                 zod_schemas.push(enum_schema);
@@ -117,12 +126,26 @@ fn generate_zod_for_schema(
 
     // Only create object schema if it's an object type
     if matches!(&schema.schema_kind, SchemaKind::Type(Type::Object(_))) {
-        zod_schemas.push(ZodSchema {
-            content: format!(
-                "export const {}Schema = z.object({{\n{}\n}});",
-                schema_name, zod_def
-            ),
-        });
+        // Check if this is an empty object (should be a record type)
+        if let SchemaKind::Type(Type::Object(obj)) = &schema.schema_kind {
+            if obj.properties.is_empty() {
+                // Empty object with additionalProperties - use z.record() directly
+                zod_schemas.push(ZodSchema {
+                    content: format!(
+                        "export const {}Schema: z.ZodType<any> = z.record(z.string(), z.any());",
+                        schema_name
+                    ),
+                });
+            } else {
+                // Regular object with properties
+                zod_schemas.push(ZodSchema {
+                    content: format!(
+                        "export const {}Schema: z.ZodType<any> = z.object({{\n{}\n}});",
+                        schema_name, zod_def
+                    ),
+                });
+            }
+        }
     }
 
     Ok(())
@@ -138,6 +161,7 @@ fn schema_to_zod(
     enum_registry: &mut std::collections::HashMap<String, String>,
     context: Option<(&str, &str)>, // (property_name, parent_schema_name)
     current_schema_name: Option<&str>, // Current schema being processed (for enum naming context)
+    common_schemas: &[String],
 ) -> Result<String> {
     // Prevent infinite recursion with a reasonable depth limit
     if indent > 100 {
@@ -352,12 +376,17 @@ fn schema_to_zod(
                         match items {
                             ReferenceOr::Reference { reference } => {
                                 if let Some(ref_name) = get_schema_name_from_ref(reference) {
+                                    let schema_ref = if common_schemas.contains(&ref_name) {
+                                        format!("Common.{}Schema", to_pascal_case(&ref_name))
+                                    } else {
+                                        format!("{}Schema", to_pascal_case(&ref_name))
+                                    };
                                     // If already processed, use lazy reference to avoid infinite recursion
                                     if processed.contains(&ref_name) {
                                         format!(
-                                            "{}z.lazy(() => {}Schema)",
+                                            "{}z.lazy(() => {})",
                                             indent_str,
-                                            to_pascal_case(&ref_name)
+                                            schema_ref
                                         )
                                     } else {
                                         let resolved =
@@ -380,11 +409,12 @@ fn schema_to_zod(
                                                     processed,
                                                     enum_registry,
                                                     None,
+                                                    common_schemas,
                                                 )?;
                                                 format!(
-                                                    "{}z.lazy(() => {}Schema)",
+                                                    "{}z.lazy(() => {})",
                                                     indent_str,
-                                                    to_pascal_case(&ref_name)
+                                                    schema_ref
                                                 )
                                             } else {
                                                 schema_to_zod(
@@ -396,13 +426,14 @@ fn schema_to_zod(
                                                     enum_registry,
                                                     None,
                                                     current_schema_name,
+                                                    common_schemas,
                                                 )?
                                             }
                                         } else {
                                             format!(
-                                                "{}z.lazy(() => {}Schema)",
+                                                "{}z.lazy(() => {})",
                                                 indent_str,
-                                                to_pascal_case(&ref_name)
+                                                schema_ref
                                             )
                                         }
                                     }
@@ -426,6 +457,7 @@ fn schema_to_zod(
                                         enum_registry,
                                         None,
                                         current_schema_name,
+                                        common_schemas,
                                     )?;
                                     // Wrap in z.object()
                                     format!(
@@ -442,6 +474,7 @@ fn schema_to_zod(
                                         enum_registry,
                                         None,
                                         current_schema_name,
+                                        common_schemas,
                                     )?
                                 }
                             }
@@ -484,34 +517,65 @@ fn schema_to_zod(
                         for (prop_name, prop_schema_ref) in object_type.properties.iter() {
                             let prop_zod = match prop_schema_ref {
                                 ReferenceOr::Reference { reference } => {
-                                    // For $ref properties, always use the schema name (don't inline)
+                                    // For $ref properties, prefer enum schemas if the target is a top-level enum,
+                                    // otherwise use the referenced object schema (possibly lazily).
                                     if let Some(ref_name) = get_schema_name_from_ref(reference) {
-                                        // Generate the referenced schema if not already processed
-                                        if !processed.contains(&ref_name) {
-                                            if let Ok(ReferenceOr::Item(ref_schema)) =
-                                                resolve_ref(openapi, reference)
-                                            {
-                                                if matches!(
-                                                    &ref_schema.schema_kind,
-                                                    SchemaKind::Type(Type::Object(_))
-                                                ) {
-                                                    generate_zod_for_schema(
-                                                        openapi,
-                                                        &ref_name,
-                                                        &ref_schema,
-                                                        zod_schemas,
-                                                        processed,
-                                                        enum_registry,
-                                                        Some(&parent_schema_for_props),
-                                                    )?;
+                                        // If this $ref points to a top-level enum schema, use the enum schema directly
+                                        let schema_enum_key = format!("schema:{}", ref_name);
+                                        if let Some(enum_name) =
+                                            enum_registry.get(&schema_enum_key)
+                                        {
+                                            let schema_ref =
+                                                if common_schemas.contains(&ref_name) {
+                                                    format!(
+                                                        "Common.{}Schema",
+                                                        enum_name
+                                                    )
+                                                } else {
+                                                    format!("{}Schema", enum_name)
+                                                };
+                                            format!("{}{}", indent_str, schema_ref)
+                                        } else {
+                                            // Generate the referenced schema if not already processed
+                                            if !processed.contains(&ref_name) {
+                                                if let Ok(ReferenceOr::Item(ref_schema)) =
+                                                    resolve_ref(openapi, reference)
+                                                {
+                                                    if matches!(
+                                                        &ref_schema.schema_kind,
+                                                        SchemaKind::Type(Type::Object(_))
+                                                    ) {
+                                                        generate_zod_for_schema(
+                                                            openapi,
+                                                            &ref_name,
+                                                            &ref_schema,
+                                                            zod_schemas,
+                                                            processed,
+                                                            enum_registry,
+                                                            Some(&parent_schema_for_props),
+                                                            common_schemas,
+                                                        )?;
+                                                    }
                                                 }
                                             }
+                                            let schema_ref =
+                                                if common_schemas.contains(&ref_name) {
+                                                    format!(
+                                                        "Common.{}Schema",
+                                                        to_pascal_case(&ref_name)
+                                                    )
+                                                } else {
+                                                    format!(
+                                                        "{}Schema",
+                                                        to_pascal_case(&ref_name)
+                                                    )
+                                                };
+                                            format!(
+                                                "{}z.lazy(() => {})",
+                                                indent_str,
+                                                schema_ref
+                                            )
                                         }
-                                        format!(
-                                            "{}z.lazy(() => {}Schema)",
-                                            indent_str,
-                                            to_pascal_case(&ref_name)
-                                        )
                                     } else {
                                         format!("{}z.any()", indent_str)
                                     }
@@ -525,6 +589,7 @@ fn schema_to_zod(
                                     enum_registry,
                                     Some((prop_name, &parent_schema_for_props)),
                                     current_schema_name,
+                                    common_schemas,
                                 )?,
                             };
 
@@ -546,7 +611,7 @@ fn schema_to_zod(
                             fields.push(format!(
                                 "{}{}: {},",
                                 "  ".repeat(indent + 1),
-                                prop_name,
+                                sanitize_property_name(prop_name),
                                 zod_expr
                             ));
                         }
@@ -564,10 +629,15 @@ fn schema_to_zod(
                 match item {
                     ReferenceOr::Reference { reference } => {
                         if let Some(ref_name) = get_schema_name_from_ref(reference) {
+                            let schema_ref = if common_schemas.contains(&ref_name) {
+                                format!("Common.{}Schema", to_pascal_case(&ref_name))
+                            } else {
+                                format!("{}Schema", to_pascal_case(&ref_name))
+                            };
                             variant_schemas.push(format!(
-                                "{}z.lazy(() => {}Schema)",
+                                "{}z.lazy(() => {})",
                                 indent_str,
-                                crate::generator::utils::to_pascal_case(&ref_name)
+                                schema_ref
                             ));
                         } else {
                             variant_schemas.push(format!("{}z.any()", indent_str));
@@ -583,6 +653,7 @@ fn schema_to_zod(
                             enum_registry,
                             None,
                             current_schema_name,
+                            common_schemas,
                         )?;
                         variant_schemas.push(item_zod);
                     }
@@ -604,10 +675,15 @@ fn schema_to_zod(
                 match item {
                     ReferenceOr::Reference { reference } => {
                         if let Some(ref_name) = get_schema_name_from_ref(reference) {
+                            let schema_ref = if common_schemas.contains(&ref_name) {
+                                format!("Common.{}Schema", to_pascal_case(&ref_name))
+                            } else {
+                                format!("{}Schema", to_pascal_case(&ref_name))
+                            };
                             all_schemas.push(format!(
-                                "{}z.lazy(() => {}Schema)",
+                                "{}z.lazy(() => {})",
                                 indent_str,
-                                crate::generator::utils::to_pascal_case(&ref_name)
+                                schema_ref
                             ));
                         } else {
                             all_schemas.push(format!("{}z.any()", indent_str));
@@ -623,6 +699,7 @@ fn schema_to_zod(
                             enum_registry,
                             None,
                             current_schema_name,
+                            common_schemas,
                         )?;
                         all_schemas.push(item_zod);
                     }
@@ -649,10 +726,15 @@ fn schema_to_zod(
                 match item {
                     ReferenceOr::Reference { reference } => {
                         if let Some(ref_name) = get_schema_name_from_ref(reference) {
+                            let schema_ref = if common_schemas.contains(&ref_name) {
+                                format!("Common.{}Schema", to_pascal_case(&ref_name))
+                            } else {
+                                format!("{}Schema", to_pascal_case(&ref_name))
+                            };
                             variant_schemas.push(format!(
-                                "{}z.lazy(() => {}Schema)",
+                                "{}z.lazy(() => {})",
                                 indent_str,
-                                crate::generator::utils::to_pascal_case(&ref_name)
+                                schema_ref
                             ));
                         } else {
                             variant_schemas.push(format!("{}z.any()", indent_str));
@@ -668,6 +750,7 @@ fn schema_to_zod(
                             enum_registry,
                             None,
                             current_schema_name,
+                            common_schemas,
                         )?;
                         variant_schemas.push(item_zod);
                     }

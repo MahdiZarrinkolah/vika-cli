@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::generator::swagger_parser::{get_schema_name_from_ref, resolve_ref};
-use crate::generator::utils::to_pascal_case;
+use crate::generator::utils::{to_pascal_case, sanitize_property_name};
 use openapiv3::{OpenAPI, ReferenceOr, Schema, SchemaKind, Type};
 use std::collections::HashMap;
 
@@ -19,6 +19,7 @@ pub fn generate_typings(
         schemas,
         schema_names,
         &mut std::collections::HashMap::new(),
+        &[],
     )
 }
 
@@ -27,6 +28,7 @@ pub fn generate_typings_with_registry(
     schemas: &HashMap<String, Schema>,
     schema_names: &[String],
     enum_registry: &mut std::collections::HashMap<String, String>,
+    common_schemas: &[String],
 ) -> Result<Vec<TypeScriptType>> {
     let mut types = Vec::new();
     let mut processed = std::collections::HashSet::new();
@@ -41,6 +43,7 @@ pub fn generate_typings_with_registry(
                 &mut processed,
                 enum_registry,
                 None,
+                common_schemas,
             )?;
         }
     }
@@ -74,6 +77,7 @@ fn generate_type_for_schema(
     processed: &mut std::collections::HashSet<String>,
     enum_registry: &mut std::collections::HashMap<String, String>,
     parent_schema_name: Option<&str>,
+    common_schemas: &[String],
 ) -> Result<()> {
     if processed.contains(name) {
         return Ok(());
@@ -96,25 +100,23 @@ fn generate_type_for_schema(
                 enum_values.sort();
                 let enum_key = enum_values.join(",");
 
-                // For top-level enum schemas, use schema name as context if available
-                // But also check the base enum_key to avoid duplicates
+                // Use schema-specific context key so each schema can emit its own enum definition
+                let schema_context_key = format!("schema_enum:{}", name);
+                if enum_registry.get(&schema_context_key).is_some() {
+                    return Ok(());
+                }
                 let context_key = if let Some(parent) = parent_schema_name {
                     if !parent.is_empty() {
                         format!("{}:{}", enum_key, parent)
                     } else {
-                        enum_key.clone()
+                        schema_context_key.clone()
                     }
                 } else {
-                    enum_key.clone()
+                    schema_context_key.clone()
                 };
 
-                // Check if this enum already exists in registry
-                // First check context_key (for context-aware enums)
-                // Then check base enum_key to deduplicate enums with same values
-                if enum_registry.get(&context_key).is_some()
-                    || enum_registry.get(&enum_key).is_some()
-                {
-                    // Enum already generated, skip (don't generate duplicate)
+                // Only skip if we've already generated an enum for this exact schema context
+                if enum_registry.get(&context_key).is_some() {
                     return Ok(());
                 }
 
@@ -154,8 +156,16 @@ fn generate_type_for_schema(
                     "UnknownEnum".to_string()
                 };
 
-                // Store in registry using context_key
+                // Store in registry using schema context and base enum key (without overriding earlier entries)
                 enum_registry.insert(context_key, enum_name.clone());
+                enum_registry.insert(schema_context_key, enum_name.clone());
+                if !enum_registry.contains_key(&enum_key) {
+                    enum_registry.insert(enum_key.clone(), enum_name.clone());
+                }
+                // Also store mapping from schema name to enum name so $ref usages can resolve it
+                if !name.is_empty() {
+                    enum_registry.insert(format!("schema:{}", name), enum_name.clone());
+                }
 
                 let enum_type = generate_enum_type(&enum_name, &enum_values);
                 types.push(enum_type);
@@ -174,13 +184,25 @@ fn generate_type_for_schema(
         enum_registry,
         None,
         Some(name),
+        common_schemas,
     )?;
 
     // Only create interface if it's an object type
     if matches!(&schema.schema_kind, SchemaKind::Type(Type::Object(_))) {
-        types.push(TypeScriptType {
-            content: format!("export interface {} {{\n{}\n}}", type_name, content),
-        });
+        // Check if this is an empty object (should be a record type)
+        if let SchemaKind::Type(Type::Object(obj)) = &schema.schema_kind {
+            if obj.properties.is_empty() {
+                // Empty object with additionalProperties - use type alias for Record
+                types.push(TypeScriptType {
+                    content: format!("export type {} = Record<string, any>;", type_name),
+                });
+            } else {
+                // Regular object with properties
+                types.push(TypeScriptType {
+                    content: format!("export interface {} {{\n{}\n}}", type_name, content),
+                });
+            }
+        }
     }
 
     Ok(())
@@ -196,6 +218,7 @@ fn schema_to_typescript(
     enum_registry: &mut std::collections::HashMap<String, String>,
     context: Option<(&str, &str)>, // (property_name, parent_schema_name)
     current_schema_name: Option<&str>, // Current schema being processed (for enum naming context)
+    common_schemas: &[String],
 ) -> Result<String> {
     // Prevent infinite recursion with a reasonable depth limit
     if indent > 100 {
@@ -335,10 +358,25 @@ fn schema_to_typescript(
                                                 processed,
                                                 enum_registry,
                                                 current_schema_name,
+                                                common_schemas,
                                             )?;
                                         }
                                     }
-                                    to_pascal_case(&ref_name)
+
+                                    // If this $ref points to a top-level enum schema, use the enum type
+                                    let schema_enum_key = format!("schema:{}", ref_name);
+                                    if let Some(enum_name) = enum_registry.get(&schema_enum_key) {
+                                        if common_schemas.contains(&ref_name) {
+                                            format!("Common.{}", enum_name)
+                                        } else {
+                                            enum_name.clone()
+                                        }
+                                    } else if common_schemas.contains(&ref_name) {
+                                        // Check if this is a common schema and prefix with Common.
+                                        format!("Common.{}", to_pascal_case(&ref_name))
+                                    } else {
+                                        to_pascal_case(&ref_name)
+                                    }
                                 } else {
                                     "any".to_string()
                                 }
@@ -358,6 +396,7 @@ fn schema_to_typescript(
                                         enum_registry,
                                         None,
                                         current_schema_name,
+                                        common_schemas,
                                     )?;
                                     format!("{{\n{}{}\n{}}}", indent_str, fields, indent_str)
                                 } else {
@@ -370,6 +409,7 @@ fn schema_to_typescript(
                                         enum_registry,
                                         None,
                                         current_schema_name,
+                                        common_schemas,
                                     )?
                                 }
                             }
@@ -413,10 +453,26 @@ fn schema_to_typescript(
                                                     processed,
                                                     enum_registry,
                                                     Some(&parent_schema_for_props),
+                                                    common_schemas,
                                                 )?;
                                             }
                                         }
-                                        to_pascal_case(&ref_name)
+
+                                        // If this $ref points to a top-level enum schema, use the enum type
+                                        let schema_enum_key = format!("schema:{}", ref_name);
+                                        if let Some(enum_name) = enum_registry.get(&schema_enum_key)
+                                        {
+                                            if common_schemas.contains(&ref_name) {
+                                                format!("Common.{}", enum_name)
+                                            } else {
+                                                enum_name.clone()
+                                            }
+                                        } else if common_schemas.contains(&ref_name) {
+                                            // Check if this is a common schema and prefix with Common.
+                                            format!("Common.{}", to_pascal_case(&ref_name))
+                                        } else {
+                                            to_pascal_case(&ref_name)
+                                        }
                                     } else {
                                         "any".to_string()
                                     }
@@ -430,6 +486,7 @@ fn schema_to_typescript(
                                     enum_registry,
                                     Some((prop_name, &parent_schema_for_props)),
                                     current_schema_name,
+                                    common_schemas,
                                 )?,
                             };
 
@@ -445,7 +502,7 @@ fn schema_to_typescript(
 
                             fields.push(format!(
                                 "{}{}{}: {}{};",
-                                indent_str, prop_name, optional, prop_type, nullable_str
+                                indent_str, sanitize_property_name(prop_name), optional, prop_type, nullable_str
                             ));
                         }
                         Ok(fields.join("\n"))
@@ -462,7 +519,21 @@ fn schema_to_typescript(
                 match item {
                     ReferenceOr::Reference { reference } => {
                         if let Some(ref_name) = get_schema_name_from_ref(reference) {
-                            variant_types.push(to_pascal_case(&ref_name));
+                            let schema_enum_key = format!("schema:{}", ref_name);
+                            let type_name = if let Some(enum_name) =
+                                enum_registry.get(&schema_enum_key)
+                            {
+                                if common_schemas.contains(&ref_name) {
+                                    format!("Common.{}", enum_name)
+                                } else {
+                                    enum_name.clone()
+                                }
+                            } else if common_schemas.contains(&ref_name) {
+                                format!("Common.{}", to_pascal_case(&ref_name))
+                            } else {
+                                to_pascal_case(&ref_name)
+                            };
+                            variant_types.push(type_name);
                         } else {
                             variant_types.push("any".to_string());
                         }
@@ -477,6 +548,7 @@ fn schema_to_typescript(
                             enum_registry,
                             None,
                             current_schema_name,
+                            common_schemas,
                         )?;
                         variant_types.push(item_type);
                     }
@@ -494,7 +566,21 @@ fn schema_to_typescript(
                 match item {
                     ReferenceOr::Reference { reference } => {
                         if let Some(ref_name) = get_schema_name_from_ref(reference) {
-                            all_types.push(to_pascal_case(&ref_name));
+                            let schema_enum_key = format!("schema:{}", ref_name);
+                            let type_name = if let Some(enum_name) =
+                                enum_registry.get(&schema_enum_key)
+                            {
+                                if common_schemas.contains(&ref_name) {
+                                    format!("Common.{}", enum_name)
+                                } else {
+                                    enum_name.clone()
+                                }
+                            } else if common_schemas.contains(&ref_name) {
+                                format!("Common.{}", to_pascal_case(&ref_name))
+                            } else {
+                                to_pascal_case(&ref_name)
+                            };
+                            all_types.push(type_name);
                         } else {
                             all_types.push("any".to_string());
                         }
@@ -509,6 +595,7 @@ fn schema_to_typescript(
                             enum_registry,
                             None,
                             current_schema_name,
+                            common_schemas,
                         )?;
                         all_types.push(item_type);
                     }
@@ -527,7 +614,21 @@ fn schema_to_typescript(
                 match item {
                     ReferenceOr::Reference { reference } => {
                         if let Some(ref_name) = get_schema_name_from_ref(reference) {
-                            variant_types.push(to_pascal_case(&ref_name));
+                            let schema_enum_key = format!("schema:{}", ref_name);
+                            let type_name = if let Some(enum_name) =
+                                enum_registry.get(&schema_enum_key)
+                            {
+                                if common_schemas.contains(&ref_name) {
+                                    format!("Common.{}", enum_name)
+                                } else {
+                                    enum_name.clone()
+                                }
+                            } else if common_schemas.contains(&ref_name) {
+                                format!("Common.{}", to_pascal_case(&ref_name))
+                            } else {
+                                to_pascal_case(&ref_name)
+                            };
+                            variant_types.push(type_name);
                         } else {
                             variant_types.push("any".to_string());
                         }
@@ -542,6 +643,7 @@ fn schema_to_typescript(
                             enum_registry,
                             None,
                             current_schema_name,
+                            common_schemas,
                         )?;
                         variant_types.push(item_type);
                     }

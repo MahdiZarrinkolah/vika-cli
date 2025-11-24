@@ -25,9 +25,9 @@ struct ModuleSummary {
 pub async fn run(
     spec: Option<String>,
     verbose: bool,
-    _cache: bool,
-    _backup: bool,
-    _force: bool,
+    cache: bool,
+    backup: bool,
+    force: bool,
 ) -> Result<()> {
     let mut progress = ProgressReporter::new(verbose);
 
@@ -40,6 +40,17 @@ pub async fn run(
     validate_config(&config)?;
     progress.finish_spinner("Configuration loaded");
 
+    // Use config defaults, but allow CLI flags to override
+    // CLI flags are false by default (not set), so we check if they were explicitly set
+    // For now, we'll use a simple approach: if flag is true, use it; otherwise use config
+    let use_cache = if cache { true } else { config.generation.enable_cache };
+    let use_backup = if backup { true } else { config.generation.enable_backup };
+    let use_force = if force {
+        true
+    } else {
+        config.generation.conflict_strategy == "force"
+    };
+
     use crate::error::GenerationError;
 
     // Get spec path
@@ -48,7 +59,7 @@ pub async fn run(
     // Fetch and parse Swagger spec
     progress.start_spinner(&format!("Fetching spec from: {}", spec_path));
     let parsed =
-        crate::generator::swagger_parser::fetch_and_parse_spec_with_cache(&spec_path, _cache)
+        crate::generator::swagger_parser::fetch_and_parse_spec_with_cache(&spec_path, use_cache)
             .await?;
     progress.finish_spinner(&format!(
         "Parsed spec with {} modules",
@@ -119,6 +130,7 @@ pub async fn run(
             &parsed.schemas,
             &common_schemas,
             &mut shared_enum_registry,
+            &common_schemas,
         )?;
 
         // Generate Zod schemas for common schemas (using same registry)
@@ -127,6 +139,7 @@ pub async fn run(
             &parsed.schemas,
             &common_schemas,
             &mut shared_enum_registry,
+            &common_schemas,
         )?;
 
         // Write common schemas
@@ -135,8 +148,8 @@ pub async fn run(
             "common",
             &common_types,
             &common_zod_schemas,
-            _backup,
-            _force,
+            use_backup,
+            use_force,
         )?;
         total_files += common_files.len();
         module_summary.push(("common".to_string(), common_files.len()));
@@ -177,6 +190,7 @@ pub async fn run(
                 &parsed.schemas,
                 &module_schema_names,
                 &mut shared_enum_registry,
+                &common_schemas,
             )?
         } else {
             Vec::new()
@@ -189,6 +203,7 @@ pub async fn run(
                 &parsed.schemas,
                 &module_schema_names,
                 &mut shared_enum_registry,
+                &common_schemas,
             )?
         } else {
             Vec::new()
@@ -213,14 +228,14 @@ pub async fn run(
             module,
             &all_types,
             &zod_schemas,
-            _backup,
-            _force,
+            use_backup,
+            use_force,
         )?;
         total_files += schema_files.len();
 
         // Write API client (with backup and conflict detection)
         let api_files =
-            write_api_client_with_options(&apis_dir, module, &api_result.functions, _backup, _force)?;
+            write_api_client_with_options(&apis_dir, module, &api_result.functions, use_backup, use_force)?;
         total_files += api_files.len();
 
         let module_file_count = schema_files.len() + api_files.len();

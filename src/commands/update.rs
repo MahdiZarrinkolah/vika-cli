@@ -74,6 +74,7 @@ pub async fn run() -> Result<()> {
             &parsed.schemas,
             &common_schemas,
             &mut shared_enum_registry,
+            &common_schemas,
         )?;
 
         // Generate Zod schemas for common schemas (using same registry)
@@ -82,6 +83,7 @@ pub async fn run() -> Result<()> {
             &parsed.schemas,
             &common_schemas,
             &mut shared_enum_registry,
+            &common_schemas,
         )?;
 
         // Write common schemas
@@ -128,6 +130,7 @@ pub async fn run() -> Result<()> {
                 &parsed.schemas,
                 &module_schema_names,
                 &mut shared_enum_registry,
+                &common_schemas,
             )?
         } else {
             Vec::new()
@@ -140,6 +143,7 @@ pub async fn run() -> Result<()> {
                 &parsed.schemas,
                 &module_schema_names,
                 &mut shared_enum_registry,
+                &common_schemas,
             )?
         } else {
             Vec::new()

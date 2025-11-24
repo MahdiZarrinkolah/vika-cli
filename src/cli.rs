@@ -21,14 +21,14 @@ pub enum Commands {
         /// Enable verbose output
         #[arg(long)]
         verbose: bool,
-        /// Use cached spec if available
-        #[arg(long)]
+        /// Use cached spec if available (overrides config)
+        #[arg(long, action = clap::ArgAction::SetTrue)]
         cache: bool,
-        /// Create backup before writing files
-        #[arg(long)]
+        /// Create backup before writing files (overrides config)
+        #[arg(long, action = clap::ArgAction::SetTrue)]
         backup: bool,
-        /// Force overwrite user-modified files
-        #[arg(long)]
+        /// Force overwrite user-modified files (overrides config)
+        #[arg(long, action = clap::ArgAction::SetTrue)]
         force: bool,
     },
     /// Update existing generated code

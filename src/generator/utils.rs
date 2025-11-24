@@ -27,6 +27,31 @@ pub fn to_camel_case(s: &str) -> String {
     format!("{}{}", first, chars.as_str())
 }
 
+/// Sanitizes a property name to be a valid JavaScript identifier
+/// Returns the original name if valid, or the name in quotes if invalid
+pub fn sanitize_property_name(name: &str) -> String {
+    let first_char = name.chars().next();
+    let needs_quotes = match first_char {
+        Some(c) if c.is_ascii_digit() => true,  // starts with number
+        _ => name.contains(' ') || name.contains('-') && !name.starts_with('-'), // contains spaces or hyphens (but not negative numbers)
+    };
+    
+    if needs_quotes {
+        format!("\"{}\"", name)
+    } else {
+        name.to_string()
+    }
+}
+
+/// Sanitizes module names for use as directory/file names
+/// Replaces spaces with hyphens and removes other invalid characters
+pub fn sanitize_module_name(name: &str) -> String {
+    name.replace(' ', "-")
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_' || *c == '/')
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -102,5 +127,33 @@ mod tests {
     #[test]
     fn test_to_camel_case_mixed() {
         assert_eq!(to_camel_case("hello_world-test"), "helloWorldTest");
+    }
+
+    #[test]
+    fn test_sanitize_property_name_valid() {
+        assert_eq!(sanitize_property_name("name"), "name");
+        assert_eq!(sanitize_property_name("userName"), "userName");
+        assert_eq!(sanitize_property_name("_private"), "_private");
+    }
+
+    #[test]
+    fn test_sanitize_property_name_starts_with_number() {
+        assert_eq!(sanitize_property_name("2xl"), "\"2xl\"");
+        assert_eq!(sanitize_property_name("3xl"), "\"3xl\"");
+        assert_eq!(sanitize_property_name("404error"), "\"404error\"");
+    }
+
+    #[test]
+    fn test_sanitize_property_name_with_spaces() {
+        assert_eq!(sanitize_property_name("Translation name"), "\"Translation name\"");
+        assert_eq!(sanitize_property_name("user name"), "\"user name\"");
+    }
+
+    #[test]
+    fn test_sanitize_module_name() {
+        assert_eq!(sanitize_module_name("cart"), "cart");
+        assert_eq!(sanitize_module_name("AI Chat"), "AI-Chat");
+        assert_eq!(sanitize_module_name("admin/orders"), "admin/orders");
+        assert_eq!(sanitize_module_name("test module name"), "test-module-name");
     }
 }

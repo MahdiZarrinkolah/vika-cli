@@ -11,3 +11,5 @@ swagger-*.json
 
 # Insta snapshot testing - ignore pending/unreviewed snapshots
 *.snap.new
+
+regenerate_and_check.sh

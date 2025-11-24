@@ -2,6 +2,7 @@ use crate::error::{FileSystemError, Result};
 use crate::generator::api_client::ApiFunction;
 use crate::generator::ts_typings::TypeScriptType;
 use crate::generator::zod_schema::ZodSchema;
+use crate::generator::utils::sanitize_module_name;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -34,14 +35,45 @@ pub fn write_schemas_with_options(
     backup: bool,
     force: bool,
 ) -> Result<Vec<PathBuf>> {
-    let module_dir = output_dir.join(module_name);
+    let module_dir = output_dir.join(sanitize_module_name(module_name));
     ensure_directory(&module_dir)?;
 
     let mut written_files = Vec::new();
 
     // Write TypeScript types
     if !types.is_empty() {
-        let types_content_raw = types
+        // Deduplicate types by name (to avoid duplicate enum/type declarations)
+        // Extract type name from content: "export type XEnum = ..." or "export interface X { ... }"
+        let mut seen_type_names = std::collections::HashSet::new();
+        let mut deduplicated_types = Vec::new();
+        for t in types {
+            // Extract type name from content
+            let type_name = if let Some(start) = t.content.find("export type ") {
+                let after_export_type = &t.content[start + 12..];
+                if let Some(end) = after_export_type.find(|c: char| c == ' ' || c == '=' || c == '\n') {
+                    after_export_type[..end].trim().to_string()
+                } else {
+                    after_export_type.trim().to_string()
+                }
+            } else if let Some(start) = t.content.find("export interface ") {
+                let after_export_interface = &t.content[start + 17..];
+                if let Some(end) = after_export_interface.find(|c: char| c == ' ' || c == '{' || c == '\n') {
+                    after_export_interface[..end].trim().to_string()
+                } else {
+                    after_export_interface.trim().to_string()
+                }
+            } else {
+                // Fallback: use full content as key
+                t.content.clone()
+            };
+            
+            if !seen_type_names.contains(&type_name) {
+                seen_type_names.insert(type_name);
+                deduplicated_types.push(t);
+            }
+        }
+        
+        let types_content_raw = deduplicated_types
             .iter()
             .map(|t| t.content.clone())
             .collect::<Vec<_>>()
@@ -50,9 +82,12 @@ pub fn write_schemas_with_options(
         // Check if we need to import Common types
         let needs_common_import = types_content_raw.contains("Common.");
         let common_import = if needs_common_import {
-            "import * as Common from \"../common\";\n\n"
+            // Calculate relative path based on module depth
+            let depth = module_name.matches('/').count() + 1;
+            let relative_path = "../".repeat(depth);
+            format!("import * as Common from \"{}common\";\n\n", relative_path)
         } else {
-            ""
+            String::new()
         };
         
         let types_content = format_typescript_code(
@@ -66,13 +101,27 @@ pub fn write_schemas_with_options(
 
     // Write Zod schemas
     if !zod_schemas.is_empty() {
+        let zod_content_raw = zod_schemas
+            .iter()
+            .map(|z| z.content.clone())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        
+        // Check if we need to import Common schemas
+        let needs_common_import = zod_content_raw.contains("Common.");
+        let common_import = if needs_common_import {
+            // Calculate relative path based on module depth
+            let depth = module_name.matches('/').count() + 1;
+            let relative_path = "../".repeat(depth);
+            format!("import * as Common from \"{}common\";\n\n", relative_path)
+        } else {
+            String::new()
+        };
+        
         let zod_content = format_typescript_code(&format!(
-            "import {{ z }} from \"zod\";\n\n{}",
-            zod_schemas
-                .iter()
-                .map(|z| z.content.clone())
-                .collect::<Vec<_>>()
-                .join("\n\n")
+            "import {{ z }} from \"zod\";\n{}{}",
+            if !common_import.is_empty() { &common_import } else { "" },
+            zod_content_raw
         ));
 
         let zod_file = module_dir.join("schemas.ts");
@@ -117,40 +166,156 @@ pub fn write_api_client_with_options(
     backup: bool,
     force: bool,
 ) -> Result<Vec<PathBuf>> {
-    let module_dir = output_dir.join(module_name);
+    let module_dir = output_dir.join(sanitize_module_name(module_name));
     ensure_directory(&module_dir)?;
 
     let mut written_files = Vec::new();
 
     if !functions.is_empty() {
-        // Consolidate imports: extract all imports and deduplicate them
-        let mut all_imports: std::collections::HashSet<String> = std::collections::HashSet::new();
+        // Consolidate imports: extract all imports and merge by module
+        // Map: module_path -> (type_imports_set, other_imports_set)
+        // We need to separate type imports from other imports to reconstruct them correctly
+        let mut imports_by_module: std::collections::HashMap<String, (std::collections::HashSet<String>, Vec<String>)> = std::collections::HashMap::new();
         let mut function_bodies = Vec::new();
+        let mut seen_functions: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for func in functions {
             let lines: Vec<&str> = func.content.lines().collect();
             let mut func_lines = Vec::new();
             let mut in_function = false;
+            let mut function_name: Option<String> = None;
 
             for line in lines {
                 if line.trim().starts_with("import ") {
-                    all_imports.insert(line.trim().to_string());
+                    let import_line = line.trim().trim_end_matches(';').trim();
+                    // Parse import statement: "import type { A, B } from 'path'" or "import * as X from 'path'"
+                    if let Some(from_pos) = import_line.find(" from ") {
+                        let before_from = &import_line[..from_pos];
+                        let after_from = &import_line[from_pos + 6..];
+                        let module_path = after_from.trim_matches('"').trim_matches('\'').trim();
+                        
+                        // Extract imported items
+                        if before_from.contains("import type {") {
+                            // Type import: "import type { A, B }"
+                            if let Some(start) = before_from.find('{') {
+                                if let Some(end) = before_from.find('}') {
+                                    let items_str = &before_from[start + 1..end];
+                                    let items: Vec<String> = items_str
+                                        .split(',')
+                                        .map(|s| s.trim().to_string())
+                                        .filter(|s| !s.is_empty())
+                                        .collect();
+                                    
+                                    let (type_imports, _) = imports_by_module
+                                        .entry(module_path.to_string())
+                                        .or_insert_with(|| (std::collections::HashSet::new(), Vec::new()));
+                                    type_imports.extend(items);
+                                }
+                            }
+                        } else if before_from.contains("import * as ") {
+                            // Namespace import: "import * as X"
+                            // Keep as-is, don't merge
+                            let (_, other_imports) = imports_by_module
+                                .entry(module_path.to_string())
+                                .or_insert_with(|| (std::collections::HashSet::new(), Vec::new()));
+                            other_imports.push(import_line.to_string());
+                        } else {
+                            // Default import or other format (e.g., "import { http }")
+                            // Keep as-is
+                            let (_, other_imports) = imports_by_module
+                                .entry(module_path.to_string())
+                                .or_insert_with(|| (std::collections::HashSet::new(), Vec::new()));
+                            other_imports.push(import_line.to_string());
+                        }
+                    } else {
+                        // Malformed import - keep as-is
+                        let (_, other_imports) = imports_by_module
+                            .entry("".to_string())
+                            .or_insert_with(|| (std::collections::HashSet::new(), Vec::new()));
+                        other_imports.push(import_line.to_string());
+                    }
                 } else if line.trim().starts_with("export const ") {
+                    // Extract function name to check for duplicates
+                    // Find the function name after "export const " (13 chars)
+                    let trimmed = line.trim();
+                    if trimmed.len() > 13 {
+                        let after_export_const = &trimmed[13..];
+                        // Find the first space or opening parenthesis after function name
+                        let name_end = after_export_const
+                            .find(' ')
+                            .or_else(|| after_export_const.find('('))
+                            .unwrap_or(after_export_const.len());
+                        let name = after_export_const[..name_end].trim().to_string();
+                        if !name.is_empty() {
+                            function_name = Some(name.clone());
+                            if seen_functions.contains(&name) {
+                                // Skip duplicate function
+                                break;
+                            }
+                            seen_functions.insert(name);
+                        }
+                    }
                     in_function = true;
                     func_lines.push(line);
                 } else if in_function {
                     func_lines.push(line);
+                    // Check if function ends
+                    if line.trim() == "};" {
+                        break;
+                    }
                 }
                 // Skip type definitions - they're in types.ts now
             }
 
-            if !func_lines.is_empty() {
+            if !func_lines.is_empty() && function_name.is_some() {
                 function_bodies.push(func_lines.join("\n"));
             }
         }
 
         // Combine imports and function bodies (no type definitions)
-        let imports_vec: Vec<String> = all_imports.iter().cloned().collect();
+        // Merge imports by module path
+        let mut imports_vec = Vec::new();
+        for (module_path, (type_import_items, other_imports)) in imports_by_module.iter() {
+            if module_path.is_empty() {
+                // Malformed imports - add as-is (deduplicate)
+                let deduped: std::collections::HashSet<String> = other_imports.iter().cloned().collect();
+                imports_vec.extend(deduped.into_iter());
+            } else {
+                // Deduplicate and separate other imports by type
+                let deduped_imports: std::collections::HashSet<String> = other_imports.iter().cloned().collect();
+                let mut namespace_imports = Vec::new();
+                let mut default_imports = Vec::new();
+                
+                for item in deduped_imports.iter() {
+                    if item.contains("import * as") {
+                        // Namespace import - keep as-is
+                        namespace_imports.push(item.clone());
+                    } else {
+                        // Default import (e.g., "import { http }")
+                        default_imports.push(item.clone());
+                    }
+                }
+                
+                // Add namespace imports (sorted for consistency)
+                namespace_imports.sort();
+                for ns_import in namespace_imports {
+                    imports_vec.push(format!("{};", ns_import));
+                }
+                
+                // Add default imports (sorted for consistency)
+                default_imports.sort();
+                for default_import in default_imports {
+                    imports_vec.push(format!("{};", default_import));
+                }
+                
+                // Merge and add type imports
+                if !type_import_items.is_empty() {
+                    let mut sorted_types: Vec<String> = type_import_items.iter().cloned().collect();
+                    sorted_types.sort();
+                    imports_vec.push(format!("import type {{ {} }} from \"{}\";", sorted_types.join(", "), module_path));
+                }
+            }
+        }
         let imports_str = imports_vec.join("\n");
         let functions_str = function_bodies.join("\n\n");
         let combined_content = if !imports_str.is_empty() {

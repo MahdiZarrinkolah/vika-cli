@@ -5,7 +5,7 @@ use crate::generator::swagger_parser::{
 };
 use crate::generator::swagger_parser::resolve_ref;
 use crate::generator::ts_typings::TypeScriptType;
-use crate::generator::utils::{to_camel_case, to_pascal_case};
+use crate::generator::utils::{to_camel_case, to_pascal_case, sanitize_module_name};
 use openapiv3::OpenAPI;
 use openapiv3::{Operation, Parameter, ReferenceOr, SchemaKind, Type};
 
@@ -164,13 +164,30 @@ fn generate_function_for_operation(
             path_template.replace(&format!("{{{}}}", param.name), &format!("${{{}}}", param.name));
     }
 
-    // Add query parameters
+    // Add request body (check if it's in common schemas)
+    if let Some(body_type) = &request_body {
+        // Don't qualify "any" type with namespace
+        if body_type == "any" {
+            params.push("body: any".to_string());
+        } else {
+            let qualified_body_type = if common_schemas.contains(body_type) {
+                format!("Common.{}", body_type)
+            } else {
+                format!("{}.{}", namespace_name, body_type)
+            };
+            params.push(format!("body: {}", qualified_body_type));
+        }
+    }
+
+    // Add query parameters (optional) AFTER any required parameters like body,
+    // to satisfy TypeScript's \"required parameter cannot follow an optional parameter\" rule.
     if !query_params.is_empty() {
         let mut query_fields = Vec::new();
         for param in &query_params {
             let param_type = match &param.param_type {
                 ParameterType::Enum(enum_name) => {
-                    enum_types.push((enum_name.clone(), param.enum_values.clone().unwrap_or_default()));
+                    enum_types
+                        .push((enum_name.clone(), param.enum_values.clone().unwrap_or_default()));
                     enum_name.clone()
                 }
                 ParameterType::Array(item_type) => {
@@ -185,21 +202,6 @@ fn generate_function_for_operation(
         }
         let query_type = format!("{{ {} }}", query_fields.join(", "));
         params.push(format!("query?: {}", query_type));
-    }
-
-    // Add request body (check if it's in common schemas)
-    if let Some(body_type) = &request_body {
-        // Don't qualify "any" type with namespace
-        if body_type == "any" {
-            params.push("body: any".to_string());
-        } else {
-            let qualified_body_type = if common_schemas.contains(body_type) {
-                format!("Common.{}", body_type)
-            } else {
-                format!("{}.{}", namespace_name, body_type)
-            };
-            params.push(format!("body: {}", qualified_body_type));
-        }
     }
 
     let params_str = params.join(", ");
@@ -287,32 +289,60 @@ fn generate_function_for_operation(
     }
 
     // HTTP client is at apis/http.ts, and we're generating apis/<module>/index.ts
-    // So the relative path is ../http
-    let http_import = "../http";
+    // Calculate relative path based on module depth
+    let depth = module_name.matches('/').count();
+    let http_relative_path = if depth == 0 {
+        "../http"
+    } else {
+        &format!("{}../http", "../".repeat(depth))
+    };
+    let http_import = http_relative_path;
 
     // Determine if response type is in common schemas or module-specific
     // We still need schema imports for request/response body types
-    let mut type_imports = if response_type != "any" {
+    let mut type_imports = String::new();
+    let mut needs_common_import = false;
+    let mut needs_namespace_import = false;
+    
+    // Check if response type needs import
+    if response_type != "any" {
         let is_common = common_schemas.contains(&response_type);
         if is_common {
-            // Import from common module
-            let common_import = "../../schemas/common";
-            let common_namespace = "Common";
-            format!(
-                "import * as {} from \"{}\";\n",
-                common_namespace, common_import
-            )
+            needs_common_import = true;
         } else {
-            // Import from module-specific schemas
-            let schemas_import = format!("../../schemas/{}", module_name);
-            format!(
-                "import * as {} from \"{}\";\n",
-                namespace_name, schemas_import
-            )
+            needs_namespace_import = true;
         }
-    } else {
-        String::new()
-    };
+    }
+    
+    // Check if request body type needs import
+    if let Some(body_type) = &request_body {
+        if body_type != "any" {
+            if common_schemas.contains(body_type) {
+                needs_common_import = true;
+            } else {
+                needs_namespace_import = true;
+            }
+        }
+    }
+    
+    // Add imports
+    if needs_common_import {
+        let schemas_depth = depth + 1; // +1 to go from apis/ to schemas/
+        let common_import = format!("{}../schemas/common", "../".repeat(schemas_depth));
+        type_imports.push_str(&format!(
+            "import * as Common from \"{}\";\n",
+            common_import
+        ));
+    }
+    if needs_namespace_import {
+        let schemas_depth = depth + 1; // +1 to go from apis/ to schemas/
+        let sanitized_module_name = sanitize_module_name(module_name);
+        let schemas_import = format!("{}../schemas/{}", "../".repeat(schemas_depth), sanitized_module_name);
+        type_imports.push_str(&format!(
+            "import * as {} from \"{}\";\n",
+            namespace_name, schemas_import
+        ));
+    }
 
     // Generate response types (Errors, Error union, Responses)
     let response_types = generate_response_types(
@@ -321,6 +351,7 @@ fn generate_function_for_operation(
         &error_responses,
         &namespace_name,
         common_schemas,
+        &enum_types,
     );
     
     // Add imports for response types if we have any
@@ -348,7 +379,10 @@ fn generate_function_for_operation(
     
     // Add type import if we have response types (separate line)
     if !response_type_imports.is_empty() {
-        let schemas_import = format!("../../schemas/{}", module_name);
+        // Calculate relative path based on module depth
+        let schemas_depth = depth + 1; // +1 to go from apis/ to schemas/
+        let sanitized_module_name = sanitize_module_name(module_name);
+        let schemas_import = format!("{}../schemas/{}", "../".repeat(schemas_depth), sanitized_module_name);
         let type_import_line = format!(
             "import type {{ {} }} from \"{}\";",
             response_type_imports.join(", "),
@@ -358,6 +392,24 @@ fn generate_function_for_operation(
             type_imports = format!("{}\n", type_import_line);
         } else {
             type_imports = format!("{}\n{}", type_imports.trim_end(), type_import_line);
+        }
+    }
+    
+    // Add enum type imports if we have any
+    if !enum_types.is_empty() {
+        let schemas_depth = depth + 1; // +1 to go from apis/ to schemas/
+        let sanitized_module_name = sanitize_module_name(module_name);
+        let schemas_import = format!("{}../schemas/{}", "../".repeat(schemas_depth), sanitized_module_name);
+        let enum_names: Vec<String> = enum_types.iter().map(|(name, _)| name.clone()).collect();
+        let enum_import_line = format!(
+            "import type {{ {} }} from \"{}\";",
+            enum_names.join(", "),
+            schemas_import
+        );
+        if type_imports.is_empty() {
+            type_imports = format!("{}\n", enum_import_line);
+        } else {
+            type_imports = format!("{}\n{}", type_imports.trim_end(), enum_import_line);
         }
     }
     
@@ -924,9 +976,21 @@ fn generate_response_types(
     error_responses: &[ResponseInfo],
     namespace_name: &str,
     common_schemas: &[String],
+    enum_types: &[(String, Vec<String>)],
 ) -> Vec<TypeScriptType> {
     let mut types = Vec::new();
     let type_name_base = to_pascal_case(func_name);
+    
+    // Generate enum types for parameters
+    for (enum_name, enum_values) in enum_types {
+        let variants = enum_values
+            .iter()
+            .map(|v| format!("\"{}\"", v))
+            .collect::<Vec<_>>()
+            .join(" |\n");
+        let enum_type = format!("export type {} =\n{};", enum_name, variants);
+        types.push(TypeScriptType { content: enum_type });
+    }
     
     // Generate Errors type
     if !error_responses.is_empty() {
