@@ -1,6 +1,6 @@
 [package]
 name = "vika-cli"
-version = "1.0.4"
+version = "1.0.3"
 edition = "2021"
 rust-version = "1.70"
 description = "Generate TypeScript types, Zod schemas, and Fetch-based API clients from OpenAPI/Swagger specifications"
