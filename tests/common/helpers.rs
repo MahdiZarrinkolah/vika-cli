@@ -48,6 +48,7 @@ pub fn create_mock_config_with_paths(schemas_output: &str, apis_output: &str) ->
             ignore: vec![],
             selected: vec![],
         },
+        generation: vika_cli::config::model::GenerationConfig::default(),
         spec_path: None,
         schema: vika_cli::config::model::default_schema(),
     }

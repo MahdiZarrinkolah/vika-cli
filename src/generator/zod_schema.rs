@@ -50,6 +50,7 @@ pub fn generate_zod_schemas_with_registry(
     Ok(zod_schemas)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn generate_zod_for_schema(
     openapi: &OpenAPI,
     name: &str,

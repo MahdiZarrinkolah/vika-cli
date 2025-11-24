@@ -267,8 +267,8 @@ mod tests {
     #[test]
     fn test_generation_config_defaults() {
         let config = Config::default();
-        assert_eq!(config.generation.enable_cache, true);
-        assert_eq!(config.generation.enable_backup, false);
+        assert!(config.generation.enable_cache);
+        assert!(!config.generation.enable_backup);
         assert_eq!(config.generation.conflict_strategy, "ask");
     }
 
@@ -300,8 +300,8 @@ mod tests {
         "#;
 
         let config: Config = serde_json::from_str(json).unwrap();
-        assert_eq!(config.generation.enable_cache, false);
-        assert_eq!(config.generation.enable_backup, true);
+        assert!(!config.generation.enable_cache);
+        assert!(config.generation.enable_backup);
         assert_eq!(config.generation.conflict_strategy, "force");
     }
 }

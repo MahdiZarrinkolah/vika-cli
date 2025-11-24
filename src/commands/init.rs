@@ -57,7 +57,7 @@ pub fn run() -> Result<()> {
         println!();
 
         // Schema naming convention
-        let naming_options = vec!["PascalCase", "camelCase", "snake_case", "kebab-case"];
+        let naming_options = ["PascalCase", "camelCase", "snake_case", "kebab-case"];
         let naming_index = Select::new()
             .with_prompt("Schema naming convention")
             .items(&[
@@ -80,7 +80,7 @@ pub fn run() -> Result<()> {
         println!("{}", "🔌 API Configuration".bright_yellow());
         println!();
 
-        let api_style_options = vec!["fetch"];
+        let api_style_options = ["fetch"];
         let api_style_index = Select::new()
             .with_prompt("API client style")
             .items(&["fetch - Native Fetch API (recommended)"])
@@ -110,7 +110,7 @@ pub fn run() -> Result<()> {
 
         println!();
 
-        let header_strategy_options = vec!["consumerInjected", "bearerToken", "fixed"];
+        let header_strategy_options = ["consumerInjected", "bearerToken", "fixed"];
         let header_strategy_index = Select::new()
             .with_prompt("Header strategy for API requests")
             .items(&[
@@ -152,7 +152,7 @@ pub fn run() -> Result<()> {
 
         println!();
 
-        let conflict_strategy_options = vec!["ask", "force", "skip"];
+        let conflict_strategy_options = ["ask", "force", "skip"];
         let conflict_strategy_index = Select::new()
             .with_prompt("What should happen when a file was modified by you?")
             .items(&[
@@ -171,17 +171,25 @@ pub fn run() -> Result<()> {
         println!();
 
         // Create config with user preferences
-        let mut config = Config::default();
-        config.root_dir = root_dir;
-        config.schemas.output = schemas_output;
-        config.schemas.naming = naming;
-        config.apis.output = apis_output;
-        config.apis.style = api_style;
-        config.apis.base_url = base_url;
-        config.apis.header_strategy = header_strategy;
-        config.generation.enable_cache = enable_cache;
-        config.generation.enable_backup = enable_backup;
-        config.generation.conflict_strategy = conflict_strategy;
+        let config = Config {
+            root_dir,
+            schemas: crate::config::model::SchemasConfig {
+                output: schemas_output,
+                naming,
+            },
+            apis: crate::config::model::ApisConfig {
+                output: apis_output,
+                style: api_style,
+                base_url,
+                header_strategy,
+            },
+            generation: crate::config::model::GenerationConfig {
+                enable_cache,
+                enable_backup,
+                conflict_strategy,
+            },
+            ..Config::default()
+        };
 
         validate_config(&config)?;
         save_config(&config)?;

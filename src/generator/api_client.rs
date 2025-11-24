@@ -422,7 +422,7 @@ fn generate_function_for_operation(
     let has_responses_type = response_type_imports.iter().any(|imp| imp.contains("Responses"));
     let return_type = if has_responses_type {
         // Use Responses type with primary status code
-        if let Some(primary_response) = success_responses.iter().find(|r| r.status_code == 200 && r.body_type != "any") {
+        if let Some(_primary_response) = success_responses.iter().find(|r| r.status_code == 200 && r.body_type != "any") {
             format!(": Promise<{}Responses[200]>", type_name_base)
         } else if let Some(first_success) = success_responses.iter().find(|r| r.status_code >= 200 && r.status_code < 300 && r.body_type != "any") {
             format!(": Promise<{}Responses[{}]>", type_name_base, first_success.status_code)
@@ -512,7 +512,7 @@ fn extract_path_parameters(
             }
             ReferenceOr::Item(param) => {
                 if let Parameter::Path { parameter_data, .. } = param {
-                    if let Some(param_info) = extract_parameter_info(openapi, &parameter_data, enum_registry)? {
+                    if let Some(param_info) = extract_parameter_info(openapi, parameter_data, enum_registry)? {
                         params.push(param_info);
                     }
                 }
@@ -568,7 +568,7 @@ fn extract_query_parameters(
             }
             ReferenceOr::Item(param) => {
                 if let Parameter::Query { parameter_data, style, .. } = param {
-                    if let Some(mut param_info) = extract_parameter_info(openapi, &parameter_data, enum_registry)? {
+                    if let Some(mut param_info) = extract_parameter_info(openapi, parameter_data, enum_registry)? {
                         // Override style and explode for query parameters
                         param_info.style = Some(format!("{:?}", style));
                         // explode defaults to true for arrays, false otherwise
@@ -843,6 +843,7 @@ fn extract_request_body(openapi: &OpenAPI, operation: &Operation) -> Result<Opti
     }
 }
 
+#[allow(dead_code)]
 fn extract_response_type(openapi: &OpenAPI, operation: &Operation) -> Result<String> {
     // Try to get 200 response
     if let Some(success_response) = operation
@@ -957,6 +958,7 @@ fn extract_all_responses(openapi: &OpenAPI, operation: &Operation) -> Result<Vec
     Ok(responses)
 }
 
+#[allow(dead_code)]
 fn extract_error_responses(openapi: &OpenAPI, operation: &Operation) -> Result<Vec<ErrorResponse>> {
     let all_responses = extract_all_responses(openapi, operation)?;
     let errors: Vec<ErrorResponse> = all_responses
@@ -974,7 +976,7 @@ fn generate_response_types(
     func_name: &str,
     success_responses: &[ResponseInfo],
     error_responses: &[ResponseInfo],
-    namespace_name: &str,
+    _namespace_name: &str,
     common_schemas: &[String],
     enum_types: &[(String, Vec<String>)],
 ) -> Vec<TypeScriptType> {
@@ -1012,7 +1014,7 @@ fn generate_response_types(
                 
                 let description = error.description.as_ref()
                     .map(|d| format!("    /**\n     * {}\n     */", d))
-                    .unwrap_or_else(|| String::new());
+                    .unwrap_or_default();
                 
                 error_fields.push(format!("{}\n    {}: {};", description, error.status_code, qualified_type));
             }
@@ -1049,7 +1051,7 @@ fn generate_response_types(
             
             let description = response.description.as_ref()
                 .map(|d| format!("    /**\n     * {}\n     */", d))
-                .unwrap_or_else(|| String::new());
+                .unwrap_or_default();
             
             response_fields.push(format!("{}\n    {}: {};", description, response.status_code, qualified_type));
         }

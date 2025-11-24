@@ -69,6 +69,7 @@ pub fn organize_types_by_module(
     organized
 }
 
+#[allow(clippy::too_many_arguments)]
 fn generate_type_for_schema(
     openapi: &OpenAPI,
     name: &str,

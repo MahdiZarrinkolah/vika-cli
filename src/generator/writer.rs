@@ -50,14 +50,14 @@ pub fn write_schemas_with_options(
             // Extract type name from content
             let type_name = if let Some(start) = t.content.find("export type ") {
                 let after_export_type = &t.content[start + 12..];
-                if let Some(end) = after_export_type.find(|c: char| c == ' ' || c == '=' || c == '\n') {
+                if let Some(end) = after_export_type.find([' ', '=', '\n']) {
                     after_export_type[..end].trim().to_string()
                 } else {
                     after_export_type.trim().to_string()
                 }
             } else if let Some(start) = t.content.find("export interface ") {
                 let after_export_interface = &t.content[start + 17..];
-                if let Some(end) = after_export_interface.find(|c: char| c == ' ' || c == '{' || c == '\n') {
+                if let Some(end) = after_export_interface.find([' ', '{', '\n']) {
                     after_export_interface[..end].trim().to_string()
                 } else {
                     after_export_interface.trim().to_string()
