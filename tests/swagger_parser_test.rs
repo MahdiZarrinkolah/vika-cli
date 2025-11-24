@@ -3,11 +3,9 @@ use std::fs;
 use vika_cli::generator::swagger_parser::{
     extract_modules, extract_operations_by_tag, extract_schemas, 
     fetch_and_parse_spec, fetch_and_parse_spec_with_cache,
-    get_schema_name_from_ref, resolve_ref, resolve_parameter_ref,
-    resolve_request_body_ref, resolve_response_ref,
-    filter_common_schemas, collect_all_dependencies
+    get_schema_name_from_ref, resolve_ref,
+    filter_common_schemas
 };
-use vika_cli::generator::swagger_parser::ParsedSpec;
 
 #[tokio::test]
 async fn test_fetch_and_parse_spec_local_json() {
@@ -265,7 +263,7 @@ fn test_filter_common_schemas() {
     module_schemas.insert("orders".to_string(), vec!["Order".to_string()]);
     
     let selected = vec!["users".to_string(), "products".to_string()];
-    let (filtered, common) = filter_common_schemas(&module_schemas, &selected);
+    let (_filtered, common) = filter_common_schemas(&module_schemas, &selected);
     
     assert!(common.contains(&"Common".to_string()));
     assert!(!common.contains(&"User".to_string()));

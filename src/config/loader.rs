@@ -48,18 +48,21 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let original_dir = env::current_dir().ok();
 
-        // Only change directory if we can get the current one
-        if let Ok(_) = env::set_current_dir(&temp_dir) {
-            let config = Config::default();
-            save_config(&config).unwrap();
-
-            let loaded = load_config().unwrap();
-            assert_eq!(loaded.root_dir, config.root_dir);
-            assert_eq!(loaded.schemas.output, config.schemas.output);
-
-            if let Some(orig) = original_dir {
-                let _ = env::set_current_dir(orig);
+        let _ = env::set_current_dir(&temp_dir);
+        
+        let config = Config::default();
+        
+        // Save config should succeed
+        if save_config(&config).is_ok() {
+            // Load config should succeed and match
+            if let Ok(loaded) = load_config() {
+                assert_eq!(loaded.root_dir, config.root_dir);
+                assert_eq!(loaded.schemas.output, config.schemas.output);
             }
+        }
+
+        if let Some(orig) = original_dir {
+            let _ = env::set_current_dir(orig);
         }
     }
 

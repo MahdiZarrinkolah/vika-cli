@@ -39,7 +39,8 @@ jobs:
       - name: Run unit tests
         run: cargo test --lib
       - name: Run integration tests
-        run: cargo test --test '*'
+        # Run with single thread to avoid directory change conflicts in formatter tests
+        run: cargo test --test '*' -- --test-threads=1
 
   build:
     name: Build Verification

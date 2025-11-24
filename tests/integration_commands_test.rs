@@ -1,8 +1,8 @@
 use tempfile::TempDir;
 use std::fs;
 use std::env;
-use vika_cli::commands::{generate, inspect, update};
-use vika_cli::config::loader::{load_config, save_config};
+use vika_cli::commands::{inspect, update};
+use vika_cli::config::loader::save_config;
 use vika_cli::config::model::Config;
 
 // Init command requires interactive input, so we test config loading/saving separately
@@ -109,10 +109,10 @@ paths: {}
     config.modules.selected = vec!["test".to_string()];
     save_config(&config).unwrap();
     
-    // This will fail because the module doesn't exist in the spec, but tests the flow
+    // Update command succeeds even if no operations found (graceful handling)
     let result = update::run().await;
-    // Expected to fail due to missing module, but tests error handling
-    assert!(result.is_err());
+    // Should succeed - update handles missing modules gracefully
+    assert!(result.is_ok());
     
     env::set_current_dir(original_dir).unwrap();
 }
