@@ -75,11 +75,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed release workflow binary path issue
 - Initial multi-platform release workflow setup
 
+
 ## [1.0.3] - 2025-11-22
 
 ### Fixed
 
 - Fixed release workflow to include install scripts (install.sh and install.ps1) in release assets
+
+## [1.0.4] - 2025-11-24
+
+### Fixed
+
+- Fixed HTTP client body property to use `null` instead of `undefined` for TypeScript `exactOptionalPropertyTypes` compatibility
+- Fixed GET request with body parameter type mismatch by adding proper RequestInit detection
+- Fixed enum schema name resolution in Zod schemas when referenced via `$ref` (e.g., `CurrencySchema` -> `CurrencyEnumSchema`, `ProviderKeyEnumSchema`)
+- Fixed enum schema generation for top-level enum schemas referenced in object properties and arrays
+- Added HEAD and OPTIONS HTTP method support to HTTP client template
+
+### Changed
+
+- Enhanced HTTP client template to support GET requests with body parameters
+- Improved enum schema reference resolution to check enum registry before falling back to schema name
+- Enum schemas are now used directly (without `z.lazy()`) since they don't have circular dependencies
+
 
 ## [Unreleased]
 
