@@ -24,7 +24,7 @@ pub fn write_schemas(
     types: &[TypeScriptType],
     zod_schemas: &[ZodSchema],
 ) -> Result<Vec<PathBuf>> {
-    write_schemas_with_options(output_dir, module_name, types, zod_schemas, false, false)
+    write_schemas_with_options(output_dir, module_name, types, zod_schemas, None, false, false)
 }
 
 pub fn write_schemas_with_options(
@@ -32,10 +32,18 @@ pub fn write_schemas_with_options(
     module_name: &str,
     types: &[TypeScriptType],
     zod_schemas: &[ZodSchema],
+    spec_name: Option<&str>,
     backup: bool,
     force: bool,
 ) -> Result<Vec<PathBuf>> {
-    let module_dir = output_dir.join(sanitize_module_name(module_name));
+    // Build module directory path: {output_dir}/{spec_name}/{module_name} for multi-spec mode
+    let module_dir = if let Some(spec) = spec_name {
+        output_dir
+            .join(sanitize_module_name(spec))
+            .join(sanitize_module_name(module_name))
+    } else {
+        output_dir.join(sanitize_module_name(module_name))
+    };
     ensure_directory(&module_dir)?;
 
     let mut written_files = Vec::new();
@@ -83,7 +91,8 @@ pub fn write_schemas_with_options(
         let needs_common_import = types_content_raw.contains("Common.");
         let common_import = if needs_common_import {
             // Calculate relative path based on module depth
-            let depth = module_name.matches('/').count() + 1;
+            // In multi-spec mode, add 1 extra level for spec_name
+            let depth = module_name.matches('/').count() + 1 + if spec_name.is_some() { 1 } else { 0 };
             let relative_path = "../".repeat(depth);
             format!("import * as Common from \"{}common\";\n\n", relative_path)
         } else {
@@ -110,7 +119,8 @@ pub fn write_schemas_with_options(
         let needs_common_import = zod_content_raw.contains("Common.");
         let common_import = if needs_common_import {
             // Calculate relative path based on module depth
-            let depth = module_name.matches('/').count() + 1;
+            // In multi-spec mode, add 1 extra level for spec_name
+            let depth = module_name.matches('/').count() + 1 + if spec_name.is_some() { 1 } else { 0 };
             let relative_path = "../".repeat(depth);
             format!("import * as Common from \"{}common\";\n\n", relative_path)
         } else {
@@ -159,17 +169,25 @@ pub fn write_api_client(
     module_name: &str,
     functions: &[ApiFunction],
 ) -> Result<Vec<PathBuf>> {
-    write_api_client_with_options(output_dir, module_name, functions, false, false)
+    write_api_client_with_options(output_dir, module_name, functions, None, false, false)
 }
 
 pub fn write_api_client_with_options(
     output_dir: &Path,
     module_name: &str,
     functions: &[ApiFunction],
+    spec_name: Option<&str>,
     backup: bool,
     force: bool,
 ) -> Result<Vec<PathBuf>> {
-    let module_dir = output_dir.join(sanitize_module_name(module_name));
+    // Build module directory path: {output_dir}/{spec_name}/{module_name} for multi-spec mode
+    let module_dir = if let Some(spec) = spec_name {
+        output_dir
+            .join(sanitize_module_name(spec))
+            .join(sanitize_module_name(module_name))
+    } else {
+        output_dir.join(sanitize_module_name(module_name))
+    };
     ensure_directory(&module_dir)?;
 
     let mut written_files = Vec::new();

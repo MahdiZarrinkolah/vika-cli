@@ -3,6 +3,66 @@ use crate::error::{ConfigError, Result};
 use std::path::{Path, PathBuf};
 
 pub fn validate_config(config: &Config) -> Result<()> {
+    // Validate mutual exclusion: spec_path XOR specs
+    if config.spec_path.is_some() && config.specs.is_some() {
+        return Err(ConfigError::BothSpecAndSpecs.into());
+    }
+
+    // Validate that at least one spec is defined
+    if config.spec_path.is_none() && config.specs.is_none() {
+        return Err(ConfigError::NoSpecDefined.into());
+    }
+
+    // Validate multi-spec configuration if present
+    if let Some(ref specs) = config.specs {
+        if specs.is_empty() {
+            return Err(ConfigError::Invalid {
+                message: "At least one spec must be defined in 'specs' array".to_string(),
+            }
+            .into());
+        }
+
+        // Check for duplicate names
+        let mut seen_names = std::collections::HashSet::new();
+        for spec in specs {
+            if seen_names.contains(&spec.name) {
+                return Err(ConfigError::DuplicateSpecName {
+                    name: spec.name.clone(),
+                }
+                .into());
+            }
+            seen_names.insert(&spec.name);
+
+            // Validate spec name
+            if spec.name.is_empty() {
+                return Err(ConfigError::InvalidSpecName {
+                    name: spec.name.clone(),
+                }
+                .into());
+            }
+
+            // Validate spec name format (alphanumeric, hyphens, underscores only)
+            if !spec
+                .name
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+            {
+                return Err(ConfigError::InvalidSpecName {
+                    name: spec.name.clone(),
+                }
+                .into());
+            }
+
+            // Validate spec path is not empty
+            if spec.path.is_empty() {
+                return Err(ConfigError::Invalid {
+                    message: format!("Spec '{}' has an empty path", spec.name),
+                }
+                .into());
+            }
+        }
+    }
+
     // Validate root_dir
     let root_dir = PathBuf::from(&config.root_dir);
     if root_dir.is_absolute() && !root_dir.exists() {
@@ -143,5 +203,132 @@ mod tests {
 
         let result = validate_config(&config);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_config_both_spec_and_specs() {
+        let mut config = Config::default();
+        config.spec_path = Some("openapi.json".to_string());
+        config.specs = Some(vec![
+            crate::config::model::SpecEntry {
+                name: "auth".to_string(),
+                path: "specs/auth.yaml".to_string(),
+            },
+        ]);
+
+        let result = validate_config(&config);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Both 'spec_path' and 'specs'"));
+    }
+
+    #[test]
+    fn test_validate_config_no_spec_defined() {
+        let config = Config::default();
+        // Default config has no spec_path or specs, so this should fail
+        let result = validate_config(&config);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Neither 'spec_path' nor 'specs'"));
+    }
+
+    #[test]
+    fn test_validate_config_empty_specs_array() {
+        let mut config = Config::default();
+        config.specs = Some(vec![]);
+
+        let result = validate_config(&config);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("At least one spec must be defined"));
+    }
+
+    #[test]
+    fn test_validate_config_duplicate_spec_names() {
+        let mut config = Config::default();
+        config.specs = Some(vec![
+            crate::config::model::SpecEntry {
+                name: "auth".to_string(),
+                path: "specs/auth.yaml".to_string(),
+            },
+            crate::config::model::SpecEntry {
+                name: "auth".to_string(),
+                path: "specs/auth2.yaml".to_string(),
+            },
+        ]);
+
+        let result = validate_config(&config);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Duplicate spec name"));
+    }
+
+    #[test]
+    fn test_validate_config_invalid_spec_name() {
+        let mut config = Config::default();
+        config.specs = Some(vec![crate::config::model::SpecEntry {
+            name: "invalid name".to_string(), // contains space
+            path: "specs/auth.yaml".to_string(),
+        }]);
+
+        let result = validate_config(&config);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Invalid spec name"));
+    }
+
+    #[test]
+    fn test_validate_config_empty_spec_name() {
+        let mut config = Config::default();
+        config.specs = Some(vec![crate::config::model::SpecEntry {
+            name: "".to_string(),
+            path: "specs/auth.yaml".to_string(),
+        }]);
+
+        let result = validate_config(&config);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Invalid spec name"));
+    }
+
+    #[test]
+    fn test_validate_config_empty_spec_path() {
+        let mut config = Config::default();
+        config.specs = Some(vec![crate::config::model::SpecEntry {
+            name: "auth".to_string(),
+            path: "".to_string(),
+        }]);
+
+        let result = validate_config(&config);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("empty path"));
+    }
+
+    #[test]
+    fn test_validate_config_valid_multi_spec() {
+        let mut config = Config::default();
+        config.specs = Some(vec![
+            crate::config::model::SpecEntry {
+                name: "auth".to_string(),
+                path: "specs/auth.yaml".to_string(),
+            },
+            crate::config::model::SpecEntry {
+                name: "orders".to_string(),
+                path: "specs/orders.json".to_string(),
+            },
+        ]);
+
+        let result = validate_config(&config);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_config_valid_single_spec() {
+        let mut config = Config::default();
+        config.spec_path = Some("openapi.json".to_string());
+
+        let result = validate_config(&config);
+        assert!(result.is_ok());
     }
 }

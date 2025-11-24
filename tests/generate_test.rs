@@ -84,12 +84,12 @@ async fn test_full_generation_workflow() {
     // Write files
     let output_dir = temp_dir.path().join("output");
     let schema_files =
-        write_schemas_with_options(&output_dir, "users", &types, &zod_schemas, false, false)
+        write_schemas_with_options(&output_dir, "users", &types, &zod_schemas, None, false, false)
             .unwrap();
     assert!(!schema_files.is_empty());
 
     let api_files =
-        write_api_client_with_options(&output_dir, "users", &api_functions.functions, false, false)
+        write_api_client_with_options(&output_dir, "users", &api_functions.functions, None, false, false)
             .unwrap();
     assert!(!api_files.is_empty());
 

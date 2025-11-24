@@ -1,5 +1,14 @@
 use serde::{Deserialize, Serialize};
 
+/// Represents a single OpenAPI specification entry in multi-spec mode.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpecEntry {
+    /// Unique name for this spec (kebab-case recommended)
+    pub name: String,
+    /// Path or URL to the OpenAPI specification file
+    pub path: String,
+}
+
 /// Main configuration structure for vika-cli.
 ///
 /// Represents the `.vika.json` configuration file that controls
@@ -33,8 +42,15 @@ pub struct Config {
     #[serde(default)]
     pub generation: GenerationConfig,
 
+    /// Single spec path (for backward compatibility)
+    /// Mutually exclusive with `specs` field
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spec_path: Option<String>,
+
+    /// Multiple specs configuration (for multi-spec/microservices mode)
+    /// Mutually exclusive with `spec_path` field
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub specs: Option<Vec<SpecEntry>>,
 }
 
 pub fn default_schema() -> String {
@@ -166,6 +182,7 @@ impl Default for Config {
             },
             generation: GenerationConfig::default(),
             spec_path: None,
+            specs: None,
         }
     }
 }
@@ -319,5 +336,58 @@ mod tests {
         assert!(!config.generation.enable_cache);
         assert!(config.generation.enable_backup);
         assert_eq!(config.generation.conflict_strategy, "force");
+    }
+
+    #[test]
+    fn test_single_spec_deserialization() {
+        let json = r#"
+        {
+            "$schema": "https://example.com/schema.json",
+            "spec_path": "openapi.json"
+        }
+        "#;
+
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.spec_path, Some("openapi.json".to_string()));
+        assert!(config.specs.is_none());
+    }
+
+    #[test]
+    fn test_multi_spec_deserialization() {
+        let json = r#"
+        {
+            "$schema": "https://example.com/schema.json",
+            "specs": [
+                { "name": "auth", "path": "specs/auth.yaml" },
+                { "name": "orders", "path": "specs/orders.json" },
+                { "name": "products", "path": "specs/products.yaml" }
+            ]
+        }
+        "#;
+
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert!(config.spec_path.is_none());
+        assert!(config.specs.is_some());
+        let specs = config.specs.unwrap();
+        assert_eq!(specs.len(), 3);
+        assert_eq!(specs[0].name, "auth");
+        assert_eq!(specs[0].path, "specs/auth.yaml");
+        assert_eq!(specs[1].name, "orders");
+        assert_eq!(specs[1].path, "specs/orders.json");
+        assert_eq!(specs[2].name, "products");
+        assert_eq!(specs[2].path, "specs/products.yaml");
+    }
+
+    #[test]
+    fn test_spec_entry_serialization() {
+        let entry = SpecEntry {
+            name: "test-spec".to_string(),
+            path: "specs/test.yaml".to_string(),
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("\"name\""));
+        assert!(json.contains("\"path\""));
+        assert!(json.contains("test-spec"));
+        assert!(json.contains("specs/test.yaml"));
     }
 }

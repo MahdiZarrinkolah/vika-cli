@@ -18,6 +18,8 @@ pub struct ApiContext {
     pub module_name: String,
     pub params: String,
     pub description: String,
+    /// Spec name (for multi-spec mode)
+    pub spec_name: Option<String>,
 }
 
 /// Parameter information for API functions.
@@ -62,6 +64,7 @@ impl ApiContext {
         module_name: String,
         params: String,
         description: String,
+        spec_name: Option<String>,
     ) -> Self {
         Self {
             function_name,
@@ -79,6 +82,7 @@ impl ApiContext {
             module_name,
             params,
             description,
+            spec_name,
         }
     }
 }

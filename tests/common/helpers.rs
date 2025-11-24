@@ -50,6 +50,7 @@ pub fn create_mock_config_with_paths(schemas_output: &str, apis_output: &str) ->
         },
         generation: vika_cli::config::model::GenerationConfig::default(),
         spec_path: None,
+        specs: None,
         schema: vika_cli::config::model::default_schema(),
     }
 }

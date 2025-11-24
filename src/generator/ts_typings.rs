@@ -51,6 +51,26 @@ pub fn generate_typings_with_registry_and_engine(
     common_schemas: &[String],
     template_engine: Option<&TemplateEngine>,
 ) -> Result<Vec<TypeScriptType>> {
+    generate_typings_with_registry_and_engine_and_spec(
+        openapi,
+        schemas,
+        schema_names,
+        enum_registry,
+        common_schemas,
+        template_engine,
+        None,
+    )
+}
+
+pub fn generate_typings_with_registry_and_engine_and_spec(
+    openapi: &OpenAPI,
+    schemas: &HashMap<String, Schema>,
+    schema_names: &[String],
+    enum_registry: &mut std::collections::HashMap<String, String>,
+    common_schemas: &[String],
+    template_engine: Option<&TemplateEngine>,
+    spec_name: Option<&str>,
+) -> Result<Vec<TypeScriptType>> {
     let mut types = Vec::new();
     let mut processed = std::collections::HashSet::new();
 
@@ -66,6 +86,7 @@ pub fn generate_typings_with_registry_and_engine(
                 None,
                 common_schemas,
                 template_engine,
+                spec_name,
             )?;
         }
     }
@@ -102,6 +123,7 @@ fn generate_type_for_schema(
     parent_schema_name: Option<&str>,
     common_schemas: &[String],
     template_engine: Option<&TemplateEngine>,
+    spec_name: Option<&str>,
 ) -> Result<()> {
     if processed.contains(name) {
         return Ok(());
@@ -194,7 +216,7 @@ fn generate_type_for_schema(
                 if let Some(engine) = template_engine {
                     let description = schema.schema_data.description.clone();
                     let mut context =
-                        TypeContext::enum_type(enum_name.clone(), enum_values.clone());
+                        TypeContext::enum_type(enum_name.clone(), enum_values.clone(), spec_name.map(|s| s.to_string()));
                     context.description = description;
                     let content = engine.render(TemplateId::TypeEnum, &context)?;
                     types.push(TypeScriptType { content });
@@ -227,6 +249,7 @@ fn generate_type_for_schema(
         Some(name),
         common_schemas,
         template_engine,
+        spec_name,
     )?;
 
     // Only create interface if it's an object type
@@ -237,7 +260,7 @@ fn generate_type_for_schema(
                 // Empty object with additionalProperties - use type alias for Record
                 if let Some(engine) = template_engine {
                     let context =
-                        TypeContext::alias(type_name.clone(), "Record<string, any>".to_string());
+                        TypeContext::alias(type_name.clone(), "Record<string, any>".to_string(), spec_name.map(|s| s.to_string()));
                     let content = engine.render(TemplateId::TypeAlias, &context)?;
                     types.push(TypeScriptType { content });
                 } else {
@@ -250,7 +273,7 @@ fn generate_type_for_schema(
                 if let Some(engine) = template_engine {
                     let fields = build_fields_from_content(&content);
                     let description = schema.schema_data.description.clone();
-                    let context = TypeContext::interface(type_name.clone(), fields, description);
+                    let context = TypeContext::interface(type_name.clone(), fields, description, spec_name.map(|s| s.to_string()));
                     let content = engine.render(TemplateId::TypeInterface, &context)?;
                     types.push(TypeScriptType { content });
                 } else {
@@ -277,6 +300,7 @@ fn schema_to_typescript(
     current_schema_name: Option<&str>, // Current schema being processed (for enum naming context)
     common_schemas: &[String],
     template_engine: Option<&TemplateEngine>,
+    spec_name: Option<&str>,
 ) -> Result<String> {
     // Prevent infinite recursion with a reasonable depth limit
     if indent > 100 {
@@ -387,7 +411,7 @@ fn schema_to_typescript(
                             // Generate enum type
                             if let Some(engine) = template_engine {
                                 let context =
-                                    TypeContext::enum_type(enum_name.clone(), enum_values.clone());
+                                    TypeContext::enum_type(enum_name.clone(), enum_values.clone(), spec_name.map(|s| s.to_string()));
                                 let content = engine.render(TemplateId::TypeEnum, &context)?;
                                 types.push(TypeScriptType { content });
                             } else {
@@ -425,6 +449,7 @@ fn schema_to_typescript(
                                                 current_schema_name,
                                                 common_schemas,
                                                 template_engine,
+                                                spec_name,
                                             )?;
                                         }
                                     }
@@ -464,6 +489,7 @@ fn schema_to_typescript(
                                         current_schema_name,
                                         common_schemas,
                                         template_engine,
+                                        spec_name,
                                     )?;
                                     format!("{{\n{}{}\n{}}}", indent_str, fields, indent_str)
                                 } else {
@@ -478,6 +504,7 @@ fn schema_to_typescript(
                                         current_schema_name,
                                         common_schemas,
                                         template_engine,
+                                        spec_name,
                                     )?
                                 }
                             }
@@ -523,6 +550,7 @@ fn schema_to_typescript(
                                                     Some(&parent_schema_for_props),
                                                     common_schemas,
                                                     template_engine,
+                                                    spec_name,
                                                 )?;
                                             }
                                         }
@@ -557,6 +585,7 @@ fn schema_to_typescript(
                                     current_schema_name,
                                     common_schemas,
                                     template_engine,
+                                    spec_name,
                                 )?,
                             };
 
@@ -643,6 +672,7 @@ fn schema_to_typescript(
                             current_schema_name,
                             common_schemas,
                             template_engine,
+                            spec_name,
                         )?;
                         variant_types.push(item_type);
                     }
@@ -690,6 +720,7 @@ fn schema_to_typescript(
                             current_schema_name,
                             common_schemas,
                             template_engine,
+                            spec_name,
                         )?;
                         all_types.push(item_type);
                     }
@@ -738,6 +769,7 @@ fn schema_to_typescript(
                             current_schema_name,
                             common_schemas,
                             template_engine,
+                            spec_name,
                         )?;
                         variant_types.push(item_type);
                     }

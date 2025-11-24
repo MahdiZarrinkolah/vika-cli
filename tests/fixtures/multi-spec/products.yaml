@@ -1,0 +1,68 @@
+openapi: 3.0.0
+info:
+  title: Products Service API
+  version: 1.0.0
+tags:
+  - name: items
+    description: Product items operations
+  - name: categories
+    description: Category operations
+paths:
+  /products/items:
+    get:
+      tags:
+        - items
+      summary: List products
+      operationId: listProducts
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+  /products/categories:
+    get:
+      tags:
+        - categories
+      summary: List categories
+      operationId: listCategories
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        price:
+          type: number
+        category_id:
+          type: string
+      required:
+        - id
+        - name
+        - price
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+

@@ -15,9 +15,15 @@ pub enum Commands {
     Init,
     /// Generate TypeScript code from Swagger spec
     Generate {
-        /// Path or URL to Swagger/OpenAPI spec
+        /// Path or URL to Swagger/OpenAPI spec (for single-spec mode)
         #[arg(short, long)]
         spec: Option<String>,
+        /// Generate all specs (for multi-spec mode)
+        #[arg(long)]
+        all_specs: bool,
+        /// Generate specific spec by name (for multi-spec mode)
+        #[arg(long)]
+        spec_name: Option<String>,
         /// Enable verbose output
         #[arg(long)]
         verbose: bool,
@@ -32,12 +38,25 @@ pub enum Commands {
         force: bool,
     },
     /// Update existing generated code
-    Update,
+    Update {
+        /// Update specific spec by name (for multi-spec mode)
+        #[arg(long)]
+        spec_name: Option<String>,
+        /// Update all specs (for multi-spec mode)
+        #[arg(long)]
+        all_specs: bool,
+    },
     /// Inspect OpenAPI spec without generating code
     Inspect {
-        /// Path or URL to Swagger/OpenAPI spec
+        /// Path or URL to Swagger/OpenAPI spec (for single-spec mode)
         #[arg(short, long)]
         spec: Option<String>,
+        /// Inspect all specs (for multi-spec mode)
+        #[arg(long)]
+        all_specs: bool,
+        /// Inspect specific spec by name (for multi-spec mode)
+        #[arg(long)]
+        spec_name: Option<String>,
         /// Show details for specific module
         #[arg(short, long)]
         module: Option<String>,

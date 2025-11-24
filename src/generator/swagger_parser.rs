@@ -26,10 +26,20 @@ pub async fn fetch_and_parse_spec_with_cache(
     spec_path: &str,
     use_cache: bool,
 ) -> Result<ParsedSpec> {
+    fetch_and_parse_spec_with_cache_and_name(spec_path, use_cache, None).await
+}
+
+pub async fn fetch_and_parse_spec_with_cache_and_name(
+    spec_path: &str,
+    use_cache: bool,
+    spec_name: Option<&str>,
+) -> Result<ParsedSpec> {
     let content = if spec_path.starts_with("http://") || spec_path.starts_with("https://") {
         // Try cache first if enabled
         if use_cache {
-            if let Some(cached) = crate::cache::CacheManager::get_cached_spec(spec_path)? {
+            if let Some(cached) =
+                crate::cache::CacheManager::get_cached_spec_with_name(spec_path, spec_name)?
+            {
                 return parse_spec_content(&cached, spec_path);
             }
         }
@@ -38,7 +48,7 @@ pub async fn fetch_and_parse_spec_with_cache(
 
         // Cache the content
         if use_cache {
-            crate::cache::CacheManager::cache_spec(spec_path, &content)?;
+            crate::cache::CacheManager::cache_spec_with_name(spec_path, &content, spec_name)?;
         }
 
         content

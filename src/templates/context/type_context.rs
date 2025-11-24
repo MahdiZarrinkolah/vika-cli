@@ -10,6 +10,8 @@ pub struct TypeContext {
     pub is_alias: bool,
     pub alias_target: Option<String>,
     pub description: Option<String>,
+    /// Spec name (for multi-spec mode)
+    pub spec_name: Option<String>,
 }
 
 /// Field information for TypeScript interfaces.
@@ -23,7 +25,12 @@ pub struct Field {
 
 impl TypeContext {
     /// Create a new TypeContext for an interface.
-    pub fn interface(type_name: String, fields: Vec<Field>, description: Option<String>) -> Self {
+    pub fn interface(
+        type_name: String,
+        fields: Vec<Field>,
+        description: Option<String>,
+        spec_name: Option<String>,
+    ) -> Self {
         Self {
             type_name,
             fields,
@@ -32,11 +39,12 @@ impl TypeContext {
             is_alias: false,
             alias_target: None,
             description,
+            spec_name,
         }
     }
 
     /// Create a new TypeContext for an enum type.
-    pub fn enum_type(type_name: String, enum_values: Vec<String>) -> Self {
+    pub fn enum_type(type_name: String, enum_values: Vec<String>, spec_name: Option<String>) -> Self {
         Self {
             type_name,
             fields: Vec::new(),
@@ -45,11 +53,12 @@ impl TypeContext {
             is_alias: false,
             alias_target: None,
             description: None,
+            spec_name,
         }
     }
 
     /// Create a new TypeContext for a type alias.
-    pub fn alias(type_name: String, alias_target: String) -> Self {
+    pub fn alias(type_name: String, alias_target: String, spec_name: Option<String>) -> Self {
         Self {
             type_name,
             fields: Vec::new(),
@@ -58,6 +67,7 @@ impl TypeContext {
             is_alias: true,
             alias_target: Some(alias_target),
             description: None,
+            spec_name,
         }
     }
 }

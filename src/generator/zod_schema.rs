@@ -50,6 +50,26 @@ pub fn generate_zod_schemas_with_registry_and_engine(
     common_schemas: &[String],
     template_engine: Option<&TemplateEngine>,
 ) -> Result<Vec<ZodSchema>> {
+    generate_zod_schemas_with_registry_and_engine_and_spec(
+        openapi,
+        schemas,
+        schema_names,
+        enum_registry,
+        common_schemas,
+        template_engine,
+        None,
+    )
+}
+
+pub fn generate_zod_schemas_with_registry_and_engine_and_spec(
+    openapi: &OpenAPI,
+    schemas: &HashMap<String, Schema>,
+    schema_names: &[String],
+    enum_registry: &mut std::collections::HashMap<String, String>,
+    common_schemas: &[String],
+    template_engine: Option<&TemplateEngine>,
+    spec_name: Option<&str>,
+) -> Result<Vec<ZodSchema>> {
     let mut zod_schemas = Vec::new();
     let mut processed = std::collections::HashSet::new();
 
@@ -65,6 +85,7 @@ pub fn generate_zod_schemas_with_registry_and_engine(
                 None,
                 common_schemas,
                 template_engine,
+                spec_name,
             )?;
         }
     }
@@ -83,6 +104,7 @@ fn generate_zod_for_schema(
     parent_schema_name: Option<&str>,
     common_schemas: &[String],
     template_engine: Option<&TemplateEngine>,
+    spec_name: Option<&str>,
 ) -> Result<()> {
     if processed.contains(name) {
         return Ok(());
@@ -101,6 +123,7 @@ fn generate_zod_for_schema(
         parent_schema_name,
         common_schemas,
         template_engine,
+        spec_name,
     )?;
 
     // Handle enums at top level (when schema itself is an enum)
@@ -143,7 +166,7 @@ fn generate_zod_for_schema(
                 }
 
                 if let Some(engine) = template_engine {
-                    let context = ZodContext::enum_schema(enum_name.clone(), enum_values.clone());
+                    let context = ZodContext::enum_schema(enum_name.clone(), enum_values.clone(), spec_name.map(|s| s.to_string()));
                     let content = engine.render(TemplateId::ZodEnum, &context)?;
                     zod_schemas.push(ZodSchema { content });
                 } else {
@@ -167,6 +190,7 @@ fn generate_zod_for_schema(
                         schema_name.clone(),
                         "z.record(z.string(), z.any())".to_string(),
                         description,
+                        spec_name.map(|s| s.to_string()),
                     );
                     let content = engine.render(TemplateId::ZodSchema, &context)?;
                     zod_schemas.push(ZodSchema { content });
@@ -190,9 +214,10 @@ fn generate_zod_for_schema(
                             schema_name.clone(),
                             zod_expr,
                             description,
+                            spec_name.map(|s| s.to_string()),
                         )
                     } else {
-                        ZodContext::schema(schema_name.clone(), zod_expr, description)
+                        ZodContext::schema(schema_name.clone(), zod_expr, description, spec_name.map(|s| s.to_string()))
                     };
                     let content = engine.render(TemplateId::ZodSchema, &context)?;
                     zod_schemas.push(ZodSchema { content });
@@ -223,6 +248,7 @@ fn schema_to_zod(
     current_schema_name: Option<&str>, // Current schema being processed (for enum naming context)
     common_schemas: &[String],
     template_engine: Option<&TemplateEngine>,
+    spec_name: Option<&str>,
 ) -> Result<String> {
     // Prevent infinite recursion with a reasonable depth limit
     if indent > 100 {
@@ -287,6 +313,7 @@ fn schema_to_zod(
                                         let context = ZodContext::enum_schema(
                                             existing_name.clone(),
                                             enum_values.clone(),
+                                            spec_name.map(|s| s.to_string()),
                                         );
                                         let content =
                                             engine.render(TemplateId::ZodEnum, &context)?;
@@ -362,7 +389,7 @@ fn schema_to_zod(
                             // Generate enum schema
                             if let Some(engine) = template_engine {
                                 let context =
-                                    ZodContext::enum_schema(enum_name.clone(), enum_values.clone());
+                                    ZodContext::enum_schema(enum_name.clone(), enum_values.clone(), spec_name.map(|s| s.to_string()));
                                 let content = engine.render(TemplateId::ZodEnum, &context)?;
                                 zod_schemas.push(ZodSchema { content });
                             } else {
@@ -504,6 +531,7 @@ fn schema_to_zod(
                                                     None,
                                                     common_schemas,
                                                     template_engine,
+                                                    spec_name,
                                                 )?;
                                                 format!(
                                                     "{}z.lazy(() => {})",
@@ -517,10 +545,11 @@ fn schema_to_zod(
                                                     processed,
                                                     indent,
                                                     enum_registry,
-                                                    None,
+                                                    context,
                                                     current_schema_name,
                                                     common_schemas,
                                                     template_engine,
+                                                    spec_name,
                                                 )?
                                             }
                                         } else {
@@ -549,6 +578,7 @@ fn schema_to_zod(
                                         current_schema_name,
                                         common_schemas,
                                         template_engine,
+                                        spec_name,
                                     )?;
                                     // Wrap in z.object()
                                     format!(
@@ -567,6 +597,7 @@ fn schema_to_zod(
                                         current_schema_name,
                                         common_schemas,
                                         template_engine,
+                                        spec_name,
                                     )?
                                 }
                             }
@@ -642,6 +673,7 @@ fn schema_to_zod(
                                                             Some(&parent_schema_for_props),
                                                             common_schemas,
                                                             template_engine,
+                                                            spec_name,
                                                         )?;
                                                     }
                                                 } else {
@@ -674,6 +706,7 @@ fn schema_to_zod(
                                                                             ZodContext::enum_schema(
                                                                                 enum_name.clone(),
                                                                                 enum_values.clone(),
+                                                                                spec_name.map(|s| s.to_string()),
                                                                             );
                                                                         let content = engine
                                                                             .render(
@@ -722,6 +755,7 @@ fn schema_to_zod(
                                                         Some(&parent_schema_for_props),
                                                         common_schemas,
                                                         template_engine,
+                                                        spec_name,
                                                     )?;
                                                 }
                                             }
@@ -771,6 +805,7 @@ fn schema_to_zod(
                                     current_schema_name,
                                     common_schemas,
                                     template_engine,
+                                    spec_name,
                                 )?,
                             };
 
@@ -847,6 +882,7 @@ fn schema_to_zod(
                             current_schema_name,
                             common_schemas,
                             template_engine,
+                            spec_name,
                         )?;
                         variant_schemas.push(item_zod);
                     }
@@ -890,6 +926,7 @@ fn schema_to_zod(
                             current_schema_name,
                             common_schemas,
                             template_engine,
+                            spec_name,
                         )?;
                         all_schemas.push(item_zod);
                     }
@@ -953,6 +990,7 @@ fn schema_to_zod(
                             current_schema_name,
                             common_schemas,
                             template_engine,
+                            spec_name,
                         )?;
                         variant_schemas.push(item_zod);
                     }

@@ -24,6 +24,8 @@ struct ModuleSummary {
 
 pub async fn run(
     spec: Option<String>,
+    all_specs: bool,
+    spec_name: Option<String>,
     verbose: bool,
     cache: bool,
     backup: bool,
@@ -60,7 +62,96 @@ pub async fn run(
     };
 
     use crate::error::GenerationError;
+    use crate::specs::manager::{is_multi_spec_mode, resolve_spec_selection};
+    use crate::specs::runner::{run_all_specs, run_single_spec, GenerateOptions};
 
+    // Determine if we're in multi-spec mode
+    let is_multi_spec = is_multi_spec_mode(&config);
+
+    // Handle multi-spec mode
+    if is_multi_spec {
+        // Resolve which specs to generate
+        let specs_to_generate = resolve_spec_selection(&config, spec_name.clone(), all_specs)?;
+
+        let options = GenerateOptions {
+            use_cache: if cache {
+                true
+            } else {
+                config.generation.enable_cache
+            },
+            use_backup: if backup {
+                true
+            } else {
+                config.generation.enable_backup
+            },
+            use_force: if force {
+                true
+            } else {
+                config.generation.conflict_strategy == "force"
+            },
+            verbose,
+        };
+
+        if specs_to_generate.len() > 1 {
+            // Generate all selected specs
+            progress.success("Starting multi-spec generation...");
+            println!();
+
+            let stats = run_all_specs(&specs_to_generate, &config, &options).await?;
+
+            println!();
+            progress.success(&format!(
+                "Successfully generated code for {} spec(s)!",
+                stats.len()
+            ));
+            println!();
+
+            // Display summary
+            use tabled::{Table, Tabled};
+            #[derive(Tabled)]
+            struct SpecSummary {
+                #[tabled(rename = "Spec")]
+                spec: String,
+                #[tabled(rename = "Modules")]
+                modules: usize,
+                #[tabled(rename = "Files")]
+                files: usize,
+            }
+
+            let table_data: Vec<SpecSummary> = stats
+                .iter()
+                .map(|s| SpecSummary {
+                    spec: s.spec_name.clone(),
+                    modules: s.modules_generated,
+                    files: s.files_generated,
+                })
+                .collect();
+
+            let table = Table::new(table_data);
+            println!("{}", "Generation summary:".bright_cyan());
+            println!("{}", table);
+            println!();
+        } else {
+            // Generate single spec
+            let spec_entry = &specs_to_generate[0];
+            let stats = run_single_spec(spec_entry, &config, &options).await?;
+
+            println!();
+            progress.success(&format!(
+                "Successfully generated {} files for spec '{}'!",
+                stats.files_generated, stats.spec_name
+            ));
+            println!();
+            println!("{}", "Generated files:".bright_cyan());
+            println!("  📁 Schemas: {}", config.schemas.output);
+            println!("  📁 APIs: {}", config.apis.output);
+            println!();
+        }
+
+        return Ok(());
+    }
+
+    // Single-spec mode (backward compatible)
     // Get spec path
     let spec_path = spec.ok_or(GenerationError::SpecPathRequired)?;
 
@@ -156,6 +247,7 @@ pub async fn run(
             "common",
             &common_types,
             &common_zod_schemas,
+            None, // spec_name is None for single-spec mode
             use_backup,
             use_force,
         )?;
@@ -245,6 +337,7 @@ pub async fn run(
             module,
             &all_types,
             &zod_schemas,
+            None, // spec_name is None for single-spec mode
             use_backup,
             use_force,
         )?;
@@ -255,6 +348,7 @@ pub async fn run(
             &apis_dir,
             module,
             &api_result.functions,
+            None, // spec_name is None for single-spec mode
             use_backup,
             use_force,
         )?;

@@ -34,6 +34,7 @@ Built in Rust for exceptional performance and reliability.
 - 🌐 Supports HEAD, OPTIONS, PATCH, all HTTP verbs
 - 🎨 Customizable templates (Tera-based) with user overrides
 - 🛠 Multi-platform installers + CI/CD automation
+- 🔀 Multi-spec support for microservices architectures
 
 ---
 
@@ -99,6 +100,8 @@ Creates a `.vika.json` configuration file.
 
 ## 2️ Generate code from an OpenAPI specification
 
+### Single Spec Mode
+
 Remote:
 
 ```bash
@@ -111,10 +114,27 @@ Local:
 vika-cli generate --spec ./swagger.yaml
 ```
 
+### Multi-Spec Mode (Microservices)
+
+When your `.vika.json` contains a `specs` array, you can generate from multiple specs:
+
+```bash
+# Generate all specs
+vika-cli generate --all-specs
+
+# Generate a specific spec by name
+vika-cli generate --spec ecommerce
+
+# Interactive selection (default)
+vika-cli generate
+```
+
 Flags:
 
 | Flag | Description |
 | ----------- | ------------------------------- |
+| `--spec <name>` | Generate specific spec (single or multi-spec mode) |
+| `--all-specs` | Generate all specs (multi-spec mode only) |
 | `--verbose` | Show detailed output |
 | `--cache` | Use cached version of the spec |
 | `--backup` | Backup files before overwriting |
@@ -122,7 +142,7 @@ Flags:
 
 The generator will:
 
-1. Parse the spec
+1. Parse the spec(s)
 2. Extract modules (tags)
 3. Ask you which modules to generate
 4. Produce TypeScript + Zod + Fetch clients
@@ -136,16 +156,33 @@ vika-cli update
 
 ## 4️ Inspect a specification (no generation)
 
+### Single Spec Mode
+
 ```bash
 vika-cli inspect --spec ./swagger.yaml
+```
+
+### Multi-Spec Mode
+
+```bash
+# Inspect all specs
+vika-cli inspect --all-specs
+
+# Inspect specific spec by name
+vika-cli inspect --spec ecommerce
 ```
 
 Examples:
 
 ```bash
+# Single spec mode
 vika-cli inspect --spec ./swagger.yaml --module products
 vika-cli inspect --spec ./swagger.yaml --schemas
 vika-cli inspect --spec ./swagger.yaml --json
+
+# Multi-spec mode
+vika-cli inspect --spec admin --schemas
+vika-cli inspect --all-specs --json
 ```
 
 ---
@@ -193,6 +230,8 @@ Produces:
 
 # ⚙️ Configuration (`.vika.json`)
 
+## Single Spec Mode
+
 ```json
 {
   "rootDir": "src",
@@ -208,7 +247,43 @@ Produces:
   },
   "modules": {
     "ignore": ["Auth"]
-  }
+  },
+  "spec_path": "https://example.com/openapi.json"
+}
+```
+
+## Multi-Spec Mode (Microservices)
+
+```json
+{
+  "rootDir": "src",
+  "schemas": {
+    "output": "src/schemas",
+    "naming": "PascalCase"
+  },
+  "apis": {
+    "output": "src/apis",
+    "style": "fetch",
+    "headerStrategy": "consumerInjected"
+  },
+  "modules": {
+    "ignore": [],
+    "selected": ["products", "orders", "users"]
+  },
+  "specs": [
+    {
+      "name": "ecommerce",
+      "path": "http://localhost:3000/swagger-ecommerce.json"
+    },
+    {
+      "name": "admin",
+      "path": "http://localhost:3000/swagger-admin.json"
+    },
+    {
+      "name": "public",
+      "path": "http://localhost:3000/swagger-public.json"
+    }
+  ]
 }
 ```
 
@@ -216,12 +291,19 @@ Produces:
 
 | Key | Description |
 | --------------------- | ------------------------------------------ |
+| `spec_path` | Single spec path (URL or file path) - **mutually exclusive with `specs`** |
+| `specs` | Array of spec entries for multi-spec mode - **mutually exclusive with `spec_path`** |
+| `specs[].name` | Spec identifier (kebab-case recommended, e.g., "ecommerce", "admin") |
+| `specs[].path` | Spec path (URL or file path) |
 | `schemas.output` | Directory for types + Zod schemas |
 | `schemas.naming` | Naming convention for generated types |
 | `apis.output` | Directory for API clients |
 | `apis.baseUrl` | Base URL prefix for client requests |
 | `apis.headerStrategy` | `bearerToken`, `fixed`, `consumerInjected` |
 | `modules.ignore` | Skip tagged modules |
+| `modules.selected` | Only generate these modules (if specified) |
+
+**Important**: `spec_path` and `specs` are mutually exclusive. Use `spec_path` for single-spec projects, or `specs` for multi-spec microservices architectures.
 
 Full reference: [`docs/configuration.md`](docs/configuration.md)
 
@@ -270,6 +352,8 @@ Full documentation: [`docs/templates.md`](docs/templates.md)
 
 # 🧱 Output Structure
 
+## Single Spec Mode
+
 ```
 📁 src/
 │
@@ -303,6 +387,54 @@ Full documentation: [`docs/templates.md`](docs/templates.md)
     └── 📁 orders/
         └── 📄 index.ts
 ```
+
+## Multi-Spec Mode (Microservices)
+
+When using `specs` array, output is organized by spec name:
+
+```
+📁 src/
+│
+├── 📁 schemas/
+│   │
+│   ├── 📁 ecommerce/             # From ecommerce spec
+│   │   ├── 📁 products/
+│   │   │   ├── 📄 types.ts
+│   │   │   ├── 📄 schemas.ts
+│   │   │   └── 📄 index.ts
+│   │   └── 📁 orders/
+│   │       └── ...
+│   │
+│   ├── 📁 admin/                 # From admin spec
+│   │   ├── 📁 users/
+│   │   └── 📁 permissions/
+│   │
+│   └── 📁 public/                # From public spec
+│       └── 📁 catalog/
+│
+└── 📁 apis/
+    │
+    ├── 📄 http.ts
+    │
+    ├── 📁 ecommerce/             # From ecommerce spec
+    │   ├── 📁 products/
+    │   │   └── 📄 index.ts
+    │   └── 📁 orders/
+    │       └── 📄 index.ts
+    │
+    ├── 📁 admin/                 # From admin spec
+    │   └── 📁 users/
+    │       └── 📄 index.ts
+    │
+    └── 📁 public/                # From public spec
+        └── 📁 catalog/
+            └── 📄 index.ts
+```
+
+This structure ensures:
+- ✅ **Isolation**: Each spec's generated code is separated
+- ✅ **No conflicts**: Different specs can have modules with the same name
+- ✅ **Clear organization**: Easy to identify which service generated which code
 
 **File types:**
 
@@ -346,11 +478,59 @@ export const getProduct = async (id: string): Promise<ProductDto> =>
 
 # 🧩 Advanced Features
 
+## Multi-Spec Support (Microservices)
+
+`vika-cli` supports generating code from multiple OpenAPI specifications in a single project. This is ideal for microservices architectures where different services expose separate APIs.
+
+### Benefits
+
+- **🔀 Multiple Services**: Generate code for all your microservices in one command
+- **📦 Isolated Output**: Each spec's code is organized in separate directories
+- **🎯 Selective Generation**: Generate all specs or target specific ones
+- **🔄 Unified Workflow**: Single config file manages all specs
+
+### Usage
+
+1. **Configure multiple specs** in `.vika.json`:
+   ```json
+   {
+     "specs": [
+       { "name": "ecommerce", "path": "http://localhost:3000/swagger-ecommerce.json" },
+       { "name": "admin", "path": "http://localhost:3000/swagger-admin.json" },
+       { "name": "public", "path": "http://localhost:3000/swagger-public.json" }
+     ]
+   }
+   ```
+
+2. **Generate all specs**:
+   ```bash
+   vika-cli generate --all-specs
+   ```
+
+3. **Generate specific spec**:
+   ```bash
+   vika-cli generate --spec ecommerce
+   ```
+
+4. **Interactive selection** (default):
+   ```bash
+   vika-cli generate
+   # Prompts: "Which spec do you want to generate?"
+   ```
+
+### Spec Naming Rules
+
+- Use **kebab-case** (e.g., `ecommerce`, `order-service`, `user-api`)
+- Names must be **unique** within the `specs` array
+- Names are used in directory paths: `apis/{spec_name}/{module}/`
+
 ### ⚡ Caching
 
 ```bash
 vika-cli generate --cache
 ```
+
+Each spec is cached independently using its name as part of the cache key.
 
 ### 🛡 Backup Mode
 

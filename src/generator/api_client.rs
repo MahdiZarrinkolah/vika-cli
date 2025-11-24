@@ -99,6 +99,26 @@ pub fn generate_api_client_with_registry_and_engine(
     enum_registry: &mut std::collections::HashMap<String, String>,
     template_engine: Option<&TemplateEngine>,
 ) -> Result<ApiGenerationResult> {
+    generate_api_client_with_registry_and_engine_and_spec(
+        openapi,
+        operations,
+        module_name,
+        common_schemas,
+        enum_registry,
+        template_engine,
+        None,
+    )
+}
+
+pub fn generate_api_client_with_registry_and_engine_and_spec(
+    openapi: &OpenAPI,
+    operations: &[OperationInfo],
+    module_name: &str,
+    common_schemas: &[String],
+    enum_registry: &mut std::collections::HashMap<String, String>,
+    template_engine: Option<&TemplateEngine>,
+    spec_name: Option<&str>,
+) -> Result<ApiGenerationResult> {
     let mut functions = Vec::new();
     let mut response_types = Vec::new();
 
@@ -110,6 +130,7 @@ pub fn generate_api_client_with_registry_and_engine(
             common_schemas,
             enum_registry,
             template_engine,
+            spec_name,
         )?;
         functions.push(result.function);
         response_types.extend(result.response_types);
@@ -133,6 +154,7 @@ fn generate_function_for_operation(
     common_schemas: &[String],
     enum_registry: &mut std::collections::HashMap<String, String>,
     template_engine: Option<&TemplateEngine>,
+    spec_name: Option<&str>,
 ) -> Result<FunctionGenerationResult> {
     let operation = &op_info.operation;
     let method = op_info.method.to_lowercase();
@@ -582,6 +604,7 @@ fn generate_function_for_operation(
             module_name.to_string(),
             params_str.clone(),
             operation_description.clone(),
+            spec_name.map(|s| s.to_string()),
         );
 
         engine.render(TemplateId::ApiClientFetch, &context)?

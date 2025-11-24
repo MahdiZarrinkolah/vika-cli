@@ -90,6 +90,18 @@ pub enum ConfigError {
 
     #[error("Invalid output directory: {path}")]
     InvalidOutputDirectory { path: String },
+
+    #[error("Both 'spec_path' and 'specs' are defined. Use only one.")]
+    BothSpecAndSpecs,
+
+    #[error("Neither 'spec_path' nor 'specs' is defined. At least one spec must be configured.")]
+    NoSpecDefined,
+
+    #[error("Duplicate spec name found: {name}")]
+    DuplicateSpecName { name: String },
+
+    #[error("Invalid spec name: {name}. Spec names must be non-empty and contain only alphanumeric characters, hyphens, and underscores.")]
+    InvalidSpecName { name: String },
 }
 
 #[derive(Debug, Error)]
@@ -155,6 +167,9 @@ pub enum GenerationError {
 
     #[error("Spec path or URL is required. Use --spec <path-or-url>")]
     SpecPathRequired,
+
+    #[error("Spec not found: {name}. Available specs: {available:?}")]
+    SpecNotFound { name: String, available: Vec<String> },
 
     #[error("Failed to generate TypeScript types: {0}")]
     TypeScriptGenerationFailed(String),

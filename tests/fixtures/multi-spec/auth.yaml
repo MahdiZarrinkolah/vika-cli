@@ -1,0 +1,78 @@
+openapi: 3.0.0
+info:
+  title: Auth Service API
+  version: 1.0.0
+tags:
+  - name: users
+    description: User management operations
+  - name: tokens
+    description: Token management operations
+paths:
+  /auth/users:
+    get:
+      tags:
+        - users
+      summary: List users
+      operationId: listUsers
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+  /auth/tokens:
+    post:
+      tags:
+        - tokens
+      summary: Create token
+      operationId: createToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - email
+    TokenRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+        - email
+        - password
+    Token:
+      type: object
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+      required:
+        - access_token
+

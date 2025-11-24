@@ -92,6 +92,7 @@ mod tests {
         let context = TypeContext::enum_type(
             "TestEnum".to_string(),
             vec!["A".to_string(), "B".to_string()],
+            None,
         );
         let result = engine.render(TemplateId::TypeEnum, &context);
         assert!(result.is_ok());

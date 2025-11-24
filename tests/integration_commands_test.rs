@@ -71,11 +71,11 @@ paths:
 
     // Test inspect without module filter
     let spec_str = spec_path.to_str().unwrap().to_string();
-    let result = inspect::run(Some(spec_str.clone()), None, false, false, false).await;
+    let result = inspect::run(Some(spec_str.clone()), false, None, None, false, false, false).await;
     assert!(result.is_ok());
 
     // Test inspect with schemas flag
-    let result = inspect::run(Some(spec_str), None, true, false, false).await;
+    let result = inspect::run(Some(spec_str), false, None, None, true, false, false).await;
     assert!(result.is_ok());
 
     env::set_current_dir(original_dir).unwrap();

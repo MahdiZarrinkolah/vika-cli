@@ -53,6 +53,7 @@ fn test_template_engine_render_type_enum() {
     let context = TypeContext::enum_type(
         "TestEnum".to_string(),
         vec!["A".to_string(), "B".to_string(), "C".to_string()],
+        None,
     );
     let result = engine.render(TemplateId::TypeEnum, &context);
     assert!(result.is_ok());
@@ -80,7 +81,7 @@ fn test_template_engine_render_type_interface() {
             None,
         ),
     ];
-    let context = TypeContext::interface("User".to_string(), fields, None);
+    let context = TypeContext::interface("User".to_string(), fields, None, None);
     let result = engine.render(TemplateId::TypeInterface, &context);
     assert!(result.is_ok());
     let output = result.unwrap();
@@ -96,6 +97,7 @@ fn test_template_engine_render_zod_schema() {
         "UserSchema".to_string(),
         "z.object({ name: z.string(), age: z.number().optional() })".to_string(),
         None,
+        None,
     );
     let result = engine.render(TemplateId::ZodSchema, &context);
     assert!(result.is_ok());
@@ -110,6 +112,7 @@ fn test_template_engine_render_zod_enum() {
     let context = ZodContext::enum_schema(
         "StatusEnum".to_string(),
         vec!["active".to_string(), "inactive".to_string()],
+        None,
     );
     let result = engine.render(TemplateId::ZodEnum, &context);
     assert!(result.is_ok());
@@ -144,6 +147,7 @@ fn test_template_engine_render_api_client() {
         "users".to_string(),
         "id: string".to_string(),
         "Get user by ID".to_string(),
+        None,
     );
     let result = engine.render(TemplateId::ApiClientFetch, &context);
     assert!(result.is_ok());
@@ -156,7 +160,7 @@ fn test_template_engine_render_api_client() {
 #[test]
 fn test_template_engine_render_type_alias() {
     let engine = TemplateEngine::new(None).unwrap();
-    let context = TypeContext::alias("RecordType".to_string(), "Record<string, any>".to_string());
+    let context = TypeContext::alias("RecordType".to_string(), "Record<string, any>".to_string(), None);
     let result = engine.render(TemplateId::TypeAlias, &context);
     assert!(result.is_ok());
     let output = result.unwrap();

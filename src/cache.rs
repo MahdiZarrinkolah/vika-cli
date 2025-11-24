@@ -7,6 +7,25 @@ const CACHE_DIR: &str = ".vika-cache";
 const SPEC_CACHE_FILE: &str = "spec.json";
 const SPEC_META_FILE: &str = "spec.meta.json";
 
+/// Generate a cache key from spec path and optional spec name
+fn cache_key(spec_path: &str, spec_name: Option<&str>) -> String {
+    if let Some(name) = spec_name {
+        format!("{}:{}", name, spec_path)
+    } else {
+        spec_path.to_string()
+    }
+}
+
+/// Generate cache file names from cache key
+fn cache_file_names(cache_key: &str) -> (String, String) {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    cache_key.hash(&mut hasher);
+    let hash = format!("{:x}", hasher.finish());
+    (format!("spec_{}.json", hash), format!("spec_{}.meta.json", hash))
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SpecMetadata {
     pub url: String,
@@ -31,9 +50,15 @@ impl CacheManager {
     }
 
     pub fn get_cached_spec(url: &str) -> Result<Option<String>> {
+        Self::get_cached_spec_with_name(url, None)
+    }
+
+    pub fn get_cached_spec_with_name(url: &str, spec_name: Option<&str>) -> Result<Option<String>> {
         let cache_dir = Self::ensure_cache_dir()?;
-        let meta_path = cache_dir.join(SPEC_META_FILE);
-        let spec_path = cache_dir.join(SPEC_CACHE_FILE);
+        let key = cache_key(url, spec_name);
+        let (spec_file, meta_file) = cache_file_names(&key);
+        let meta_path = cache_dir.join(&meta_file);
+        let spec_path = cache_dir.join(&spec_file);
 
         // Check if cache exists
         if !meta_path.exists() || !spec_path.exists() {
@@ -72,10 +97,16 @@ impl CacheManager {
     }
 
     pub fn cache_spec(url: &str, content: &str) -> Result<()> {
+        Self::cache_spec_with_name(url, content, None)
+    }
+
+    pub fn cache_spec_with_name(url: &str, content: &str, spec_name: Option<&str>) -> Result<()> {
         // Ensure cache directory exists before writing
         let cache_dir = Self::ensure_cache_dir()?;
-        let meta_path = cache_dir.join(SPEC_META_FILE);
-        let spec_path = cache_dir.join(SPEC_CACHE_FILE);
+        let key = cache_key(url, spec_name);
+        let (spec_file, meta_file) = cache_file_names(&key);
+        let meta_path = cache_dir.join(&meta_file);
+        let spec_path = cache_dir.join(&spec_file);
 
         // Compute content hash (simple hash for now)
         use std::collections::hash_map::DefaultHasher;

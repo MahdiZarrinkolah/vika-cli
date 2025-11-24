@@ -9,11 +9,18 @@ pub struct ZodContext {
     pub enum_values: Option<Vec<String>>,
     pub description: Option<String>,
     pub needs_type_annotation: bool,
+    /// Spec name (for multi-spec mode)
+    pub spec_name: Option<String>,
 }
 
 impl ZodContext {
     /// Create a new ZodContext for a regular schema.
-    pub fn schema(schema_name: String, zod_expr: String, description: Option<String>) -> Self {
+    pub fn schema(
+        schema_name: String,
+        zod_expr: String,
+        description: Option<String>,
+        spec_name: Option<String>,
+    ) -> Self {
         Self {
             schema_name,
             zod_expr,
@@ -21,6 +28,7 @@ impl ZodContext {
             enum_values: None,
             description,
             needs_type_annotation: false,
+            spec_name,
         }
     }
 
@@ -29,6 +37,7 @@ impl ZodContext {
         schema_name: String,
         zod_expr: String,
         description: Option<String>,
+        spec_name: Option<String>,
     ) -> Self {
         Self {
             schema_name,
@@ -37,11 +46,16 @@ impl ZodContext {
             enum_values: None,
             description,
             needs_type_annotation: true,
+            spec_name,
         }
     }
 
     /// Create a new ZodContext for an enum schema.
-    pub fn enum_schema(schema_name: String, enum_values: Vec<String>) -> Self {
+    pub fn enum_schema(
+        schema_name: String,
+        enum_values: Vec<String>,
+        spec_name: Option<String>,
+    ) -> Self {
         let enum_values_str = enum_values
             .iter()
             .map(|v| format!("\"{}\"", v))
@@ -56,6 +70,7 @@ impl ZodContext {
             enum_values: Some(enum_values),
             description: None,
             needs_type_annotation: false,
+            spec_name,
         }
     }
 }

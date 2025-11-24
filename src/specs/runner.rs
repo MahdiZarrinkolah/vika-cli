@@ -1,0 +1,363 @@
+use crate::config::model::{Config, SpecEntry};
+use crate::error::Result;
+use crate::formatter::FormatterManager;
+use crate::generator::module_selector::select_modules;
+use crate::generator::swagger_parser::filter_common_schemas;
+use crate::generator::ts_typings::generate_typings_with_registry_and_engine_and_spec;
+use crate::generator::zod_schema::generate_zod_schemas_with_registry_and_engine_and_spec;
+use crate::generator::api_client::generate_api_client_with_registry_and_engine_and_spec;
+use crate::generator::writer::{write_api_client_with_options, write_schemas_with_options};
+use crate::progress::ProgressReporter;
+use std::path::PathBuf;
+
+/// Statistics for a single spec generation run
+#[derive(Debug, Clone)]
+pub struct GenerationStats {
+    pub spec_name: String,
+    pub modules_generated: usize,
+    pub files_generated: usize,
+    pub modules: Vec<String>,
+}
+
+/// Options for generation
+pub struct GenerateOptions {
+    pub use_cache: bool,
+    pub use_backup: bool,
+    pub use_force: bool,
+    pub verbose: bool,
+}
+
+/// Generate code for a single spec
+pub async fn run_single_spec(
+    spec: &SpecEntry,
+    config: &Config,
+    options: &GenerateOptions,
+) -> Result<GenerationStats> {
+    let mut progress = ProgressReporter::new(options.verbose);
+    let is_multi_spec = crate::specs::manager::is_multi_spec_mode(config);
+    let spec_name = if is_multi_spec {
+        Some(spec.name.as_str())
+    } else {
+        None
+    };
+
+    progress.start_spinner(&format!("Fetching spec from: {}", spec.path));
+    let parsed = crate::generator::swagger_parser::fetch_and_parse_spec_with_cache_and_name(
+        &spec.path,
+        options.use_cache,
+        Some(&spec.name),
+    )
+    .await?;
+    progress.finish_spinner(&format!(
+        "Parsed spec with {} modules",
+        parsed.modules.len()
+    ));
+
+    // Filter out ignored modules
+    let available_modules: Vec<String> = parsed
+        .modules
+        .iter()
+        .filter(|m| !config.modules.ignore.contains(m))
+        .cloned()
+        .collect();
+
+    if available_modules.is_empty() {
+        return Err(crate::error::GenerationError::NoModulesAvailable.into());
+    }
+
+    // Select modules interactively
+    let selected_modules = select_modules(&available_modules, &config.modules.ignore)?;
+
+    // Filter common schemas based on selected modules only
+    let (filtered_module_schemas, common_schemas) =
+        filter_common_schemas(&parsed.module_schemas, &selected_modules);
+
+    // Generate code for each module
+    let schemas_dir = PathBuf::from(&config.schemas.output);
+    let apis_dir = PathBuf::from(&config.apis.output);
+
+    // Ensure http.ts file exists (only once per output directory)
+    let http_file = apis_dir.join("http.ts");
+    if !http_file.exists() {
+        use crate::generator::writer::write_http_client_template;
+        write_http_client_template(&http_file)?;
+        if options.verbose {
+            progress.success(&format!("Created {}", http_file.display()));
+        }
+    }
+
+    let mut total_files = 0;
+
+    // Generate common module first if there are shared schemas
+    if !common_schemas.is_empty() {
+        progress.start_spinner("Generating common schemas...");
+
+        // Shared enum registry to ensure consistent naming between TypeScript and Zod
+        let mut shared_enum_registry = std::collections::HashMap::new();
+
+        // Initialize template engine
+        let project_root = std::env::current_dir().ok();
+        let template_engine =
+            crate::templates::engine::TemplateEngine::new(project_root.as_deref())?;
+
+        // Generate TypeScript typings for common schemas
+        let common_types = generate_typings_with_registry_and_engine_and_spec(
+            &parsed.openapi,
+            &parsed.schemas,
+            &common_schemas,
+            &mut shared_enum_registry,
+            &common_schemas,
+            Some(&template_engine),
+            spec_name,
+        )?;
+
+        // Generate Zod schemas for common schemas (using same registry)
+        let common_zod_schemas = generate_zod_schemas_with_registry_and_engine_and_spec(
+            &parsed.openapi,
+            &parsed.schemas,
+            &common_schemas,
+            &mut shared_enum_registry,
+            &common_schemas,
+            Some(&template_engine),
+            spec_name,
+        )?;
+
+        // Write common schemas
+        let common_files = write_schemas_with_options(
+            &schemas_dir,
+            "common",
+            &common_types,
+            &common_zod_schemas,
+            spec_name,
+            options.use_backup,
+            options.use_force,
+        )?;
+        total_files += common_files.len();
+        progress.finish_spinner(&format!(
+            "Generated {} common schema files",
+            common_files.len()
+        ));
+    }
+
+    for module in &selected_modules {
+        progress.start_spinner(&format!("Generating code for module: {}", module));
+
+        // Get operations for this module
+        let operations = parsed
+            .operations_by_tag
+            .get(module)
+            .cloned()
+            .unwrap_or_default();
+
+        if operations.is_empty() {
+            progress.warning(&format!("No operations found for module: {}", module));
+            continue;
+        }
+
+        // Get schema names used by this module (from filtered schemas)
+        let module_schema_names = filtered_module_schemas
+            .get(module)
+            .cloned()
+            .unwrap_or_default();
+
+        // Initialize template engine
+        let project_root = std::env::current_dir().ok();
+        let template_engine =
+            crate::templates::engine::TemplateEngine::new(project_root.as_deref())?;
+
+        // Shared enum registry to ensure consistent naming between TypeScript and Zod
+        let mut shared_enum_registry = std::collections::HashMap::new();
+
+        // Generate TypeScript typings
+        let types = if !module_schema_names.is_empty() {
+            generate_typings_with_registry_and_engine_and_spec(
+                &parsed.openapi,
+                &parsed.schemas,
+                &module_schema_names,
+                &mut shared_enum_registry,
+                &common_schemas,
+                Some(&template_engine),
+                spec_name,
+            )?
+        } else {
+            Vec::new()
+        };
+
+        // Generate Zod schemas (using same registry)
+        let zod_schemas = if !module_schema_names.is_empty() {
+            generate_zod_schemas_with_registry_and_engine_and_spec(
+                &parsed.openapi,
+                &parsed.schemas,
+                &module_schema_names,
+                &mut shared_enum_registry,
+                &common_schemas,
+                Some(&template_engine),
+                spec_name,
+            )?
+        } else {
+            Vec::new()
+        };
+
+        // Generate API client (using same enum registry as schemas)
+        let api_result = generate_api_client_with_registry_and_engine_and_spec(
+            &parsed.openapi,
+            &operations,
+            module,
+            &common_schemas,
+            &mut shared_enum_registry,
+            Some(&template_engine),
+            spec_name,
+        )?;
+
+        // Combine response types with schema types
+        let mut all_types = types;
+        all_types.extend(api_result.response_types);
+
+        // Write schemas (with backup and conflict detection)
+        let schema_files = write_schemas_with_options(
+            &schemas_dir,
+            module,
+            &all_types,
+            &zod_schemas,
+            spec_name,
+            options.use_backup,
+            options.use_force,
+        )?;
+        total_files += schema_files.len();
+
+        // Write API client (with backup and conflict detection)
+        let api_files = write_api_client_with_options(
+            &apis_dir,
+            module,
+            &api_result.functions,
+            spec_name,
+            options.use_backup,
+            options.use_force,
+        )?;
+        total_files += api_files.len();
+
+        progress.finish_spinner(&format!(
+            "Generated {} files for module: {}",
+            schema_files.len() + api_files.len(),
+            module
+        ));
+    }
+
+    // Format all generated files with prettier/biome if available
+    let mut all_generated_files = Vec::new();
+
+    // Collect schema files recursively
+    if schemas_dir.exists() {
+        collect_ts_files(&schemas_dir, &mut all_generated_files)?;
+    }
+
+    // Collect API files recursively
+    if apis_dir.exists() {
+        collect_ts_files(&apis_dir, &mut all_generated_files)?;
+    }
+
+    // Format files if formatter is available
+    if !all_generated_files.is_empty() {
+        let output_base = schemas_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .or_else(|| apis_dir.parent().and_then(|p| p.parent()));
+
+        let formatter = if let Some(base_dir) = output_base {
+            FormatterManager::detect_formatter_from_dir(base_dir)
+                .or_else(FormatterManager::detect_formatter)
+        } else {
+            FormatterManager::detect_formatter()
+        };
+
+        if let Some(formatter) = formatter {
+            progress.start_spinner("Formatting generated files...");
+            let original_dir = std::env::current_dir().map_err(|e| {
+                crate::error::FileSystemError::ReadFileFailed {
+                    path: ".".to_string(),
+                    source: e,
+                }
+            })?;
+
+            if let Some(output_base) = output_base {
+                std::env::set_current_dir(output_base).map_err(|e| {
+                    crate::error::FileSystemError::ReadFileFailed {
+                        path: output_base.display().to_string(),
+                        source: e,
+                    }
+                })?;
+
+                let relative_files: Vec<PathBuf> = all_generated_files
+                    .iter()
+                    .filter_map(|p| p.strip_prefix(output_base).ok().map(|p| p.to_path_buf()))
+                    .collect();
+
+                if !relative_files.is_empty() {
+                    let result = FormatterManager::format_files(&relative_files, formatter);
+
+                    std::env::set_current_dir(&original_dir).map_err(|e| {
+                        crate::error::FileSystemError::ReadFileFailed {
+                            path: original_dir.display().to_string(),
+                            source: e,
+                        }
+                    })?;
+
+                    result?;
+                } else {
+                    std::env::set_current_dir(&original_dir).map_err(|e| {
+                        crate::error::FileSystemError::ReadFileFailed {
+                            path: original_dir.display().to_string(),
+                            source: e,
+                        }
+                    })?;
+                }
+            } else {
+                FormatterManager::format_files(&all_generated_files, formatter)?;
+            }
+            progress.finish_spinner("Files formatted");
+        }
+    }
+
+    Ok(GenerationStats {
+        spec_name: spec.name.clone(),
+        modules_generated: selected_modules.len(),
+        files_generated: total_files,
+        modules: selected_modules,
+    })
+}
+
+/// Generate code for multiple specs sequentially
+pub async fn run_all_specs(
+    specs: &[SpecEntry],
+    config: &Config,
+    options: &GenerateOptions,
+) -> Result<Vec<GenerationStats>> {
+    let mut stats = Vec::new();
+    for spec in specs {
+        let result = run_single_spec(spec, config, options).await?;
+        stats.push(result);
+    }
+    Ok(stats)
+}
+
+fn collect_ts_files(dir: &std::path::Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    if dir.is_dir() {
+        for entry in std::fs::read_dir(dir).map_err(|e| crate::error::FileSystemError::ReadFileFailed {
+            path: dir.display().to_string(),
+            source: e,
+        })? {
+            let entry = entry.map_err(|e| crate::error::FileSystemError::ReadFileFailed {
+                path: dir.display().to_string(),
+                source: e,
+            })?;
+            let path = entry.path();
+            if path.is_dir() {
+                collect_ts_files(&path, files)?;
+            } else if path.extension().and_then(|s| s.to_str()) == Some("ts") {
+                files.push(path);
+            }
+        }
+    }
+    Ok(())
+}
+
