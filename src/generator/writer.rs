@@ -1,8 +1,8 @@
 use crate::error::{FileSystemError, Result};
 use crate::generator::api_client::ApiFunction;
 use crate::generator::ts_typings::TypeScriptType;
-use crate::generator::zod_schema::ZodSchema;
 use crate::generator::utils::sanitize_module_name;
+use crate::generator::zod_schema::ZodSchema;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -66,19 +66,19 @@ pub fn write_schemas_with_options(
                 // Fallback: use full content as key
                 t.content.clone()
             };
-            
+
             if !seen_type_names.contains(&type_name) {
                 seen_type_names.insert(type_name);
                 deduplicated_types.push(t);
             }
         }
-        
+
         let types_content_raw = deduplicated_types
             .iter()
             .map(|t| t.content.clone())
             .collect::<Vec<_>>()
             .join("\n\n");
-        
+
         // Check if we need to import Common types
         let needs_common_import = types_content_raw.contains("Common.");
         let common_import = if needs_common_import {
@@ -89,10 +89,9 @@ pub fn write_schemas_with_options(
         } else {
             String::new()
         };
-        
-        let types_content = format_typescript_code(
-            &format!("{}{}", common_import, types_content_raw),
-        );
+
+        let types_content =
+            format_typescript_code(&format!("{}{}", common_import, types_content_raw));
 
         let types_file = module_dir.join("types.ts");
         write_file_with_backup(&types_file, &types_content, backup, force)?;
@@ -106,7 +105,7 @@ pub fn write_schemas_with_options(
             .map(|z| z.content.clone())
             .collect::<Vec<_>>()
             .join("\n\n");
-        
+
         // Check if we need to import Common schemas
         let needs_common_import = zod_content_raw.contains("Common.");
         let common_import = if needs_common_import {
@@ -117,10 +116,14 @@ pub fn write_schemas_with_options(
         } else {
             String::new()
         };
-        
+
         let zod_content = format_typescript_code(&format!(
             "import {{ z }} from \"zod\";\n{}{}",
-            if !common_import.is_empty() { &common_import } else { "" },
+            if !common_import.is_empty() {
+                &common_import
+            } else {
+                ""
+            },
             zod_content_raw
         ));
 
@@ -175,9 +178,13 @@ pub fn write_api_client_with_options(
         // Consolidate imports: extract all imports and merge by module
         // Map: module_path -> (type_imports_set, other_imports_set)
         // We need to separate type imports from other imports to reconstruct them correctly
-        let mut imports_by_module: std::collections::HashMap<String, (std::collections::HashSet<String>, Vec<String>)> = std::collections::HashMap::new();
+        let mut imports_by_module: std::collections::HashMap<
+            String,
+            (std::collections::HashSet<String>, Vec<String>),
+        > = std::collections::HashMap::new();
         let mut function_bodies = Vec::new();
-        let mut seen_functions: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut seen_functions: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
 
         for func in functions {
             let lines: Vec<&str> = func.content.lines().collect();
@@ -193,7 +200,7 @@ pub fn write_api_client_with_options(
                         let before_from = &import_line[..from_pos];
                         let after_from = &import_line[from_pos + 6..];
                         let module_path = after_from.trim_matches('"').trim_matches('\'').trim();
-                        
+
                         // Extract imported items
                         if before_from.contains("import type {") {
                             // Type import: "import type { A, B }"
@@ -205,10 +212,12 @@ pub fn write_api_client_with_options(
                                         .map(|s| s.trim().to_string())
                                         .filter(|s| !s.is_empty())
                                         .collect();
-                                    
+
                                     let (type_imports, _) = imports_by_module
                                         .entry(module_path.to_string())
-                                        .or_insert_with(|| (std::collections::HashSet::new(), Vec::new()));
+                                        .or_insert_with(|| {
+                                            (std::collections::HashSet::new(), Vec::new())
+                                        });
                                     type_imports.extend(items);
                                 }
                             }
@@ -278,14 +287,16 @@ pub fn write_api_client_with_options(
         for (module_path, (type_import_items, other_imports)) in imports_by_module.iter() {
             if module_path.is_empty() {
                 // Malformed imports - add as-is (deduplicate)
-                let deduped: std::collections::HashSet<String> = other_imports.iter().cloned().collect();
+                let deduped: std::collections::HashSet<String> =
+                    other_imports.iter().cloned().collect();
                 imports_vec.extend(deduped.into_iter());
             } else {
                 // Deduplicate and separate other imports by type
-                let deduped_imports: std::collections::HashSet<String> = other_imports.iter().cloned().collect();
+                let deduped_imports: std::collections::HashSet<String> =
+                    other_imports.iter().cloned().collect();
                 let mut namespace_imports = Vec::new();
                 let mut default_imports = Vec::new();
-                
+
                 for item in deduped_imports.iter() {
                     if item.contains("import * as") {
                         // Namespace import - keep as-is
@@ -295,24 +306,28 @@ pub fn write_api_client_with_options(
                         default_imports.push(item.clone());
                     }
                 }
-                
+
                 // Add namespace imports (sorted for consistency)
                 namespace_imports.sort();
                 for ns_import in namespace_imports {
                     imports_vec.push(format!("{};", ns_import));
                 }
-                
+
                 // Add default imports (sorted for consistency)
                 default_imports.sort();
                 for default_import in default_imports {
                     imports_vec.push(format!("{};", default_import));
                 }
-                
+
                 // Merge and add type imports
                 if !type_import_items.is_empty() {
                     let mut sorted_types: Vec<String> = type_import_items.iter().cloned().collect();
                     sorted_types.sort();
-                    imports_vec.push(format!("import type {{ {} }} from \"{}\";", sorted_types.join(", "), module_path));
+                    imports_vec.push(format!(
+                        "import type {{ {} }} from \"{}\";",
+                        sorted_types.join(", "),
+                        module_path
+                    ));
                 }
             }
         }

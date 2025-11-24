@@ -43,8 +43,16 @@ pub async fn run(
     // Use config defaults, but allow CLI flags to override
     // CLI flags are false by default (not set), so we check if they were explicitly set
     // For now, we'll use a simple approach: if flag is true, use it; otherwise use config
-    let use_cache = if cache { true } else { config.generation.enable_cache };
-    let use_backup = if backup { true } else { config.generation.enable_backup };
+    let use_cache = if cache {
+        true
+    } else {
+        config.generation.enable_cache
+    };
+    let use_backup = if backup {
+        true
+    } else {
+        config.generation.enable_backup
+    };
     let use_force = if force {
         true
     } else {
@@ -234,8 +242,13 @@ pub async fn run(
         total_files += schema_files.len();
 
         // Write API client (with backup and conflict detection)
-        let api_files =
-            write_api_client_with_options(&apis_dir, module, &api_result.functions, use_backup, use_force)?;
+        let api_files = write_api_client_with_options(
+            &apis_dir,
+            module,
+            &api_result.functions,
+            use_backup,
+            use_force,
+        )?;
         total_files += api_files.len();
 
         let module_file_count = schema_files.len() + api_files.len();

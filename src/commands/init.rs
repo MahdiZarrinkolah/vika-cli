@@ -19,7 +19,10 @@ pub fn run() -> Result<()> {
             "⚠️  .vika.json already exists. Skipping config creation.".yellow()
         );
     } else {
-        println!("{}", "Let's configure your vika-cli preferences:".bright_cyan());
+        println!(
+            "{}",
+            "Let's configure your vika-cli preferences:".bright_cyan()
+        );
         println!();
 
         // Paths configuration

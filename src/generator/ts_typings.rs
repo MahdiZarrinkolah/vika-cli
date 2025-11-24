@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::generator::swagger_parser::{get_schema_name_from_ref, resolve_ref};
-use crate::generator::utils::{to_pascal_case, sanitize_property_name};
+use crate::generator::utils::{sanitize_property_name, to_pascal_case};
 use openapiv3::{OpenAPI, ReferenceOr, Schema, SchemaKind, Type};
 use std::collections::HashMap;
 
@@ -503,7 +503,11 @@ fn schema_to_typescript(
 
                             fields.push(format!(
                                 "{}{}{}: {}{};",
-                                indent_str, sanitize_property_name(prop_name), optional, prop_type, nullable_str
+                                indent_str,
+                                sanitize_property_name(prop_name),
+                                optional,
+                                prop_type,
+                                nullable_str
                             ));
                         }
                         Ok(fields.join("\n"))
@@ -521,19 +525,18 @@ fn schema_to_typescript(
                     ReferenceOr::Reference { reference } => {
                         if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             let schema_enum_key = format!("schema:{}", ref_name);
-                            let type_name = if let Some(enum_name) =
-                                enum_registry.get(&schema_enum_key)
-                            {
-                                if common_schemas.contains(&ref_name) {
-                                    format!("Common.{}", enum_name)
+                            let type_name =
+                                if let Some(enum_name) = enum_registry.get(&schema_enum_key) {
+                                    if common_schemas.contains(&ref_name) {
+                                        format!("Common.{}", enum_name)
+                                    } else {
+                                        enum_name.clone()
+                                    }
+                                } else if common_schemas.contains(&ref_name) {
+                                    format!("Common.{}", to_pascal_case(&ref_name))
                                 } else {
-                                    enum_name.clone()
-                                }
-                            } else if common_schemas.contains(&ref_name) {
-                                format!("Common.{}", to_pascal_case(&ref_name))
-                            } else {
-                                to_pascal_case(&ref_name)
-                            };
+                                    to_pascal_case(&ref_name)
+                                };
                             variant_types.push(type_name);
                         } else {
                             variant_types.push("any".to_string());
@@ -568,19 +571,18 @@ fn schema_to_typescript(
                     ReferenceOr::Reference { reference } => {
                         if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             let schema_enum_key = format!("schema:{}", ref_name);
-                            let type_name = if let Some(enum_name) =
-                                enum_registry.get(&schema_enum_key)
-                            {
-                                if common_schemas.contains(&ref_name) {
-                                    format!("Common.{}", enum_name)
+                            let type_name =
+                                if let Some(enum_name) = enum_registry.get(&schema_enum_key) {
+                                    if common_schemas.contains(&ref_name) {
+                                        format!("Common.{}", enum_name)
+                                    } else {
+                                        enum_name.clone()
+                                    }
+                                } else if common_schemas.contains(&ref_name) {
+                                    format!("Common.{}", to_pascal_case(&ref_name))
                                 } else {
-                                    enum_name.clone()
-                                }
-                            } else if common_schemas.contains(&ref_name) {
-                                format!("Common.{}", to_pascal_case(&ref_name))
-                            } else {
-                                to_pascal_case(&ref_name)
-                            };
+                                    to_pascal_case(&ref_name)
+                                };
                             all_types.push(type_name);
                         } else {
                             all_types.push("any".to_string());
@@ -616,19 +618,18 @@ fn schema_to_typescript(
                     ReferenceOr::Reference { reference } => {
                         if let Some(ref_name) = get_schema_name_from_ref(reference) {
                             let schema_enum_key = format!("schema:{}", ref_name);
-                            let type_name = if let Some(enum_name) =
-                                enum_registry.get(&schema_enum_key)
-                            {
-                                if common_schemas.contains(&ref_name) {
-                                    format!("Common.{}", enum_name)
+                            let type_name =
+                                if let Some(enum_name) = enum_registry.get(&schema_enum_key) {
+                                    if common_schemas.contains(&ref_name) {
+                                        format!("Common.{}", enum_name)
+                                    } else {
+                                        enum_name.clone()
+                                    }
+                                } else if common_schemas.contains(&ref_name) {
+                                    format!("Common.{}", to_pascal_case(&ref_name))
                                 } else {
-                                    enum_name.clone()
-                                }
-                            } else if common_schemas.contains(&ref_name) {
-                                format!("Common.{}", to_pascal_case(&ref_name))
-                            } else {
-                                to_pascal_case(&ref_name)
-                            };
+                                    to_pascal_case(&ref_name)
+                                };
                             variant_types.push(type_name);
                         } else {
                             variant_types.push("any".to_string());

@@ -3,6 +3,8 @@ source: tests/snapshot_api_test.rs
 expression: output
 ---
 import { http } from "../http";
+import type { StatusEnum, SortEnum } from "../../schemas/test";
+
 export const getProducts = async (status: StatusEnum, query?: { sort?: SortEnum }) => {
     const queryString = new URLSearchParams();
     if (query?.sort) queryString.append("sort", String(query.sort));

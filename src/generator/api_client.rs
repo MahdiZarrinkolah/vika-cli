@@ -1,11 +1,11 @@
 use crate::error::Result;
+use crate::generator::swagger_parser::resolve_ref;
 use crate::generator::swagger_parser::{
     get_schema_name_from_ref, resolve_parameter_ref, resolve_request_body_ref,
     resolve_response_ref, OperationInfo,
 };
-use crate::generator::swagger_parser::resolve_ref;
 use crate::generator::ts_typings::TypeScriptType;
-use crate::generator::utils::{to_camel_case, to_pascal_case, sanitize_module_name};
+use crate::generator::utils::{sanitize_module_name, to_camel_case, to_pascal_case};
 use openapiv3::OpenAPI;
 use openapiv3::{Operation, Parameter, ReferenceOr, SchemaKind, Type};
 
@@ -36,7 +36,7 @@ pub enum ParameterType {
     Number,
     Integer,
     Boolean,
-    Enum(String), // enum type name
+    Enum(String),  // enum type name
     Array(String), // array item type
 }
 
@@ -59,7 +59,13 @@ pub fn generate_api_client(
     module_name: &str,
     common_schemas: &[String],
 ) -> Result<ApiGenerationResult> {
-    generate_api_client_with_registry(openapi, operations, module_name, common_schemas, &mut std::collections::HashMap::new())
+    generate_api_client_with_registry(
+        openapi,
+        operations,
+        module_name,
+        common_schemas,
+        &mut std::collections::HashMap::new(),
+    )
 }
 
 pub fn generate_api_client_with_registry(
@@ -73,7 +79,13 @@ pub fn generate_api_client_with_registry(
     let mut response_types = Vec::new();
 
     for op_info in operations {
-        let result = generate_function_for_operation(openapi, op_info, module_name, common_schemas, enum_registry)?;
+        let result = generate_function_for_operation(
+            openapi,
+            op_info,
+            module_name,
+            common_schemas,
+            enum_registry,
+        )?;
         functions.push(result.function);
         response_types.extend(result.response_types);
     }
@@ -117,7 +129,7 @@ fn generate_function_for_operation(
 
     // Extract all responses (success + error)
     let all_responses = extract_all_responses(openapi, operation)?;
-    
+
     // Separate success and error responses
     let success_responses: Vec<ResponseInfo> = all_responses
         .iter()
@@ -129,7 +141,7 @@ fn generate_function_for_operation(
         .filter(|r| r.status_code < 200 || r.status_code >= 300)
         .cloned()
         .collect();
-    
+
     // Get primary success response type (for backward compatibility)
     let response_type = success_responses
         .iter()
@@ -150,7 +162,10 @@ fn generate_function_for_operation(
     for param in &path_params {
         let param_type = match &param.param_type {
             ParameterType::Enum(enum_name) => {
-                enum_types.push((enum_name.clone(), param.enum_values.clone().unwrap_or_default()));
+                enum_types.push((
+                    enum_name.clone(),
+                    param.enum_values.clone().unwrap_or_default(),
+                ));
                 enum_name.clone()
             }
             ParameterType::String => "string".to_string(),
@@ -160,8 +175,10 @@ fn generate_function_for_operation(
             ParameterType::Array(_) => "string".to_string(), // Arrays in path are serialized as strings
         };
         params.push(format!("{}: {}", param.name, param_type));
-        path_template =
-            path_template.replace(&format!("{{{}}}", param.name), &format!("${{{}}}", param.name));
+        path_template = path_template.replace(
+            &format!("{{{}}}", param.name),
+            &format!("${{{}}}", param.name),
+        );
     }
 
     // Add request body (check if it's in common schemas)
@@ -186,8 +203,10 @@ fn generate_function_for_operation(
         for param in &query_params {
             let param_type = match &param.param_type {
                 ParameterType::Enum(enum_name) => {
-                    enum_types
-                        .push((enum_name.clone(), param.enum_values.clone().unwrap_or_default()));
+                    enum_types.push((
+                        enum_name.clone(),
+                        param.enum_values.clone().unwrap_or_default(),
+                    ));
                     enum_name.clone()
                 }
                 ParameterType::Array(item_type) => {
@@ -212,7 +231,10 @@ fn generate_function_for_operation(
     // Build URL with path parameters
     let mut url_template = op_info.path.clone();
     for param in &path_params {
-        url_template = url_template.replace(&format!("{{{}}}", param.name), &format!("${{{}}}", param.name));
+        url_template = url_template.replace(
+            &format!("{{{}}}", param.name),
+            &format!("${{{}}}", param.name),
+        );
     }
 
     // Build URL with query parameters
@@ -223,10 +245,7 @@ fn generate_function_for_operation(
                 let explode = param.explode.unwrap_or(true);
                 if explode {
                     // explode: true -> tags=one&tags=two
-                    body_lines.push(format!(
-                        "    if (query?.{}) {{",
-                        param.name
-                    ));
+                    body_lines.push(format!("    if (query?.{}) {{", param.name));
                     body_lines.push(format!(
                         "      query.{}.forEach((item) => queryString.append(\"{}\", String(item)));",
                         param.name, param.name
@@ -303,7 +322,7 @@ fn generate_function_for_operation(
     let mut type_imports = String::new();
     let mut needs_common_import = false;
     let mut needs_namespace_import = false;
-    
+
     // Check if response type needs import
     if response_type != "any" {
         let is_common = common_schemas.contains(&response_type);
@@ -313,7 +332,7 @@ fn generate_function_for_operation(
             needs_namespace_import = true;
         }
     }
-    
+
     // Check if request body type needs import
     if let Some(body_type) = &request_body {
         if body_type != "any" {
@@ -324,20 +343,21 @@ fn generate_function_for_operation(
             }
         }
     }
-    
+
     // Add imports
     if needs_common_import {
         let schemas_depth = depth + 1; // +1 to go from apis/ to schemas/
         let common_import = format!("{}../schemas/common", "../".repeat(schemas_depth));
-        type_imports.push_str(&format!(
-            "import * as Common from \"{}\";\n",
-            common_import
-        ));
+        type_imports.push_str(&format!("import * as Common from \"{}\";\n", common_import));
     }
     if needs_namespace_import {
         let schemas_depth = depth + 1; // +1 to go from apis/ to schemas/
         let sanitized_module_name = sanitize_module_name(module_name);
-        let schemas_import = format!("{}../schemas/{}", "../".repeat(schemas_depth), sanitized_module_name);
+        let schemas_import = format!(
+            "{}../schemas/{}",
+            "../".repeat(schemas_depth),
+            sanitized_module_name
+        );
         type_imports.push_str(&format!(
             "import * as {} from \"{}\";\n",
             namespace_name, schemas_import
@@ -353,11 +373,11 @@ fn generate_function_for_operation(
         common_schemas,
         &enum_types,
     );
-    
+
     // Add imports for response types if we have any
     let type_name_base = to_pascal_case(&func_name);
     let mut response_type_imports = Vec::new();
-    
+
     // Only add error types if we have errors with schemas
     let errors_with_schemas: Vec<&ResponseInfo> = error_responses
         .iter()
@@ -367,7 +387,7 @@ fn generate_function_for_operation(
         response_type_imports.push(format!("{}Errors", type_name_base));
         response_type_imports.push(format!("{}Error", type_name_base));
     }
-    
+
     // Only add Responses type if we have success responses with schemas
     let success_with_schemas: Vec<&ResponseInfo> = success_responses
         .iter()
@@ -376,13 +396,17 @@ fn generate_function_for_operation(
     if !success_with_schemas.is_empty() {
         response_type_imports.push(format!("{}Responses", type_name_base));
     }
-    
+
     // Add type import if we have response types (separate line)
     if !response_type_imports.is_empty() {
         // Calculate relative path based on module depth
         let schemas_depth = depth + 1; // +1 to go from apis/ to schemas/
         let sanitized_module_name = sanitize_module_name(module_name);
-        let schemas_import = format!("{}../schemas/{}", "../".repeat(schemas_depth), sanitized_module_name);
+        let schemas_import = format!(
+            "{}../schemas/{}",
+            "../".repeat(schemas_depth),
+            sanitized_module_name
+        );
         let type_import_line = format!(
             "import type {{ {} }} from \"{}\";",
             response_type_imports.join(", "),
@@ -394,12 +418,16 @@ fn generate_function_for_operation(
             type_imports = format!("{}\n{}", type_imports.trim_end(), type_import_line);
         }
     }
-    
+
     // Add enum type imports if we have any
     if !enum_types.is_empty() {
         let schemas_depth = depth + 1; // +1 to go from apis/ to schemas/
         let sanitized_module_name = sanitize_module_name(module_name);
-        let schemas_import = format!("{}../schemas/{}", "../".repeat(schemas_depth), sanitized_module_name);
+        let schemas_import = format!(
+            "{}../schemas/{}",
+            "../".repeat(schemas_depth),
+            sanitized_module_name
+        );
         let enum_names: Vec<String> = enum_types.iter().map(|(name, _)| name.clone()).collect();
         let enum_import_line = format!(
             "import type {{ {} }} from \"{}\";",
@@ -412,20 +440,31 @@ fn generate_function_for_operation(
             type_imports = format!("{}\n{}", type_imports.trim_end(), enum_import_line);
         }
     }
-    
+
     // Ensure type_imports ends with newline for proper separation
     if !type_imports.is_empty() && !type_imports.ends_with('\n') {
         type_imports.push('\n');
     }
 
     // Determine return type - use Responses type if available, otherwise fallback to direct type
-    let has_responses_type = response_type_imports.iter().any(|imp| imp.contains("Responses"));
+    let has_responses_type = response_type_imports
+        .iter()
+        .any(|imp| imp.contains("Responses"));
     let return_type = if has_responses_type {
         // Use Responses type with primary status code
-        if let Some(_primary_response) = success_responses.iter().find(|r| r.status_code == 200 && r.body_type != "any") {
+        if let Some(_primary_response) = success_responses
+            .iter()
+            .find(|r| r.status_code == 200 && r.body_type != "any")
+        {
             format!(": Promise<{}Responses[200]>", type_name_base)
-        } else if let Some(first_success) = success_responses.iter().find(|r| r.status_code >= 200 && r.status_code < 300 && r.body_type != "any") {
-            format!(": Promise<{}Responses[{}]>", type_name_base, first_success.status_code)
+        } else if let Some(first_success) = success_responses
+            .iter()
+            .find(|r| r.status_code >= 200 && r.status_code < 300 && r.body_type != "any")
+        {
+            format!(
+                ": Promise<{}Responses[{}]>",
+                type_name_base, first_success.status_code
+            )
         } else {
             String::new()
         }
@@ -456,12 +495,23 @@ fn generate_function_for_operation(
     let content = if params_str.is_empty() {
         format!(
             "import {{ http }} from \"{}\";\n{}{}export const {} = async (){} => {{\n{}\n}};",
-            http_import, type_imports, if !type_imports.is_empty() { "\n" } else { "" }, func_name, return_type, function_body
+            http_import,
+            type_imports,
+            if !type_imports.is_empty() { "\n" } else { "" },
+            func_name,
+            return_type,
+            function_body
         )
     } else {
         format!(
             "import {{ http }} from \"{}\";\n{}{}export const {} = async ({}){} => {{\n{}\n}};",
-            http_import, type_imports, if !type_imports.is_empty() { "\n" } else { "" }, func_name, params_str, return_type, function_body
+            http_import,
+            type_imports,
+            if !type_imports.is_empty() { "\n" } else { "" },
+            func_name,
+            params_str,
+            return_type,
+            function_body
         )
     };
 
@@ -491,7 +541,9 @@ fn extract_path_parameters(
                     match resolve_parameter_ref(openapi, &ref_path) {
                         Ok(ReferenceOr::Item(param)) => {
                             if let Parameter::Path { parameter_data, .. } = param {
-                                if let Some(param_info) = extract_parameter_info(openapi, &parameter_data, enum_registry)? {
+                                if let Some(param_info) =
+                                    extract_parameter_info(openapi, &parameter_data, enum_registry)?
+                                {
                                     params.push(param_info);
                                 }
                             }
@@ -512,7 +564,9 @@ fn extract_path_parameters(
             }
             ReferenceOr::Item(param) => {
                 if let Parameter::Path { parameter_data, .. } = param {
-                    if let Some(param_info) = extract_parameter_info(openapi, parameter_data, enum_registry)? {
+                    if let Some(param_info) =
+                        extract_parameter_info(openapi, parameter_data, enum_registry)?
+                    {
                         params.push(param_info);
                     }
                 }
@@ -542,12 +596,20 @@ fn extract_query_parameters(
                     }
                     match resolve_parameter_ref(openapi, &ref_path) {
                         Ok(ReferenceOr::Item(param)) => {
-                            if let Parameter::Query { parameter_data, style, .. } = param {
-                                if let Some(mut param_info) = extract_parameter_info(openapi, &parameter_data, enum_registry)? {
+                            if let Parameter::Query {
+                                parameter_data,
+                                style,
+                                ..
+                            } = param
+                            {
+                                if let Some(mut param_info) =
+                                    extract_parameter_info(openapi, &parameter_data, enum_registry)?
+                                {
                                     // Override style and explode for query parameters
                                     param_info.style = Some(format!("{:?}", style));
                                     // explode defaults to true for arrays, false otherwise
-                                    param_info.explode = Some(parameter_data.explode.unwrap_or(false));
+                                    param_info.explode =
+                                        Some(parameter_data.explode.unwrap_or(false));
                                     params.push(param_info);
                                 }
                             }
@@ -567,8 +629,15 @@ fn extract_query_parameters(
                 }
             }
             ReferenceOr::Item(param) => {
-                if let Parameter::Query { parameter_data, style, .. } = param {
-                    if let Some(mut param_info) = extract_parameter_info(openapi, parameter_data, enum_registry)? {
+                if let Parameter::Query {
+                    parameter_data,
+                    style,
+                    ..
+                } = param
+                {
+                    if let Some(mut param_info) =
+                        extract_parameter_info(openapi, parameter_data, enum_registry)?
+                    {
                         // Override style and explode for query parameters
                         param_info.style = Some(format!("{:?}", style));
                         // explode defaults to true for arrays, false otherwise
@@ -589,20 +658,18 @@ fn extract_parameter_info(
     enum_registry: &mut std::collections::HashMap<String, String>,
 ) -> Result<Option<ParameterInfo>> {
     let name = parameter_data.name.clone();
-    
+
     // Get schema from parameter
     let schema = match &parameter_data.format {
-        openapiv3::ParameterSchemaOrContent::Schema(schema_ref) => {
-            match schema_ref {
-                ReferenceOr::Reference { reference } => {
-                    resolve_ref(openapi, reference).ok().and_then(|r| match r {
-                        ReferenceOr::Item(s) => Some(s),
-                        _ => None,
-                    })
-                }
-                ReferenceOr::Item(s) => Some(s.clone()),
+        openapiv3::ParameterSchemaOrContent::Schema(schema_ref) => match schema_ref {
+            ReferenceOr::Reference { reference } => {
+                resolve_ref(openapi, reference).ok().and_then(|r| match r {
+                    ReferenceOr::Item(s) => Some(s),
+                    _ => None,
+                })
             }
-        }
+            ReferenceOr::Item(s) => Some(s.clone()),
+        },
         _ => None,
     };
 
@@ -620,20 +687,23 @@ fn extract_parameter_info(
                                 .collect();
                             enum_values.sort();
                             let enum_key = enum_values.join(",");
-                            
+
                             // Generate enum name
                             let enum_name = format!("{}Enum", to_pascal_case(&name));
                             let context_key = format!("{}:{}", enum_key, name);
-                            
+
                             // Check registry
-                            let final_enum_name = if let Some(existing) = enum_registry.get(&context_key).or_else(|| enum_registry.get(&enum_key)) {
+                            let final_enum_name = if let Some(existing) = enum_registry
+                                .get(&context_key)
+                                .or_else(|| enum_registry.get(&enum_key))
+                            {
                                 existing.clone()
                             } else {
                                 enum_registry.insert(context_key.clone(), enum_name.clone());
                                 enum_registry.insert(enum_key.clone(), enum_name.clone());
                                 enum_name
                             };
-                            
+
                             Ok(Some(ParameterInfo {
                                 name,
                                 param_type: ParameterType::Enum(final_enum_name.clone()),
@@ -642,7 +712,7 @@ fn extract_parameter_info(
                                 is_array: false,
                                 array_item_type: None,
                                 style: Some("simple".to_string()), // default for path
-                                explode: Some(false), // default for path
+                                explode: Some(false),              // default for path
                             }))
                         } else {
                             Ok(Some(ParameterInfo {
@@ -710,15 +780,13 @@ fn extract_parameter_info(
                                 ReferenceOr::Item(item_schema) => {
                                     // Extract type from item schema
                                     match &item_schema.schema_kind {
-                                        SchemaKind::Type(item_type) => {
-                                            match item_type {
-                                                Type::String(_) => "string".to_string(),
-                                                Type::Number(_) => "number".to_string(),
-                                                Type::Integer(_) => "number".to_string(),
-                                                Type::Boolean(_) => "boolean".to_string(),
-                                                _ => "string".to_string(),
-                                            }
-                                        }
+                                        SchemaKind::Type(item_type) => match item_type {
+                                            Type::String(_) => "string".to_string(),
+                                            Type::Number(_) => "number".to_string(),
+                                            Type::Integer(_) => "number".to_string(),
+                                            Type::Boolean(_) => "boolean".to_string(),
+                                            _ => "string".to_string(),
+                                        },
                                         _ => "string".to_string(),
                                     }
                                 }
@@ -726,7 +794,7 @@ fn extract_parameter_info(
                         } else {
                             "string".to_string()
                         };
-                        
+
                         Ok(Some(ParameterInfo {
                             name,
                             param_type: ParameterType::Array(item_type.clone()),
@@ -735,7 +803,7 @@ fn extract_parameter_info(
                             is_array: true,
                             array_item_type: Some(item_type),
                             style: Some("form".to_string()), // default for query arrays
-                            explode: Some(true), // default for query arrays
+                            explode: Some(true),             // default for query arrays
                         }))
                     }
                 }
@@ -982,7 +1050,7 @@ fn generate_response_types(
 ) -> Vec<TypeScriptType> {
     let mut types = Vec::new();
     let type_name_base = to_pascal_case(func_name);
-    
+
     // Generate enum types for parameters
     for (enum_name, enum_values) in enum_types {
         let variants = enum_values
@@ -993,7 +1061,7 @@ fn generate_response_types(
         let enum_type = format!("export type {} =\n{};", enum_name, variants);
         types.push(TypeScriptType { content: enum_type });
     }
-    
+
     // Generate Errors type
     if !error_responses.is_empty() {
         let mut error_fields = Vec::new();
@@ -1011,32 +1079,47 @@ fn generate_response_types(
                 } else {
                     "any".to_string()
                 };
-                
-                let description = error.description.as_ref()
+
+                let description = error
+                    .description
+                    .as_ref()
                     .map(|d| format!("    /**\n     * {}\n     */", d))
                     .unwrap_or_default();
-                
-                error_fields.push(format!("{}\n    {}: {};", description, error.status_code, qualified_type));
+
+                error_fields.push(format!(
+                    "{}\n    {}: {};",
+                    description, error.status_code, qualified_type
+                ));
             }
         }
-        
+
         if !error_fields.is_empty() {
-            let errors_type = format!("export type {}Errors = {{\n{}\n}};", type_name_base, error_fields.join("\n"));
-            types.push(TypeScriptType { content: errors_type });
-            
+            let errors_type = format!(
+                "export type {}Errors = {{\n{}\n}};",
+                type_name_base,
+                error_fields.join("\n")
+            );
+            types.push(TypeScriptType {
+                content: errors_type,
+            });
+
             // Generate Error union type
-            let error_union_type = format!("export type {}Error = {}Errors[keyof {}Errors];", 
-                type_name_base, type_name_base, type_name_base);
-            types.push(TypeScriptType { content: error_union_type });
+            let error_union_type = format!(
+                "export type {}Error = {}Errors[keyof {}Errors];",
+                type_name_base, type_name_base, type_name_base
+            );
+            types.push(TypeScriptType {
+                content: error_union_type,
+            });
         }
     }
-    
+
     // Generate Responses type (only if we have success responses with schemas)
     let success_with_schemas: Vec<&ResponseInfo> = success_responses
         .iter()
         .filter(|r| r.status_code >= 200 && r.status_code < 300 && r.body_type != "any")
         .collect();
-    
+
     if !success_with_schemas.is_empty() {
         let mut response_fields = Vec::new();
         for response in success_with_schemas {
@@ -1048,20 +1131,31 @@ fn generate_response_types(
                 // Type is in the same file, use unqualified name
                 response.body_type.clone()
             };
-            
-            let description = response.description.as_ref()
+
+            let description = response
+                .description
+                .as_ref()
                 .map(|d| format!("    /**\n     * {}\n     */", d))
                 .unwrap_or_default();
-            
-            response_fields.push(format!("{}\n    {}: {};", description, response.status_code, qualified_type));
+
+            response_fields.push(format!(
+                "{}\n    {}: {};",
+                description, response.status_code, qualified_type
+            ));
         }
-        
+
         if !response_fields.is_empty() {
-            let responses_type = format!("export type {}Responses = {{\n{}\n}};", type_name_base, response_fields.join("\n"));
-            types.push(TypeScriptType { content: responses_type });
+            let responses_type = format!(
+                "export type {}Responses = {{\n{}\n}};",
+                type_name_base,
+                response_fields.join("\n")
+            );
+            types.push(TypeScriptType {
+                content: responses_type,
+            });
         }
     }
-    
+
     types
 }
 
@@ -1132,4 +1226,3 @@ fn generate_function_name_from_path(path: &str, method: &str) -> String {
 
     to_camel_case(&base_name)
 }
-

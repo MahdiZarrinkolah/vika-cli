@@ -2,7 +2,7 @@
 source: tests/snapshot_zod_test.rs
 expression: output
 ---
-export const ValidatedSchema = z.object({
+export const ValidatedSchema: z.ZodType<any> = z.object({
   email: z.string().email(),
   age: z.number().int().min(0).max(120),
   name: z.string().min(1).max(100).regex(/^^[A-Za-z]+$$/).optional(),

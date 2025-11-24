@@ -36,7 +36,8 @@ async fn test_all_http_methods() {
     let operations = parsed.operations_by_tag.get("test").unwrap();
     let api_result = generate_api_client(&parsed.openapi, operations, "test", &[]).unwrap();
 
-    let output: String = api_result.functions
+    let output: String = api_result
+        .functions
         .iter()
         .map(|f| f.content.clone())
         .collect::<Vec<_>>()
@@ -79,7 +80,8 @@ async fn test_query_parameters() {
     let operations = parsed.operations_by_tag.get("test").unwrap();
     let api_result = generate_api_client(&parsed.openapi, operations, "test", &[]).unwrap();
 
-    let output: String = api_result.functions
+    let output: String = api_result
+        .functions
         .iter()
         .map(|f| f.content.clone())
         .collect::<Vec<_>>()
@@ -120,7 +122,8 @@ async fn test_path_parameters() {
     let operations = parsed.operations_by_tag.get("test").unwrap();
     let api_result = generate_api_client(&parsed.openapi, operations, "test", &[]).unwrap();
 
-    let output: String = api_result.functions
+    let output: String = api_result
+        .functions
         .iter()
         .map(|f| f.content.clone())
         .collect::<Vec<_>>()
@@ -176,7 +179,8 @@ async fn test_request_bodies() {
     let operations = parsed.operations_by_tag.get("test").unwrap();
     let api_result = generate_api_client(&parsed.openapi, operations, "test", &[]).unwrap();
 
-    let output: String = api_result.functions
+    let output: String = api_result
+        .functions
         .iter()
         .map(|f| f.content.clone())
         .collect::<Vec<_>>()
@@ -233,7 +237,8 @@ async fn test_enum_parameters() {
     let operations = parsed.operations_by_tag.get("test").unwrap();
     let api_result = generate_api_client(&parsed.openapi, operations, "test", &[]).unwrap();
 
-    let output: String = api_result.functions
+    let output: String = api_result
+        .functions
         .iter()
         .map(|f| f.content.clone())
         .collect::<Vec<_>>()
@@ -293,7 +298,8 @@ async fn test_array_query_parameters() {
     let operations = parsed.operations_by_tag.get("test").unwrap();
     let api_result = generate_api_client(&parsed.openapi, operations, "test", &[]).unwrap();
 
-    let output: String = api_result.functions
+    let output: String = api_result
+        .functions
         .iter()
         .map(|f| f.content.clone())
         .collect::<Vec<_>>()
@@ -380,17 +386,17 @@ async fn test_error_responses() {
 
     // Combine function output with response types for snapshot
     let mut output_parts = Vec::new();
-    
+
     // Add response types
     for response_type in &api_result.response_types {
         output_parts.push(response_type.content.clone());
     }
-    
+
     // Add functions
     for func in &api_result.functions {
         output_parts.push(func.content.clone());
     }
-    
+
     let output = output_parts.join("\n\n");
     assert_snapshot!("error_responses", output);
 }

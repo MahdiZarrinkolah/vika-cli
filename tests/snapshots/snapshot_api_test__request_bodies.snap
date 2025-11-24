@@ -3,6 +3,8 @@ source: tests/snapshot_api_test.rs
 expression: output
 ---
 import { http } from "../http";
+import * as Test from "../../schemas/test";
+
 export const createTest = async (body: Test.User) => {
     const url = `/test`;
     return http.post(url, body);

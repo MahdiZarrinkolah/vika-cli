@@ -32,10 +32,10 @@ pub fn to_camel_case(s: &str) -> String {
 pub fn sanitize_property_name(name: &str) -> String {
     let first_char = name.chars().next();
     let needs_quotes = match first_char {
-        Some(c) if c.is_ascii_digit() => true,  // starts with number
+        Some(c) if c.is_ascii_digit() => true, // starts with number
         _ => name.contains(' ') || name.contains('-') && !name.starts_with('-'), // contains spaces or hyphens (but not negative numbers)
     };
-    
+
     if needs_quotes {
         format!("\"{}\"", name)
     } else {
@@ -145,7 +145,10 @@ mod tests {
 
     #[test]
     fn test_sanitize_property_name_with_spaces() {
-        assert_eq!(sanitize_property_name("Translation name"), "\"Translation name\"");
+        assert_eq!(
+            sanitize_property_name("Translation name"),
+            "\"Translation name\""
+        );
         assert_eq!(sanitize_property_name("user name"), "\"user name\"");
     }
 

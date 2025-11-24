@@ -2,6 +2,6 @@
 source: tests/snapshot_zod_test.rs
 expression: output
 ---
-export const OuterSchema = z.object({
+export const OuterSchema: z.ZodType<any> = z.object({
   inner: value: z.string(),,
 });

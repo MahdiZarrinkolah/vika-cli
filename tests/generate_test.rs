@@ -79,7 +79,7 @@ async fn test_full_generation_workflow() {
     // Generate API client
     let operations = parsed.operations_by_tag.get("users").unwrap();
     let api_functions = generate_api_client(&parsed.openapi, operations, "users", &[]).unwrap();
-    assert!(!api_functions.is_empty());
+    assert!(!api_functions.functions.is_empty());
 
     // Write files
     let output_dir = temp_dir.path().join("output");
@@ -89,7 +89,7 @@ async fn test_full_generation_workflow() {
     assert!(!schema_files.is_empty());
 
     let api_files =
-        write_api_client_with_options(&output_dir, "users", &api_functions, false, false).unwrap();
+        write_api_client_with_options(&output_dir, "users", &api_functions.functions, false, false).unwrap();
     assert!(!api_files.is_empty());
 
     // Verify files exist
