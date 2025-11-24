@@ -91,12 +91,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed enum schema name resolution in Zod schemas when referenced via `$ref` (e.g., `CurrencySchema` -> `CurrencyEnumSchema`, `ProviderKeyEnumSchema`)
 - Fixed enum schema generation for top-level enum schemas referenced in object properties and arrays
 - Added HEAD and OPTIONS HTTP method support to HTTP client template
+- Fixed CI test execution to run integration tests sequentially (`--test-threads=1`) to avoid directory conflicts in formatter tests
 
 ### Changed
 
 - Enhanced HTTP client template to support GET requests with body parameters
 - Improved enum schema reference resolution to check enum registry before falling back to schema name
 - Enum schemas are now used directly (without `z.lazy()`) since they don't have circular dependencies
+- Updated CI workflow to run integration tests sequentially for better reliability
+
+### Added
+
+- Comprehensive test suite with 141 passing tests across 15 test files
+- Integration tests for CLI entry point (`tests/integration_main_test.rs`) - 16 tests covering all commands and flags
+- Unit tests for progress reporter (`tests/progress_test.rs`) - 12 tests
+- Unit tests for cache manager (`tests/cache_test.rs`) - 6 tests
+- Unit tests for formatter (`tests/formatter_test.rs`) - 9 tests
+- Unit tests for module selector (`tests/module_selector_test.rs`) - 3 tests
+- Unit tests for swagger parser (`tests/swagger_parser_test.rs`) - 11 tests
+- Unit tests for schema resolver (`tests/schema_resolver_test.rs`) - 12 tests covering dependency resolution, circular detection, and schema classification
+- Enhanced config module tests with edge cases and validation scenarios
+- Test infrastructure improvements: added `assert_cmd` and `predicates` crates for CLI testing
 
 
 ## [Unreleased]
