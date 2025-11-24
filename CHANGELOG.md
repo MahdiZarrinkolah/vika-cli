@@ -114,6 +114,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test infrastructure improvements: added `assert_cmd` and `predicates` crates for CLI testing
 
 
+## [1.1.0] - 2025-11-24
+
+### Added
+
+- JSDoc comments generation for API client functions
+  - Operation descriptions from OpenAPI `description` and `summary` fields
+  - Parameter descriptions for path, query, and request body parameters
+  - Request body descriptions
+  - Properly formatted JSDoc blocks with `@param` tags
+
+### Fixed
+
+- Fixed function body extraction to preserve JSDoc comments that appear before `export const` declarations
+- Fixed TypeScript code formatter to preserve indentation in generated files
+- Fixed template rendering to correctly handle empty string descriptions
+
 ## [Unreleased]
 
 ### Planned
