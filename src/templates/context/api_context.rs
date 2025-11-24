@@ -17,7 +17,7 @@ pub struct ApiContext {
     pub function_body: String,
     pub module_name: String,
     pub params: String,
-    pub description: Option<String>,
+    pub description: String,
 }
 
 /// Parameter information for API functions.
@@ -60,7 +60,7 @@ impl ApiContext {
         function_body: String,
         module_name: String,
         params: String,
-        description: Option<String>,
+        description: String,
     ) -> Self {
         Self {
             function_name,

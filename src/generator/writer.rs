@@ -190,6 +190,8 @@ pub fn write_api_client_with_options(
             let lines: Vec<&str> = func.content.lines().collect();
             let mut func_lines = Vec::new();
             let mut in_function = false;
+            let mut jsdoc_lines = Vec::new();
+            let mut in_jsdoc = false;
             let mut function_name: Option<String> = None;
 
             for line in lines {
@@ -243,6 +245,16 @@ pub fn write_api_client_with_options(
                             .or_insert_with(|| (std::collections::HashSet::new(), Vec::new()));
                         other_imports.push(import_line.to_string());
                     }
+                } else if line.trim().starts_with("/**") {
+                    // Start of JSDoc comment
+                    in_jsdoc = true;
+                    jsdoc_lines.push(line);
+                } else if in_jsdoc {
+                    jsdoc_lines.push(line);
+                    if line.trim().ends_with("*/") {
+                        // End of JSDoc comment
+                        in_jsdoc = false;
+                    }
                 } else if line.trim().starts_with("export const ") {
                     // Extract function name to check for duplicates
                     // Find the function name after "export const " (13 chars)
@@ -259,12 +271,15 @@ pub fn write_api_client_with_options(
                             function_name = Some(name.clone());
                             if seen_functions.contains(&name) {
                                 // Skip duplicate function
+                                jsdoc_lines.clear();
                                 break;
                             }
                             seen_functions.insert(name);
                         }
                     }
                     in_function = true;
+                    // Add JSDoc comments before the function
+                    func_lines.extend(jsdoc_lines.drain(..));
                     func_lines.push(line);
                 } else if in_function {
                     func_lines.push(line);
@@ -502,14 +517,13 @@ export const http = {
 }
 
 fn format_typescript_code(code: &str) -> String {
-    // Basic formatting: ensure consistent spacing and remove extra blank lines
+    // Basic formatting: remove extra blank lines while preserving indentation
     let lines: Vec<&str> = code.lines().collect();
     let mut formatted = Vec::new();
     let mut last_was_empty = false;
 
     for line in lines {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
+        if line.trim().is_empty() {
             if !last_was_empty && !formatted.is_empty() {
                 formatted.push(String::new());
                 last_was_empty = true;
@@ -517,7 +531,7 @@ fn format_typescript_code(code: &str) -> String {
             continue;
         }
         last_was_empty = false;
-        formatted.push(trimmed.to_string());
+        formatted.push(line.to_string());
     }
 
     // Remove trailing empty lines

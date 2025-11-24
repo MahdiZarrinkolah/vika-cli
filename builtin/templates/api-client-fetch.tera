@@ -1,18 +1,13 @@
 import { http } from "{{ http_import }}";
 {% if type_imports %}{{ type_imports }}
-{% endif %}{% if description %}/**
- * {{ description }}
-{% if path_params or query_params or request_body %}
+{% endif %}{% set has_description = description %}{% set has_params = query_params or path_params or request_body %}{% if has_description or has_params %}/**
+{% if has_description %} * {{ description }}
+{% endif %}{% if has_params %}{% if has_description %}
  *{% endif %}{% for param in path_params %}
  * @param {{ param.name }}{% if param.description %} - {{ param.description }}{% endif %}{% endfor %}{% for param in query_params %}
  * @param {{ param.name }}{% if param.description %} - {{ param.description }}{% endif %}{% endfor %}{% if request_body %}
  * @param body{% if request_body.description %} - {{ request_body.description }}{% endif %}{% endif %}
- */
-{% elif path_params or query_params or request_body %}/**
-{% for param in path_params %}
- * @param {{ param.name }}{% if param.description %} - {{ param.description }}{% endif %}{% endfor %}{% for param in query_params %}
- * @param {{ param.name }}{% if param.description %} - {{ param.description }}{% endif %}{% endfor %}{% if request_body %}
- * @param body{% if request_body.description %} - {{ request_body.description }}{% endif %}{% endif %}
+{% endif %}
  */
 {% endif %}export const {{ function_name }} = async ({{ params }}){{ return_type }} => {
 {{ function_body }}

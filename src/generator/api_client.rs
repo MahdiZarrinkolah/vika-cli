@@ -552,10 +552,13 @@ fn generate_function_for_operation(
         .collect();
 
     // Generate content using template or fallback to string formatting
-    // Use description if available, otherwise fall back to summary
+    // Use description if available and non-empty, otherwise fall back to summary
+    // Note: Both description and summary are Option<String> in the OpenAPI crate
     let operation_description = operation.description.clone()
         .or_else(|| operation.summary.clone())
-        .filter(|s| !s.is_empty());
+        .filter(|s| !s.is_empty())
+        .unwrap_or_default();
+    
     let content = if let Some(engine) = template_engine {
         let context = ApiContext::new(
             func_name.clone(),
@@ -572,13 +575,14 @@ fn generate_function_for_operation(
             function_body.clone(),
             module_name.to_string(),
             params_str.clone(),
-            operation_description,
+            operation_description.clone(),
         );
+        
         engine.render(TemplateId::ApiClientFetch, &context)?
     } else {
         // Fallback to string formatting
-        let jsdoc = if let Some(desc) = &operation_description {
-            format!("/**\n * {}\n */\n", desc)
+        let jsdoc = if !operation_description.is_empty() {
+            format!("/**\n * {}\n */\n", operation_description)
         } else {
             String::new()
         };
