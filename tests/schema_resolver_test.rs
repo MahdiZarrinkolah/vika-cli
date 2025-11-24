@@ -1,7 +1,7 @@
+use std::fs;
+use tempfile::TempDir;
 use vika_cli::generator::schema_resolver::SchemaResolver;
 use vika_cli::generator::swagger_parser::fetch_and_parse_spec;
-use tempfile::TempDir;
-use std::fs;
 
 #[tokio::test]
 async fn test_schema_resolver_new() {
@@ -106,7 +106,7 @@ components:
     let mut resolver = SchemaResolver::new(parsed.openapi);
     let result = resolver.build_dependency_graph();
     assert!(result.is_ok());
-    
+
     let cycles = resolver.detect_circular_dependencies();
     assert!(cycles.is_ok());
 }
@@ -175,7 +175,7 @@ components:
 
     let mut resolver = SchemaResolver::new(parsed.openapi);
     resolver.build_dependency_graph().unwrap();
-    
+
     let result = resolver.resolve_with_dependencies("User");
     assert!(result.is_ok());
     let deps = result.unwrap();
@@ -216,7 +216,7 @@ components:
 
     let mut resolver = SchemaResolver::new(parsed.openapi);
     resolver.build_dependency_graph().unwrap();
-    
+
     let cycles = resolver.detect_circular_dependencies().unwrap();
     assert!(cycles.len() >= 0);
 }
@@ -264,11 +264,14 @@ components:
         .unwrap();
 
     let resolver = SchemaResolver::new(parsed.openapi);
-    
+
     if let Some(components) = &resolver.get_openapi().components {
         if let Some(openapiv3::ReferenceOr::Item(schema)) = components.schemas.get("StringSchema") {
             let schema_type = resolver.classify_schema(schema);
-            matches!(schema_type, vika_cli::generator::schema_resolver::SchemaType::Primitive(_));
+            matches!(
+                schema_type,
+                vika_cli::generator::schema_resolver::SchemaType::Primitive(_)
+            );
         }
     }
 }

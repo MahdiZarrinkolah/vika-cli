@@ -89,7 +89,8 @@ async fn test_full_generation_workflow() {
     assert!(!schema_files.is_empty());
 
     let api_files =
-        write_api_client_with_options(&output_dir, "users", &api_functions.functions, false, false).unwrap();
+        write_api_client_with_options(&output_dir, "users", &api_functions.functions, false, false)
+            .unwrap();
     assert!(!api_files.is_empty());
 
     // Verify files exist

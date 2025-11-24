@@ -1,8 +1,6 @@
-use vika_cli::generator::writer::{
-    ensure_directory, write_file_safe,
-};
-use tempfile::TempDir;
 use std::fs;
+use tempfile::TempDir;
+use vika_cli::generator::writer::{ensure_directory, write_file_safe};
 
 #[test]
 fn test_ensure_directory() {
@@ -45,5 +43,3 @@ fn test_write_file_safe_skip_unchanged() {
     let diff = mtime2.duration_since(mtime1).unwrap();
     assert!(diff.as_secs() < 2);
 }
-
-

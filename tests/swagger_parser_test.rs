@@ -1,10 +1,8 @@
-use tempfile::TempDir;
 use std::fs;
+use tempfile::TempDir;
 use vika_cli::generator::swagger_parser::{
-    extract_modules, extract_operations_by_tag, extract_schemas, 
-    fetch_and_parse_spec, fetch_and_parse_spec_with_cache,
-    get_schema_name_from_ref, resolve_ref,
-    filter_common_schemas
+    extract_modules, extract_operations_by_tag, extract_schemas, fetch_and_parse_spec,
+    fetch_and_parse_spec_with_cache, filter_common_schemas, get_schema_name_from_ref, resolve_ref,
 };
 
 #[tokio::test]
@@ -33,7 +31,7 @@ async fn test_fetch_and_parse_spec_local_json() {
 "#;
     let spec_path = temp_dir.path().join("spec.json");
     fs::write(&spec_path, spec_content).unwrap();
-    
+
     let result = fetch_and_parse_spec(spec_path.to_str().unwrap()).await;
     assert!(result.is_ok());
     let parsed = result.unwrap();
@@ -60,7 +58,7 @@ paths:
 "#;
     let spec_path = temp_dir.path().join("spec.yaml");
     fs::write(&spec_path, spec_content).unwrap();
-    
+
     let result = fetch_and_parse_spec(spec_path.to_str().unwrap()).await;
     assert!(result.is_ok());
     let parsed = result.unwrap();
@@ -71,7 +69,7 @@ paths:
 async fn test_fetch_and_parse_spec_with_cache() {
     let temp_dir = TempDir::new().unwrap();
     std::env::set_current_dir(temp_dir.path()).unwrap();
-    
+
     let spec_content = r#"
 {
   "openapi": "3.0.0",
@@ -81,11 +79,11 @@ async fn test_fetch_and_parse_spec_with_cache() {
 "#;
     let spec_path = temp_dir.path().join("spec.json");
     fs::write(&spec_path, spec_content).unwrap();
-    
+
     // Test without cache
     let result1 = fetch_and_parse_spec_with_cache(spec_path.to_str().unwrap(), false).await;
     assert!(result1.is_ok());
-    
+
     // Test with cache (should work the same for local files)
     let result2 = fetch_and_parse_spec_with_cache(spec_path.to_str().unwrap(), true).await;
     assert!(result2.is_ok());
@@ -95,7 +93,7 @@ async fn test_fetch_and_parse_spec_with_cache() {
 fn test_extract_modules_from_tags() {
     use openapiv3::OpenAPI;
     use serde_json;
-    
+
     let json = r#"
 {
   "openapi": "3.0.0",
@@ -118,7 +116,7 @@ fn test_extract_modules_from_tags() {
 fn test_extract_modules_from_operations() {
     use openapiv3::OpenAPI;
     use serde_json;
-    
+
     let json = r#"
 {
   "openapi": "3.0.0",
@@ -150,7 +148,7 @@ fn test_extract_modules_from_operations() {
 fn test_extract_operations_by_tag() {
     use openapiv3::OpenAPI;
     use serde_json;
-    
+
     let json = r#"
 {
   "openapi": "3.0.0",
@@ -179,7 +177,7 @@ fn test_extract_operations_by_tag() {
 fn test_extract_schemas() {
     use openapiv3::OpenAPI;
     use serde_json;
-    
+
     let json = r#"
 {
   "openapi": "3.0.0",
@@ -247,8 +245,10 @@ async fn test_resolve_ref() {
 "#;
     let spec_path = temp_dir.path().join("spec.json");
     fs::write(&spec_path, spec_content).unwrap();
-    
-    let parsed = fetch_and_parse_spec(spec_path.to_str().unwrap()).await.unwrap();
+
+    let parsed = fetch_and_parse_spec(spec_path.to_str().unwrap())
+        .await
+        .unwrap();
     let result = resolve_ref(&parsed.openapi, "#/components/schemas/User");
     assert!(result.is_ok());
 }
@@ -256,17 +256,22 @@ async fn test_resolve_ref() {
 #[test]
 fn test_filter_common_schemas() {
     use std::collections::HashMap;
-    
+
     let mut module_schemas = HashMap::new();
-    module_schemas.insert("users".to_string(), vec!["User".to_string(), "Common".to_string()]);
-    module_schemas.insert("products".to_string(), vec!["Product".to_string(), "Common".to_string()]);
+    module_schemas.insert(
+        "users".to_string(),
+        vec!["User".to_string(), "Common".to_string()],
+    );
+    module_schemas.insert(
+        "products".to_string(),
+        vec!["Product".to_string(), "Common".to_string()],
+    );
     module_schemas.insert("orders".to_string(), vec!["Order".to_string()]);
-    
+
     let selected = vec!["users".to_string(), "products".to_string()];
     let (_filtered, common) = filter_common_schemas(&module_schemas, &selected);
-    
+
     assert!(common.contains(&"Common".to_string()));
     assert!(!common.contains(&"User".to_string()));
     assert!(!common.contains(&"Product".to_string()));
 }
-

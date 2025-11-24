@@ -49,9 +49,9 @@ mod tests {
         let original_dir = env::current_dir().ok();
 
         let _ = env::set_current_dir(&temp_dir);
-        
+
         let config = Config::default();
-        
+
         // Save config should succeed
         if save_config(&config).is_ok() {
             // Load config should succeed and match

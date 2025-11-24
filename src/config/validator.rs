@@ -122,7 +122,7 @@ mod tests {
         let mut config = Config::default();
         config.schemas.output = "/home/user/schemas".to_string();
         config.apis.output = "/home/user/apis".to_string();
-        
+
         let result = validate_config(&config);
         assert!(result.is_ok());
     }
@@ -131,7 +131,7 @@ mod tests {
     fn test_validate_config_unsafe_schemas_path() {
         let mut config = Config::default();
         config.schemas.output = "/etc/schemas".to_string();
-        
+
         let result = validate_config(&config);
         assert!(result.is_err());
     }
@@ -140,7 +140,7 @@ mod tests {
     fn test_validate_config_unsafe_apis_path() {
         let mut config = Config::default();
         config.apis.output = "/usr/apis".to_string();
-        
+
         let result = validate_config(&config);
         assert!(result.is_err());
     }
