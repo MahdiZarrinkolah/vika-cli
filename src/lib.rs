@@ -20,6 +20,7 @@ pub mod error;
 pub mod formatter;
 pub mod generator;
 pub mod progress;
+pub mod templates;
 
 /// Main configuration structure for vika-cli.
 ///

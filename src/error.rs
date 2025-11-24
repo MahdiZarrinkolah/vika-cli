@@ -167,6 +167,9 @@ pub enum GenerationError {
 
     #[error("Invalid operation: {message}")]
     InvalidOperation { message: String },
+
+    #[error("Template error: {0}")]
+    Template(#[from] TemplateError),
 }
 
 #[derive(Debug, Error)]
@@ -179,6 +182,28 @@ pub enum ValidationError {
 
     #[error("Validation failed: {message}")]
     Failed { message: String },
+}
+
+#[derive(Debug, Error)]
+pub enum TemplateError {
+    #[error("Template not found: {name}")]
+    NotFound { name: String },
+
+    #[error("Failed to render template {name}: {message}")]
+    RenderFailed { name: String, message: String },
+
+    #[error("Invalid template syntax in {name}: {message}")]
+    InvalidSyntax { name: String, message: String },
+
+    #[error("Missing required context field {field} in template {name}")]
+    MissingContextField { name: String, field: String },
+
+    #[error("Failed to load template {name}: {source}")]
+    LoadFailed {
+        name: String,
+        #[source]
+        source: FileSystemError,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, VikaError>;

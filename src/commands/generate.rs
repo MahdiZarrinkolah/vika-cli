@@ -1,7 +1,7 @@
 use crate::config::loader::{load_config, save_config};
 use crate::config::validator::validate_config;
-use crate::error::Result;
-use crate::generator::api_client::generate_api_client_with_registry;
+use crate::error::{FileSystemError, Result};
+use crate::formatter::FormatterManager;
 use crate::generator::module_selector::select_modules;
 use crate::generator::swagger_parser::filter_common_schemas;
 use crate::generator::ts_typings::generate_typings_with_registry;
@@ -9,7 +9,7 @@ use crate::generator::writer::{write_api_client_with_options, write_schemas_with
 use crate::generator::zod_schema::generate_zod_schemas_with_registry;
 use crate::progress::ProgressReporter;
 use colored::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tabled::{Table, Tabled};
 
 #[derive(Tabled)]
@@ -188,17 +188,24 @@ pub async fn run(
             .cloned()
             .unwrap_or_default();
 
+        // Initialize template engine
+        let project_root = std::env::current_dir().ok();
+        let template_engine = crate::templates::engine::TemplateEngine::new(
+            project_root.as_deref()
+        )?;
+
         // Shared enum registry to ensure consistent naming between TypeScript and Zod
         let mut shared_enum_registry = std::collections::HashMap::new();
 
         // Generate TypeScript typings
         let types = if !module_schema_names.is_empty() {
-            generate_typings_with_registry(
+            crate::generator::ts_typings::generate_typings_with_registry_and_engine(
                 &parsed.openapi,
                 &parsed.schemas,
                 &module_schema_names,
                 &mut shared_enum_registry,
                 &common_schemas,
+                Some(&template_engine),
             )?
         } else {
             Vec::new()
@@ -206,24 +213,26 @@ pub async fn run(
 
         // Generate Zod schemas (using same registry)
         let zod_schemas = if !module_schema_names.is_empty() {
-            generate_zod_schemas_with_registry(
+            crate::generator::zod_schema::generate_zod_schemas_with_registry_and_engine(
                 &parsed.openapi,
                 &parsed.schemas,
                 &module_schema_names,
                 &mut shared_enum_registry,
                 &common_schemas,
+                Some(&template_engine),
             )?
         } else {
             Vec::new()
         };
 
         // Generate API client (using same enum registry as schemas)
-        let api_result = generate_api_client_with_registry(
+        let api_result = crate::generator::api_client::generate_api_client_with_registry_and_engine(
             &parsed.openapi,
             &operations,
             module,
             &common_schemas,
             &mut shared_enum_registry,
+            Some(&template_engine),
         )?;
 
         // Combine response types with schema types
@@ -259,6 +268,83 @@ pub async fn run(
         ));
     }
 
+    // Format all generated files with prettier/biome if available
+    let mut all_generated_files = Vec::new();
+    let schemas_dir = PathBuf::from(&config.schemas.output);
+    let apis_dir = PathBuf::from(&config.apis.output);
+    
+    // Collect schema files recursively
+    if schemas_dir.exists() {
+        collect_ts_files(&schemas_dir, &mut all_generated_files)?;
+    }
+    
+    // Collect API files recursively
+    if apis_dir.exists() {
+        collect_ts_files(&apis_dir, &mut all_generated_files)?;
+    }
+
+    // Format files if formatter is available
+    // Check for formatter in output directory first (where .prettierrc might be)
+    if !all_generated_files.is_empty() {
+        // Find the common parent directory (where config files are likely located)
+        // schemas_dir is "temp/src/schemas", so parent is "temp/src", parent of that is "temp"
+        let output_base = schemas_dir.parent()
+            .and_then(|p| p.parent())
+            .or_else(|| apis_dir.parent().and_then(|p| p.parent()));
+        
+        let formatter = if let Some(base_dir) = output_base {
+            // Check in the base directory (e.g., temp/) where .prettierrc might be
+            FormatterManager::detect_formatter_from_dir(base_dir)
+                .or_else(|| FormatterManager::detect_formatter())
+        } else {
+            FormatterManager::detect_formatter()
+        };
+        
+        if let Some(formatter) = formatter {
+            progress.start_spinner("Formatting generated files...");
+            // Change to output base directory so prettier can find config files
+            let original_dir = std::env::current_dir().map_err(|e| FileSystemError::ReadFileFailed {
+                path: ".".to_string(),
+                source: e,
+            })?;
+            
+            if let Some(output_base) = output_base {
+                std::env::set_current_dir(output_base).map_err(|e| FileSystemError::ReadFileFailed {
+                    path: output_base.display().to_string(),
+                    source: e,
+                })?;
+                
+                // Convert paths to relative paths from output base directory
+                let relative_files: Vec<PathBuf> = all_generated_files
+                    .iter()
+                    .filter_map(|p| p.strip_prefix(output_base).ok().map(|p| p.to_path_buf()))
+                    .collect();
+                
+                if !relative_files.is_empty() {
+                    let result = FormatterManager::format_files(&relative_files, formatter);
+                    
+                    // Restore original directory
+                    std::env::set_current_dir(&original_dir).map_err(|e| FileSystemError::ReadFileFailed {
+                        path: original_dir.display().to_string(),
+                        source: e,
+                    })?;
+                    
+                    result?;
+                } else {
+                    // Restore original directory
+                    std::env::set_current_dir(&original_dir).map_err(|e| FileSystemError::ReadFileFailed {
+                        path: original_dir.display().to_string(),
+                        source: e,
+                    })?;
+                }
+            } else {
+                // Fallback: format with absolute paths
+                FormatterManager::format_files(&all_generated_files, formatter)?;
+            }
+            progress.finish_spinner("Files formatted");
+        }
+    }
+
     println!();
     progress.success(&format!("Successfully generated {} files!", total_files));
     println!();
@@ -284,5 +370,26 @@ pub async fn run(
         println!();
     }
 
+    Ok(())
+}
+
+fn collect_ts_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    if dir.is_dir() {
+        for entry in std::fs::read_dir(dir).map_err(|e| FileSystemError::ReadFileFailed {
+            path: dir.display().to_string(),
+            source: e,
+        })? {
+            let entry = entry.map_err(|e| FileSystemError::ReadFileFailed {
+                path: dir.display().to_string(),
+                source: e,
+            })?;
+            let path = entry.path();
+            if path.is_dir() {
+                collect_ts_files(&path, files)?;
+            } else if path.extension().and_then(|s| s.to_str()) == Some("ts") {
+                files.push(path);
+            }
+        }
+    }
     Ok(())
 }

@@ -6,6 +6,9 @@ use crate::generator::swagger_parser::{
 };
 use crate::generator::ts_typings::TypeScriptType;
 use crate::generator::utils::{sanitize_module_name, to_camel_case, to_pascal_case};
+use crate::templates::engine::TemplateEngine;
+use crate::templates::registry::TemplateId;
+use crate::templates::context::{ApiContext, Parameter as ApiParameter, RequestBody, Response as ApiResponse};
 use openapiv3::OpenAPI;
 use openapiv3::{Operation, Parameter, ReferenceOr, SchemaKind, Type};
 
@@ -28,6 +31,7 @@ pub struct ParameterInfo {
     pub array_item_type: Option<String>,
     pub style: Option<String>,
     pub explode: Option<bool>,
+    pub description: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -75,6 +79,24 @@ pub fn generate_api_client_with_registry(
     common_schemas: &[String],
     enum_registry: &mut std::collections::HashMap<String, String>,
 ) -> Result<ApiGenerationResult> {
+    generate_api_client_with_registry_and_engine(
+        openapi,
+        operations,
+        module_name,
+        common_schemas,
+        enum_registry,
+        None,
+    )
+}
+
+pub fn generate_api_client_with_registry_and_engine(
+    openapi: &OpenAPI,
+    operations: &[OperationInfo],
+    module_name: &str,
+    common_schemas: &[String],
+    enum_registry: &mut std::collections::HashMap<String, String>,
+    template_engine: Option<&TemplateEngine>,
+) -> Result<ApiGenerationResult> {
     let mut functions = Vec::new();
     let mut response_types = Vec::new();
 
@@ -85,6 +107,7 @@ pub fn generate_api_client_with_registry(
             module_name,
             common_schemas,
             enum_registry,
+            template_engine,
         )?;
         functions.push(result.function);
         response_types.extend(result.response_types);
@@ -107,6 +130,7 @@ fn generate_function_for_operation(
     module_name: &str,
     common_schemas: &[String],
     enum_registry: &mut std::collections::HashMap<String, String>,
+    template_engine: Option<&TemplateEngine>,
 ) -> Result<FunctionGenerationResult> {
     let operation = &op_info.operation;
     let method = op_info.method.to_lowercase();
@@ -125,7 +149,7 @@ fn generate_function_for_operation(
     let query_params = extract_query_parameters(openapi, operation, enum_registry)?;
 
     // Extract request body
-    let request_body = extract_request_body(openapi, operation)?;
+    let request_body_info = extract_request_body(openapi, operation)?;
 
     // Extract all responses (success + error)
     let all_responses = extract_all_responses(openapi, operation)?;
@@ -182,7 +206,7 @@ fn generate_function_for_operation(
     }
 
     // Add request body (check if it's in common schemas)
-    if let Some(body_type) = &request_body {
+    if let Some((body_type, _)) = &request_body_info {
         // Don't qualify "any" type with namespace
         if body_type == "any" {
             params.push("body: any".to_string());
@@ -298,7 +322,7 @@ fn generate_function_for_operation(
         response_type.clone()
     };
 
-    if let Some(_body_type) = &request_body {
+    if let Some((_body_type, _)) = &request_body_info {
         body_lines.push(format!("    return http.{}(url, body);", http_method));
     } else {
         body_lines.push(format!(
@@ -334,7 +358,7 @@ fn generate_function_for_operation(
     }
 
     // Check if request body type needs import
-    if let Some(body_type) = &request_body {
+    if let Some((body_type, _)) = &request_body_info {
         if body_type != "any" {
             if common_schemas.contains(body_type) {
                 needs_common_import = true;
@@ -490,29 +514,98 @@ fn generate_function_for_operation(
 
     let function_body = body_lines.join("\n");
 
-    // Remove inline type definitions - they'll be in types.ts
-    // Separate imports from function definition
-    let content = if params_str.is_empty() {
-        format!(
-            "import {{ http }} from \"{}\";\n{}{}export const {} = async (){} => {{\n{}\n}};",
-            http_import,
-            type_imports,
-            if !type_imports.is_empty() { "\n" } else { "" },
-            func_name,
-            return_type,
-            function_body
-        )
+    // Build API context for template
+    let api_path_params: Vec<ApiParameter> = path_params
+        .iter()
+        .map(|p| {
+            let param_type = match &p.param_type {
+                ParameterType::Enum(enum_name) => enum_name.clone(),
+                ParameterType::Array(item_type) => format!("{}[]", item_type),
+                ParameterType::String => "string".to_string(),
+                ParameterType::Number => "number".to_string(),
+                ParameterType::Integer => "number".to_string(),
+                ParameterType::Boolean => "boolean".to_string(),
+            };
+            ApiParameter::new(p.name.clone(), param_type, false, p.description.clone())
+        })
+        .collect();
+
+    let api_query_params: Vec<ApiParameter> = query_params
+        .iter()
+        .map(|p| {
+            let param_type = match &p.param_type {
+                ParameterType::Enum(enum_name) => enum_name.clone(),
+                ParameterType::Array(item_type) => format!("{}[]", item_type),
+                ParameterType::String => "string".to_string(),
+                ParameterType::Number => "number".to_string(),
+                ParameterType::Integer => "number".to_string(),
+                ParameterType::Boolean => "boolean".to_string(),
+            };
+            ApiParameter::new(p.name.clone(), param_type, true, p.description.clone())
+        })
+        .collect();
+
+    let api_request_body = request_body_info.as_ref().map(|(rb_type, rb_desc)| RequestBody::new(rb_type.clone(), rb_desc.clone()));
+    let api_responses: Vec<ApiResponse> = all_responses
+        .iter()
+        .map(|r| ApiResponse::new(r.status_code, r.body_type.clone()))
+        .collect();
+
+    // Generate content using template or fallback to string formatting
+    // Use description if available, otherwise fall back to summary
+    let operation_description = operation.description.clone()
+        .or_else(|| operation.summary.clone())
+        .filter(|s| !s.is_empty());
+    let content = if let Some(engine) = template_engine {
+        let context = ApiContext::new(
+            func_name.clone(),
+            operation.operation_id.clone(),
+            method.clone(),
+            op_info.path.clone(),
+            api_path_params,
+            api_query_params,
+            api_request_body,
+            api_responses,
+            type_imports.clone(),
+            http_import.to_string(),
+            return_type.clone(),
+            function_body.clone(),
+            module_name.to_string(),
+            params_str.clone(),
+            operation_description,
+        );
+        engine.render(TemplateId::ApiClientFetch, &context)?
     } else {
-        format!(
-            "import {{ http }} from \"{}\";\n{}{}export const {} = async ({}){} => {{\n{}\n}};",
-            http_import,
-            type_imports,
-            if !type_imports.is_empty() { "\n" } else { "" },
-            func_name,
-            params_str,
-            return_type,
-            function_body
-        )
+        // Fallback to string formatting
+        let jsdoc = if let Some(desc) = &operation_description {
+            format!("/**\n * {}\n */\n", desc)
+        } else {
+            String::new()
+        };
+        if params_str.is_empty() {
+            format!(
+                "import {{ http }} from \"{}\";\n{}{}{}export const {} = async (){} => {{\n{}\n}};",
+                http_import,
+                type_imports,
+                if !type_imports.is_empty() { "\n" } else { "" },
+                jsdoc,
+                func_name,
+                return_type,
+                function_body
+            )
+        } else {
+            format!(
+                "import {{ http }} from \"{}\";\n{}{}{}export const {} = async ({}){} => {{\n{}\n}};",
+                http_import,
+                type_imports,
+                if !type_imports.is_empty() { "\n" } else { "" },
+                jsdoc,
+                func_name,
+                params_str,
+                return_type,
+                function_body
+            )
+        }
     };
 
     Ok(FunctionGenerationResult {
@@ -658,6 +751,7 @@ fn extract_parameter_info(
     enum_registry: &mut std::collections::HashMap<String, String>,
 ) -> Result<Option<ParameterInfo>> {
     let name = parameter_data.name.clone();
+    let description = parameter_data.description.clone();
 
     // Get schema from parameter
     let schema = match &parameter_data.format {
@@ -713,6 +807,7 @@ fn extract_parameter_info(
                                 array_item_type: None,
                                 style: Some("simple".to_string()), // default for path
                                 explode: Some(false),              // default for path
+                                description: description.clone(),
                             }))
                         } else {
                             Ok(Some(ParameterInfo {
@@ -724,6 +819,7 @@ fn extract_parameter_info(
                                 array_item_type: None,
                                 style: Some("simple".to_string()),
                                 explode: Some(false),
+                                description: description.clone(),
                             }))
                         }
                     }
@@ -736,6 +832,7 @@ fn extract_parameter_info(
                         array_item_type: None,
                         style: Some("simple".to_string()),
                         explode: Some(false),
+                        description: description.clone(),
                     })),
                     Type::Integer(_) => Ok(Some(ParameterInfo {
                         name,
@@ -746,6 +843,7 @@ fn extract_parameter_info(
                         array_item_type: None,
                         style: Some("simple".to_string()),
                         explode: Some(false),
+                        description: description.clone(),
                     })),
                     Type::Boolean(_) => Ok(Some(ParameterInfo {
                         name,
@@ -756,6 +854,7 @@ fn extract_parameter_info(
                         array_item_type: None,
                         style: Some("simple".to_string()),
                         explode: Some(false),
+                        description: description.clone(),
                     })),
                     Type::Object(_) => Ok(Some(ParameterInfo {
                         name,
@@ -766,6 +865,7 @@ fn extract_parameter_info(
                         array_item_type: None,
                         style: Some("simple".to_string()),
                         explode: Some(false),
+                        description: description.clone(),
                     })),
                     Type::Array(array) => {
                         let item_type = if let Some(items) = &array.items {
@@ -804,6 +904,7 @@ fn extract_parameter_info(
                             array_item_type: Some(item_type),
                             style: Some("form".to_string()), // default for query arrays
                             explode: Some(true),             // default for query arrays
+                            description: description.clone(),
                         }))
                     }
                 }
@@ -817,6 +918,7 @@ fn extract_parameter_info(
                 array_item_type: None,
                 style: Some("simple".to_string()),
                 explode: Some(false),
+                description: description.clone(),
             })),
         }
     } else {
@@ -830,26 +932,28 @@ fn extract_parameter_info(
             array_item_type: None,
             style: Some("simple".to_string()),
             explode: Some(false),
+            description: description.clone(),
         }))
     }
 }
 
-fn extract_request_body(openapi: &OpenAPI, operation: &Operation) -> Result<Option<String>> {
+fn extract_request_body(openapi: &OpenAPI, operation: &Operation) -> Result<Option<(String, Option<String>)>> {
     if let Some(request_body) = &operation.request_body {
         match request_body {
             ReferenceOr::Reference { reference } => {
                 // Resolve request body reference
                 match resolve_request_body_ref(openapi, reference) {
                     Ok(ReferenceOr::Item(body)) => {
+                        let description = body.description.clone();
                         if let Some(json_media) = body.content.get("application/json") {
                             if let Some(schema_ref) = &json_media.schema {
                                 match schema_ref {
                                     ReferenceOr::Reference { reference } => {
                                         if let Some(ref_name) = get_schema_name_from_ref(reference)
                                         {
-                                            Ok(Some(to_pascal_case(&ref_name)))
+                                            Ok(Some((to_pascal_case(&ref_name), description)))
                                         } else {
-                                            Ok(Some("any".to_string()))
+                                            Ok(Some(("any".to_string(), description)))
                                         }
                                     }
                                     ReferenceOr::Item(_schema) => {
@@ -858,35 +962,36 @@ fn extract_request_body(openapi: &OpenAPI, operation: &Operation) -> Result<Opti
                                         // recursive type generation at this point, which is complex.
                                         // For now, we use 'any' as a fallback. This can be enhanced
                                         // to generate inline types if needed.
-                                        Ok(Some("any".to_string()))
+                                        Ok(Some(("any".to_string(), description)))
                                     }
                                 }
                             } else {
-                                Ok(Some("any".to_string()))
+                                Ok(Some(("any".to_string(), description)))
                             }
                         } else {
-                            Ok(Some("any".to_string()))
+                            Ok(Some(("any".to_string(), description)))
                         }
                     }
                     Ok(ReferenceOr::Reference { .. }) => {
                         // Nested reference - return any
-                        Ok(Some("any".to_string()))
+                        Ok(Some(("any".to_string(), None)))
                     }
                     Err(_) => {
                         // Reference resolution failed - return any
-                        Ok(Some("any".to_string()))
+                        Ok(Some(("any".to_string(), None)))
                     }
                 }
             }
             ReferenceOr::Item(body) => {
+                let description = body.description.clone();
                 if let Some(json_media) = body.content.get("application/json") {
                     if let Some(schema_ref) = &json_media.schema {
                         match schema_ref {
                             ReferenceOr::Reference { reference } => {
                                 if let Some(ref_name) = get_schema_name_from_ref(reference) {
-                                    Ok(Some(to_pascal_case(&ref_name)))
+                                    Ok(Some((to_pascal_case(&ref_name), description)))
                                 } else {
-                                    Ok(Some("any".to_string()))
+                                    Ok(Some(("any".to_string(), description)))
                                 }
                             }
                             ReferenceOr::Item(_schema) => {
@@ -895,14 +1000,14 @@ fn extract_request_body(openapi: &OpenAPI, operation: &Operation) -> Result<Opti
                                 // recursive type generation at this point, which is complex.
                                 // For now, we use 'any' as a fallback. This can be enhanced
                                 // to generate inline types if needed.
-                                Ok(Some("any".to_string()))
+                                Ok(Some(("any".to_string(), description)))
                             }
                         }
                     } else {
-                        Ok(Some("any".to_string()))
+                        Ok(Some(("any".to_string(), description)))
                     }
                 } else {
-                    Ok(Some("any".to_string()))
+                    Ok(Some(("any".to_string(), description)))
                 }
             }
         }

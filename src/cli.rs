@@ -51,4 +51,17 @@ pub enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Manage templates
+    Templates {
+        #[command(subcommand)]
+        command: TemplateCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TemplateCommands {
+    /// List all available templates
+    List,
+    /// Initialize templates directory with built-in templates
+    Init,
 }

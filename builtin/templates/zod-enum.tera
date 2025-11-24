@@ -1,0 +1,2 @@
+export const {{ schema_name }}Schema = z.enum([{% for value in enum_values %}"{{ value }}"{% if not loop.last %}, {% endif %}{% endfor %}]);
+

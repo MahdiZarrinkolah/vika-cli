@@ -1,0 +1,6 @@
+{% if description %}/**
+ * {{ description }}
+ */
+{% endif %}
+export const {{ schema_name }}Schema{% if needs_type_annotation %}: z.ZodType<any>{% endif %} = {{ zod_expr }};
+

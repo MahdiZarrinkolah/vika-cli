@@ -1,0 +1,13 @@
+{% if description %}/**
+ * {{ description }}
+ */
+{% endif %}
+export interface {{ type_name }} {
+{% for field in fields %}
+{% if field.description %}  /**
+   * {{ field.description }}
+   */
+{% endif %}  {{ field.name }}{% if field.optional %}?{% endif %}: {{ field.type_name }};
+{% endfor %}
+}
+

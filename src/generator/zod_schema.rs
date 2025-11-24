@@ -1,6 +1,9 @@
 use crate::error::Result;
 use crate::generator::swagger_parser::{get_schema_name_from_ref, resolve_ref};
 use crate::generator::utils::{sanitize_property_name, to_pascal_case};
+use crate::templates::engine::TemplateEngine;
+use crate::templates::registry::TemplateId;
+use crate::templates::context::ZodContext;
 use openapiv3::{OpenAPI, ReferenceOr, Schema, SchemaKind, Type};
 use std::collections::HashMap;
 
@@ -29,6 +32,24 @@ pub fn generate_zod_schemas_with_registry(
     enum_registry: &mut std::collections::HashMap<String, String>,
     common_schemas: &[String],
 ) -> Result<Vec<ZodSchema>> {
+    generate_zod_schemas_with_registry_and_engine(
+        openapi,
+        schemas,
+        schema_names,
+        enum_registry,
+        common_schemas,
+        None,
+    )
+}
+
+pub fn generate_zod_schemas_with_registry_and_engine(
+    openapi: &OpenAPI,
+    schemas: &HashMap<String, Schema>,
+    schema_names: &[String],
+    enum_registry: &mut std::collections::HashMap<String, String>,
+    common_schemas: &[String],
+    template_engine: Option<&TemplateEngine>,
+) -> Result<Vec<ZodSchema>> {
     let mut zod_schemas = Vec::new();
     let mut processed = std::collections::HashSet::new();
 
@@ -43,6 +64,7 @@ pub fn generate_zod_schemas_with_registry(
                 enum_registry,
                 None,
                 common_schemas,
+                template_engine,
             )?;
         }
     }
@@ -60,6 +82,7 @@ fn generate_zod_for_schema(
     enum_registry: &mut std::collections::HashMap<String, String>,
     parent_schema_name: Option<&str>,
     common_schemas: &[String],
+    template_engine: Option<&TemplateEngine>,
 ) -> Result<()> {
     if processed.contains(name) {
         return Ok(());
@@ -77,6 +100,7 @@ fn generate_zod_for_schema(
         None,
         parent_schema_name,
         common_schemas,
+        template_engine,
     )?;
 
     // Handle enums at top level (when schema itself is an enum)
@@ -118,8 +142,14 @@ fn generate_zod_for_schema(
                     enum_registry.insert(format!("schema:{}", name), enum_name.clone());
                 }
 
-                let enum_schema = generate_enum_zod(&enum_name, &enum_values);
-                zod_schemas.push(enum_schema);
+                if let Some(engine) = template_engine {
+                    let context = ZodContext::enum_schema(enum_name.clone(), enum_values.clone());
+                    let content = engine.render(TemplateId::ZodEnum, &context)?;
+                    zod_schemas.push(ZodSchema { content });
+                } else {
+                    let enum_schema = generate_enum_zod(&enum_name, &enum_values);
+                    zod_schemas.push(enum_schema);
+                }
                 return Ok(());
             }
         }
@@ -131,20 +161,41 @@ fn generate_zod_for_schema(
         if let SchemaKind::Type(Type::Object(obj)) = &schema.schema_kind {
             if obj.properties.is_empty() {
                 // Empty object with additionalProperties - use z.record() directly
-                zod_schemas.push(ZodSchema {
-                    content: format!(
-                        "export const {}Schema: z.ZodType<any> = z.record(z.string(), z.any());",
-                        schema_name
-                    ),
-                });
+                if let Some(engine) = template_engine {
+                    let description = schema.schema_data.description.as_ref().map(|s| s.clone());
+                    let context = ZodContext::schema_with_annotation(schema_name.clone(), "z.record(z.string(), z.any())".to_string(), description);
+                    let content = engine.render(TemplateId::ZodSchema, &context)?;
+                    zod_schemas.push(ZodSchema { content });
+                } else {
+                    zod_schemas.push(ZodSchema {
+                        content: format!(
+                            "export const {}Schema: z.ZodType<any> = z.record(z.string(), z.any());",
+                            schema_name
+                        ),
+                    });
+                }
             } else {
                 // Regular object with properties
-                zod_schemas.push(ZodSchema {
-                    content: format!(
-                        "export const {}Schema: z.ZodType<any> = z.object({{\n{}\n}});",
-                        schema_name, zod_def
-                    ),
-                });
+                // Check if this schema has circular references (if it's already processed, it might be circular)
+                let has_circular_ref = zod_def.contains("z.lazy");
+                if let Some(engine) = template_engine {
+                    let description = schema.schema_data.description.as_ref().map(|s| s.clone());
+                    let zod_expr = format!("z.object({{\n{}\n}})", zod_def);
+                    let context = if has_circular_ref {
+                        ZodContext::schema_with_annotation(schema_name.clone(), zod_expr, description)
+                    } else {
+                        ZodContext::schema(schema_name.clone(), zod_expr, description)
+                    };
+                    let content = engine.render(TemplateId::ZodSchema, &context)?;
+                    zod_schemas.push(ZodSchema { content });
+                } else {
+                    zod_schemas.push(ZodSchema {
+                        content: format!(
+                            "export const {}Schema: z.ZodType<any> = z.object({{\n{}\n}});",
+                            schema_name, zod_def
+                        ),
+                    });
+                }
             }
         }
     }
@@ -163,6 +214,7 @@ fn schema_to_zod(
     context: Option<(&str, &str)>, // (property_name, parent_schema_name)
     current_schema_name: Option<&str>, // Current schema being processed (for enum naming context)
     common_schemas: &[String],
+    template_engine: Option<&TemplateEngine>,
 ) -> Result<String> {
     // Prevent infinite recursion with a reasonable depth limit
     if indent > 100 {
@@ -213,15 +265,24 @@ fn schema_to_zod(
                                 enum_registry.insert(context_key.clone(), existing_name.clone());
 
                                 // Check if enum schema has already been generated
+                                // Check for both "export const {name}Schema" and just "{name}Schema" patterns
                                 let schema_already_generated = zod_schemas.iter().any(|s| {
-                                    s.content.contains(&format!("{}Schema", existing_name))
+                                    let schema_name_pattern = format!("{}Schema", existing_name);
+                                    s.content.contains(&format!("export const {}", schema_name_pattern))
+                                        || s.content.contains(&schema_name_pattern)
                                 });
 
                                 // If not generated yet, generate it now
                                 if !schema_already_generated {
-                                    let enum_schema =
-                                        generate_enum_zod(&existing_name, &enum_values);
-                                    zod_schemas.push(enum_schema);
+                                    if let Some(engine) = template_engine {
+                                        let context = ZodContext::enum_schema(existing_name.clone(), enum_values.clone());
+                                        let content = engine.render(TemplateId::ZodEnum, &context)?;
+                                        zod_schemas.push(ZodSchema { content });
+                                    } else {
+                                        let enum_schema =
+                                            generate_enum_zod(&existing_name, &enum_values);
+                                        zod_schemas.push(enum_schema);
+                                    }
                                 }
 
                                 // Enums don't need z.lazy(), use directly
@@ -286,8 +347,14 @@ fn schema_to_zod(
                             enum_registry.insert(enum_key.clone(), enum_name.clone());
 
                             // Generate enum schema
-                            let enum_schema = generate_enum_zod(&enum_name, &enum_values);
-                            zod_schemas.push(enum_schema);
+                            if let Some(engine) = template_engine {
+                                let context = ZodContext::enum_schema(enum_name.clone(), enum_values.clone());
+                                let content = engine.render(TemplateId::ZodEnum, &context)?;
+                                zod_schemas.push(ZodSchema { content });
+                            } else {
+                                let enum_schema = generate_enum_zod(&enum_name, &enum_values);
+                                zod_schemas.push(enum_schema);
+                            }
 
                             // Enums don't need z.lazy(), use directly
                             return Ok(format!("{}{}Schema", indent_str, enum_name));
@@ -422,6 +489,7 @@ fn schema_to_zod(
                                                     enum_registry,
                                                     None,
                                                     common_schemas,
+                                                    template_engine,
                                                 )?;
                                                 format!(
                                                     "{}z.lazy(() => {})",
@@ -438,6 +506,7 @@ fn schema_to_zod(
                                                     None,
                                                     current_schema_name,
                                                     common_schemas,
+                                                    template_engine,
                                                 )?
                                             }
                                         } else {
@@ -465,6 +534,7 @@ fn schema_to_zod(
                                         None,
                                         current_schema_name,
                                         common_schemas,
+                                        template_engine,
                                     )?;
                                     // Wrap in z.object()
                                     format!(
@@ -482,6 +552,7 @@ fn schema_to_zod(
                                         None,
                                         current_schema_name,
                                         common_schemas,
+                                        template_engine,
                                     )?
                                 }
                             }
@@ -556,6 +627,7 @@ fn schema_to_zod(
                                                             enum_registry,
                                                             Some(&parent_schema_for_props),
                                                             common_schemas,
+                                                            template_engine,
                                                         )?;
                                                     }
                                                 } else {
@@ -581,12 +653,17 @@ fn schema_to_zod(
                                                                         .collect();
                                                                 if !enum_values.is_empty() {
                                                                     enum_values.sort();
-                                                                    let enum_schema =
-                                                                        generate_enum_zod(
+                                                                    if let Some(engine) = template_engine {
+                                                                        let context = ZodContext::enum_schema(enum_name.clone(), enum_values.clone());
+                                                                        let content = engine.render(TemplateId::ZodEnum, &context)?;
+                                                                        zod_schemas.push(ZodSchema { content });
+                                                                    } else {
+                                                                        let enum_schema = generate_enum_zod(
                                                                             &enum_name,
                                                                             &enum_values,
                                                                         );
-                                                                    zod_schemas.push(enum_schema);
+                                                                        zod_schemas.push(enum_schema);
+                                                                    }
                                                                 }
                                                             }
                                                         }
@@ -616,6 +693,7 @@ fn schema_to_zod(
                                                         enum_registry,
                                                         Some(&parent_schema_for_props),
                                                         common_schemas,
+                                                        template_engine,
                                                     )?;
                                                 }
                                             }
@@ -664,6 +742,7 @@ fn schema_to_zod(
                                     Some((prop_name, &parent_schema_for_props)),
                                     current_schema_name,
                                     common_schemas,
+                                    template_engine,
                                 )?,
                             };
 
@@ -739,6 +818,7 @@ fn schema_to_zod(
                             None,
                             current_schema_name,
                             common_schemas,
+                            template_engine,
                         )?;
                         variant_schemas.push(item_zod);
                     }
@@ -781,6 +861,7 @@ fn schema_to_zod(
                             None,
                             current_schema_name,
                             common_schemas,
+                            template_engine,
                         )?;
                         all_schemas.push(item_zod);
                     }
@@ -843,6 +924,7 @@ fn schema_to_zod(
                             None,
                             current_schema_name,
                             common_schemas,
+                            template_engine,
                         )?;
                         variant_schemas.push(item_zod);
                     }

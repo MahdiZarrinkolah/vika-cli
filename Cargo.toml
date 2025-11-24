@@ -37,6 +37,8 @@ indicatif = "0.17"
 tabled = "0.14"
 insta = "1.38"
 tempfile = "3.10"
+tera = "1"
+rust-embed = { version = "8", features = ["include-exclude"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
