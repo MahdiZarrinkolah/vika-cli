@@ -1,8 +1,8 @@
 import { http } from "{{ http_import }}";
 {% if type_imports %}{{ type_imports }}
-{% endif %}{% set has_description = description %}{% set has_params = query_params or path_params or request_body %}{% if has_description or has_params %}/**
-{% if has_description %} * {{ description }}
-{% endif %}{% if has_params %}{% if has_description %}
+{% endif %}{% if description or path_params or query_params or request_body %}/**
+{% if description %} * {{ description }}
+{% endif %}{% if path_params or query_params or request_body %}{% if description %}
  *{% endif %}{% for param in path_params %}
  * @param {{ param.name }}{% if param.description %} - {{ param.description }}{% endif %}{% endfor %}{% for param in query_params %}
  * @param {{ param.name }}{% if param.description %} - {{ param.description }}{% endif %}{% endfor %}{% if request_body %}

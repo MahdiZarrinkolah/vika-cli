@@ -2,7 +2,7 @@ use crate::config::loader::load_config;
 use crate::config::validator::validate_config;
 use crate::error::{FileSystemError, Result};
 use crate::formatter::FormatterManager;
-use crate::generator::swagger_parser::{fetch_and_parse_spec, filter_common_schemas};
+use crate::generator::swagger_parser::filter_common_schemas;
 use crate::generator::writer::{write_api_client_with_options, write_schemas_with_options};
 use colored::*;
 use std::path::{Path, PathBuf};
@@ -15,10 +15,23 @@ pub async fn run() -> Result<()> {
     let config = load_config()?;
     validate_config(&config)?;
 
-    use crate::error::GenerationError;
+    use crate::error::{FileSystemError, GenerationError};
 
     // Get spec path from config
     let spec_path = config.spec_path.ok_or(GenerationError::SpecPathRequired)?;
+    
+    // Check if spec path is a temporary file that might not exist anymore
+    if !spec_path.starts_with("http://") && !spec_path.starts_with("https://") {
+        if !std::path::Path::new(&spec_path).exists() {
+            return Err(FileSystemError::FileNotFound {
+                path: format!(
+                    "{}\n  The spec file no longer exists. Please run 'vika-cli generate --spec <path-or-url>' again with a valid spec path.",
+                    spec_path
+                ),
+            }
+            .into());
+        }
+    }
 
     // Get selected modules from config
     let selected_modules = if config.modules.selected.is_empty() {
@@ -31,7 +44,9 @@ pub async fn run() -> Result<()> {
         "{}",
         format!("📥 Fetching spec from: {}", spec_path).bright_blue()
     );
-    let parsed = fetch_and_parse_spec(&spec_path).await?;
+    // Use caching for update command (same as generate)
+    let use_cache = config.generation.enable_cache;
+    let parsed = crate::generator::swagger_parser::fetch_and_parse_spec_with_cache(&spec_path, use_cache).await?;
     println!(
         "{}",
         format!("✅ Parsed spec with {} modules", parsed.modules.len()).green()

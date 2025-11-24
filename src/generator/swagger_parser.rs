@@ -43,6 +43,13 @@ pub async fn fetch_and_parse_spec_with_cache(
 
         content
     } else {
+        // Check if file exists before trying to read
+        if !std::path::Path::new(spec_path).exists() {
+            return Err(FileSystemError::FileNotFound {
+                path: spec_path.to_string(),
+            }
+            .into());
+        }
         std::fs::read_to_string(spec_path).map_err(|e| FileSystemError::ReadFileFailed {
             path: spec_path.to_string(),
             source: e,

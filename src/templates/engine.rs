@@ -85,7 +85,6 @@ impl TemplateEngine {
 mod tests {
     use super::*;
     use crate::templates::context::TypeContext;
-    use tempfile::TempDir;
 
     #[test]
     fn test_template_engine_new() {
