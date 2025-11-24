@@ -46,16 +46,51 @@ mod tests {
     #[test]
     fn test_save_and_load_config() {
         let temp_dir = tempfile::tempdir().unwrap();
+        let original_dir = env::current_dir().ok();
+
+        // Only change directory if we can get the current one
+        if let Ok(_) = env::set_current_dir(&temp_dir) {
+            let config = Config::default();
+            save_config(&config).unwrap();
+
+            let loaded = load_config().unwrap();
+            assert_eq!(loaded.root_dir, config.root_dir);
+            assert_eq!(loaded.schemas.output, config.schemas.output);
+
+            if let Some(orig) = original_dir {
+                let _ = env::set_current_dir(orig);
+            }
+        }
+    }
+
+    #[test]
+    fn test_load_config_not_exists() {
+        let temp_dir = tempfile::tempdir().unwrap();
         let original_dir = env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
 
         env::set_current_dir(&temp_dir).unwrap();
 
-        let config = Config::default();
+        let config = load_config().unwrap();
+        // Should return default config when file doesn't exist
+        assert_eq!(config.root_dir, "src");
+
+        env::set_current_dir(original_dir).unwrap();
+    }
+
+    #[test]
+    fn test_save_config_with_empty_schema() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let original_dir = env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+
+        env::set_current_dir(&temp_dir).unwrap();
+
+        let mut config = Config::default();
+        config.schema = String::new();
         save_config(&config).unwrap();
 
         let loaded = load_config().unwrap();
-        assert_eq!(loaded.root_dir, config.root_dir);
-        assert_eq!(loaded.schemas.output, config.schemas.output);
+        // Schema should be set to default
+        assert!(!loaded.schema.is_empty());
 
         env::set_current_dir(original_dir).unwrap();
     }

@@ -81,4 +81,67 @@ mod tests {
         let error = result.unwrap_err();
         assert!(error.to_string().contains("Unsupported API style"));
     }
+
+    #[test]
+    fn test_validate_safe_path_etc() {
+        let path = PathBuf::from("/etc/test");
+        let result = validate_safe_path(&path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_safe_path_usr() {
+        let path = PathBuf::from("/usr/test");
+        let result = validate_safe_path(&path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_safe_path_bin() {
+        let path = PathBuf::from("/bin/test");
+        let result = validate_safe_path(&path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_safe_path_root() {
+        let path = PathBuf::from("/");
+        let result = validate_safe_path(&path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_safe_path_valid() {
+        let path = PathBuf::from("/home/user/project");
+        let result = validate_safe_path(&path);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_config_absolute_paths() {
+        let mut config = Config::default();
+        config.schemas.output = "/home/user/schemas".to_string();
+        config.apis.output = "/home/user/apis".to_string();
+        
+        let result = validate_config(&config);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_config_unsafe_schemas_path() {
+        let mut config = Config::default();
+        config.schemas.output = "/etc/schemas".to_string();
+        
+        let result = validate_config(&config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_config_unsafe_apis_path() {
+        let mut config = Config::default();
+        config.apis.output = "/usr/apis".to_string();
+        
+        let result = validate_config(&config);
+        assert!(result.is_err());
+    }
 }

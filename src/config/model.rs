@@ -246,6 +246,22 @@ mod tests {
     }
 
     #[test]
+    fn test_schemas_config_default() {
+        let config = SchemasConfig::default();
+        assert_eq!(config.output, "src/schemas");
+        assert_eq!(config.naming, "PascalCase");
+    }
+
+    #[test]
+    fn test_apis_config_default() {
+        let config = ApisConfig::default();
+        assert_eq!(config.output, "src/apis");
+        assert_eq!(config.style, "fetch");
+        assert_eq!(config.header_strategy, "consumerInjected");
+        assert!(config.base_url.is_none());
+    }
+
+    #[test]
     fn test_config_with_base_url() {
         let mut config = Config::default();
         config.apis.base_url = Some("/api/v1".to_string());
