@@ -96,7 +96,7 @@ pub async fn run() -> Result<()> {
             })?;
 
         let spec_path_input: String = Input::new()
-            .with_prompt(&format!("Path or URL for '{}'", spec_name.trim()))
+            .with_prompt(format!("Path or URL for '{}'", spec_name.trim()))
             .interact_text()
             .map_err(|e| GenerationError::InvalidOperation {
                 message: format!("Failed to get user input: {}", e),
@@ -114,7 +114,7 @@ pub async fn run() -> Result<()> {
         println!();
 
         let spec_schemas_output: String = Input::new()
-            .with_prompt(&format!(
+            .with_prompt(format!(
                 "Schemas output directory for '{}'",
                 spec_name.trim()
             ))
@@ -128,7 +128,7 @@ pub async fn run() -> Result<()> {
 
         let spec_naming_options = ["PascalCase", "camelCase", "snake_case", "kebab-case"];
         let spec_naming_index = Select::new()
-            .with_prompt(&format!(
+            .with_prompt(format!(
                 "Schema naming convention for '{}'",
                 spec_name.trim()
             ))
@@ -152,7 +152,7 @@ pub async fn run() -> Result<()> {
         println!();
 
         let spec_apis_output: String = Input::new()
-            .with_prompt(&format!("APIs output directory for '{}'", spec_name.trim()))
+            .with_prompt(format!("APIs output directory for '{}'", spec_name.trim()))
             .default(format!("src/apis/{}", spec_name.trim()))
             .interact_text()
             .map_err(|e| GenerationError::InvalidOperation {
@@ -163,7 +163,7 @@ pub async fn run() -> Result<()> {
 
         let spec_api_style_options = ["fetch"];
         let spec_api_style_index = Select::new()
-            .with_prompt(&format!("API client style for '{}'", spec_name.trim()))
+            .with_prompt(format!("API client style for '{}'", spec_name.trim()))
             .items(&["fetch - Native Fetch API (recommended)"])
             .default(0)
             .interact()
@@ -175,7 +175,7 @@ pub async fn run() -> Result<()> {
         println!();
 
         let spec_base_url_input: String = Input::new()
-            .with_prompt(&format!(
+            .with_prompt(format!(
                 "API base URL for '{}' (optional, press Enter to skip)",
                 spec_name.trim()
             ))
@@ -195,7 +195,7 @@ pub async fn run() -> Result<()> {
 
         let spec_header_strategy_options = ["consumerInjected", "bearerToken", "fixed"];
         let spec_header_strategy_index = Select::new()
-            .with_prompt(&format!("Header strategy for '{}'", spec_name.trim()))
+            .with_prompt(format!("Header strategy for '{}'", spec_name.trim()))
             .items(&[
                 "consumerInjected - Headers provided by consumer (recommended)",
                 "bearerToken - Automatic Bearer token injection",

@@ -1,4 +1,4 @@
-use crate::config::model::{ApisConfig, Config, ModulesConfig, SchemasConfig, SpecEntry};
+use crate::config::model::{Config, SpecEntry};
 use crate::error::{ConfigError, GenerationError, Result};
 use dialoguer::Select;
 

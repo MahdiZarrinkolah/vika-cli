@@ -395,8 +395,6 @@ fn schema_to_zod(
 
                                         // If parent contains a word that matches the property conceptually, use that
                                         // For example, "AvailableProviderDto" contains "Provider", so "key" property should use "ProviderEnum"
-                                        let prop_lower = prop_pascal.to_lowercase();
-                                        let parent_lower = parent_clean.to_lowercase();
 
                                         // Check if parent contains a more descriptive word (like "Provider" in "AvailableProvider")
                                         // and the property is a generic identifier (like "key", "id", "name", "code")

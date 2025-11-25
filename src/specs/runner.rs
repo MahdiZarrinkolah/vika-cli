@@ -5,7 +5,7 @@ use crate::generator::api_client::generate_api_client_with_registry_and_engine_a
 use crate::generator::module_selector::select_modules;
 use crate::generator::swagger_parser::filter_common_schemas;
 use crate::generator::ts_typings::generate_typings_with_registry_and_engine_and_spec;
-use crate::generator::writer::{write_api_client_with_options, write_schemas_with_options};
+use crate::generator::writer::write_api_client_with_options;
 use crate::generator::zod_schema::generate_zod_schemas_with_registry_and_engine_and_spec;
 use crate::progress::ProgressReporter;
 use std::path::PathBuf;
@@ -30,7 +30,7 @@ pub struct GenerateOptions {
 /// Generate code for a single spec
 pub async fn run_single_spec(
     spec: &SpecEntry,
-    config: &Config,
+    _config: &Config,
     options: &GenerateOptions,
 ) -> Result<GenerationStats> {
     let mut progress = ProgressReporter::new(options.verbose);

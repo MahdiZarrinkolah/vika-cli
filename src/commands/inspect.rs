@@ -243,7 +243,7 @@ pub async fn run(
                 .iter()
                 .find(|s| s.path == cli_spec)
                 .cloned()
-                .ok_or_else(|| GenerationError::SpecPathRequired)
+                .ok_or(GenerationError::SpecPathRequired)
                 .unwrap()
         })
     } else {

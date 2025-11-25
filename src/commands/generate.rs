@@ -1,29 +1,13 @@
 use crate::config::loader::{load_config, save_config};
 use crate::config::validator::validate_config;
-use crate::error::{FileSystemError, Result};
-use crate::formatter::FormatterManager;
-use crate::generator::module_selector::select_modules;
-use crate::generator::swagger_parser::filter_common_schemas;
-use crate::generator::ts_typings::generate_typings_with_registry;
-use crate::generator::writer::{write_api_client_with_options, write_schemas_with_options};
-use crate::generator::zod_schema::generate_zod_schemas_with_registry;
+use crate::error::Result;
 use crate::progress::ProgressReporter;
 use colored::*;
-use std::path::{Path, PathBuf};
-use tabled::{Table, Tabled};
-
-#[derive(Tabled)]
-struct ModuleSummary {
-    #[tabled(rename = "Module")]
-    module: String,
-    #[tabled(rename = "Files")]
-    files: usize,
-    #[tabled(rename = "Status")]
-    status: String,
-}
+use std::path::PathBuf;
+use tabled::Tabled;
 
 pub async fn run(
-    spec: Option<String>,
+    _spec: Option<String>,
     all_specs: bool,
     spec_name: Option<String>,
     verbose: bool,
@@ -42,26 +26,6 @@ pub async fn run(
     validate_config(&config)?;
     progress.finish_spinner("Configuration loaded");
 
-    // Use config defaults, but allow CLI flags to override
-    // CLI flags are false by default (not set), so we check if they were explicitly set
-    // For now, we'll use a simple approach: if flag is true, use it; otherwise use config
-    let use_cache = if cache {
-        true
-    } else {
-        config.generation.enable_cache
-    };
-    let use_backup = if backup {
-        true
-    } else {
-        config.generation.enable_backup
-    };
-    let use_force = if force {
-        true
-    } else {
-        config.generation.conflict_strategy == "force"
-    };
-
-    use crate::error::GenerationError;
     use crate::specs::manager::resolve_spec_selection;
     use crate::specs::runner::{run_all_specs, run_single_spec, GenerateOptions};
 
@@ -177,33 +141,5 @@ pub async fn run(
         println!();
     }
 
-    return Ok(());
-
-    // This should never be reached - all code generation goes through run_single_spec or run_all_specs above
-    unreachable!("All specs should be handled by run_single_spec or run_all_specs")
-}
-
-fn collect_ts_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
-    if dir.is_dir() {
-        for entry in std::fs::read_dir(dir).map_err(|e| FileSystemError::ReadFileFailed {
-            path: dir.display().to_string(),
-            source: e,
-        })? {
-            let entry = entry.map_err(|e| FileSystemError::ReadFileFailed {
-                path: dir.display().to_string(),
-                source: e,
-            })?;
-            let path = entry.path();
-            // Skip if path is empty or invalid
-            if path.as_os_str().is_empty() {
-                continue;
-            }
-            if path.is_dir() {
-                collect_ts_files(&path, files)?;
-            } else if path.extension().and_then(|s| s.to_str()) == Some("ts") {
-                files.push(path);
-            }
-        }
-    }
     Ok(())
 }

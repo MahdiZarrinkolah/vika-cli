@@ -57,12 +57,13 @@ pub fn write_schemas_with_options(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn write_schemas_with_module_mapping(
     output_dir: &Path,
     module_name: &str,
     types: &[TypeScriptType],
     zod_schemas: &[ZodSchema],
-    spec_name: Option<&str>,
+    _spec_name: Option<&str>,
     backup: bool,
     force: bool,
     module_schemas: Option<&std::collections::HashMap<String, Vec<String>>>,
@@ -167,7 +168,7 @@ pub fn write_schemas_with_module_mapping(
             std::collections::HashSet<String>,
         > = std::collections::HashMap::new();
         if let Some(module_schemas_map) = module_schemas {
-            let current_module_schemas: std::collections::HashSet<String> = module_schemas_map
+            let _current_module_schemas: std::collections::HashSet<String> = module_schemas_map
                 .get(module_name)
                 .cloned()
                 .unwrap_or_default()
@@ -273,7 +274,7 @@ pub fn write_schemas_with_module_mapping(
                     if let Some(module) = found_module {
                         cross_module_imports
                             .entry(module)
-                            .or_insert_with(std::collections::HashSet::new)
+                            .or_default()
                             .insert(enum_name.to_string());
                     }
                     // Note: Disabled heuristic matching as it was too aggressive and caused false imports
@@ -354,7 +355,7 @@ pub fn write_api_client_with_options(
     output_dir: &Path,
     module_name: &str,
     functions: &[ApiFunction],
-    spec_name: Option<&str>,
+    _spec_name: Option<&str>,
     backup: bool,
     force: bool,
 ) -> Result<Vec<PathBuf>> {

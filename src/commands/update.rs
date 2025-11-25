@@ -3,7 +3,7 @@ use crate::config::validator::validate_config;
 use crate::error::{FileSystemError, Result};
 use crate::formatter::FormatterManager;
 use crate::generator::swagger_parser::filter_common_schemas;
-use crate::generator::writer::{write_api_client_with_options, write_schemas_with_options};
+use crate::generator::writer::write_api_client_with_options;
 use colored::*;
 use std::path::{Path, PathBuf};
 
@@ -17,7 +17,6 @@ pub async fn run() -> Result<()> {
 
     use crate::error::{FileSystemError, GenerationError};
     use crate::specs::manager::list_specs;
-    use crate::specs::runner::{run_single_spec, GenerateOptions};
 
     // Get specs from config
     let specs = list_specs(&config);
@@ -26,7 +25,8 @@ pub async fn run() -> Result<()> {
     }
 
     // Update all specs
-    let mut all_specs_summary: Vec<(String, usize, Vec<(String, usize)>)> = Vec::new();
+    type SpecSummary = (String, usize, Vec<(String, usize)>);
+    let mut all_specs_summary: Vec<SpecSummary> = Vec::new();
     let mut all_generated_files = Vec::new();
     // Track which URLs we've already printed the fetch message for
     let mut printed_urls: std::collections::HashSet<String> = std::collections::HashSet::new();

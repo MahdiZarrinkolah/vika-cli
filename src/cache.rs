@@ -4,8 +4,6 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const CACHE_DIR: &str = ".vika-cache";
-const SPEC_CACHE_FILE: &str = "spec.json";
-const SPEC_META_FILE: &str = "spec.meta.json";
 
 /// Generate a cache key from spec path and optional spec name
 fn cache_key(spec_path: &str, spec_name: Option<&str>) -> String {
