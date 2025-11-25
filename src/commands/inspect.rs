@@ -23,23 +23,23 @@ pub async fn run(
     json: bool,
 ) -> Result<()> {
     use crate::error::GenerationError;
-    use crate::specs::manager::{is_multi_spec_mode, list_specs, get_spec_by_name};
+    use crate::specs::manager::{list_specs, get_spec_by_name};
 
     // Load config
     let config = crate::config::loader::load_config()?;
     crate::config::validator::validate_config(&config)?;
 
-    // Determine if we're in multi-spec mode
-    let is_multi_spec = is_multi_spec_mode(&config);
+    // Get specs from config
+    let specs = list_specs(&config);
+    
+    if specs.is_empty() {
+        return Err(GenerationError::SpecPathRequired.into());
+    }
 
-    // Handle multi-spec mode
-    if is_multi_spec {
+    // Handle multiple specs or single spec
+    if specs.len() > 1 || all_specs {
         if all_specs {
             // Inspect all specs
-            let specs = list_specs(&config);
-            if specs.is_empty() {
-                return Err(GenerationError::SpecPathRequired.into());
-            }
 
             if json {
                 // JSON output for all specs
@@ -203,13 +203,29 @@ pub async fn run(
         }
     }
 
-    // Single-spec mode (backward compatible)
-    let spec_path = spec.ok_or(GenerationError::SpecPathRequired)?;
+    // Single spec mode - use first spec
+    let spec_entry = if let Some(name) = spec_name {
+        get_spec_by_name(&config, &name)?
+    } else if let Some(cli_spec) = spec {
+        // CLI spec argument - try to find by name or use as path
+        get_spec_by_name(&config, &cli_spec).unwrap_or_else(|_| {
+            // If not found by name, treat as path and find matching spec
+            specs.iter()
+                .find(|s| s.path == cli_spec)
+                .cloned()
+                .ok_or_else(|| GenerationError::SpecPathRequired)
+                .unwrap()
+        })
+    } else {
+        // Use first spec
+        specs[0].clone()
+    };
 
-    println!("{}", "🔍 Inspecting OpenAPI spec...".bright_cyan());
+    let spec_path = &spec_entry.path;
+    println!("{}", format!("🔍 Inspecting OpenAPI spec: {}", spec_entry.name).bright_cyan());
     println!();
 
-    let parsed = fetch_and_parse_spec(&spec_path).await?;
+    let parsed = fetch_and_parse_spec(spec_path).await?;
 
     if json {
         // JSON output

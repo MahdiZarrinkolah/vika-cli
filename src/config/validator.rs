@@ -3,63 +3,72 @@ use crate::error::{ConfigError, Result};
 use std::path::{Path, PathBuf};
 
 pub fn validate_config(config: &Config) -> Result<()> {
-    // Validate mutual exclusion: spec_path XOR specs
-    if config.spec_path.is_some() && config.specs.is_some() {
-        return Err(ConfigError::BothSpecAndSpecs.into());
-    }
-
     // Validate that at least one spec is defined
-    if config.spec_path.is_none() && config.specs.is_none() {
+    if config.specs.is_empty() {
         return Err(ConfigError::NoSpecDefined.into());
     }
 
-    // Validate multi-spec configuration if present
-    if let Some(ref specs) = config.specs {
-        if specs.is_empty() {
-            return Err(ConfigError::Invalid {
-                message: "At least one spec must be defined in 'specs' array".to_string(),
+    // Validate specs configuration
+    // Check for duplicate names
+    let mut seen_names = std::collections::HashSet::new();
+    for spec in &config.specs {
+        if seen_names.contains(&spec.name) {
+            return Err(ConfigError::DuplicateSpecName {
+                name: spec.name.clone(),
+            }
+            .into());
+        }
+        seen_names.insert(&spec.name);
+
+        // Validate spec name
+        if spec.name.is_empty() {
+            return Err(ConfigError::InvalidSpecName {
+                name: spec.name.clone(),
             }
             .into());
         }
 
-        // Check for duplicate names
-        let mut seen_names = std::collections::HashSet::new();
-        for spec in specs {
-            if seen_names.contains(&spec.name) {
-                return Err(ConfigError::DuplicateSpecName {
-                    name: spec.name.clone(),
-                }
-                .into());
+        // Validate spec name format (alphanumeric, hyphens, underscores only)
+        if !spec
+            .name
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
+            return Err(ConfigError::InvalidSpecName {
+                name: spec.name.clone(),
             }
-            seen_names.insert(&spec.name);
+            .into());
+        }
 
-            // Validate spec name
-            if spec.name.is_empty() {
-                return Err(ConfigError::InvalidSpecName {
-                    name: spec.name.clone(),
-                }
-                .into());
+        // Validate spec path is not empty
+        if spec.path.is_empty() {
+            return Err(ConfigError::Invalid {
+                message: format!("Spec '{}' has an empty path", spec.name),
             }
+            .into());
+        }
 
-            // Validate spec name format (alphanumeric, hyphens, underscores only)
-            if !spec
-                .name
-                .chars()
-                .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-            {
-                return Err(ConfigError::InvalidSpecName {
-                    name: spec.name.clone(),
-                }
-                .into());
-            }
+        // Validate per-spec schemas output path
+        let schemas_output = PathBuf::from(&spec.schemas.output);
+        if schemas_output.is_absolute() {
+            validate_safe_path(&schemas_output)?;
+        }
 
-            // Validate spec path is not empty
-            if spec.path.is_empty() {
-                return Err(ConfigError::Invalid {
-                    message: format!("Spec '{}' has an empty path", spec.name),
-                }
-                .into());
+        // Validate per-spec apis output path
+        let apis_output = PathBuf::from(&spec.apis.output);
+        if apis_output.is_absolute() {
+            validate_safe_path(&apis_output)?;
+        }
+
+        // Validate per-spec API style
+        if spec.apis.style != "fetch" {
+            return Err(ConfigError::Invalid {
+                message: format!(
+                    "Unsupported API style for spec '{}': {}. Only 'fetch' is supported.",
+                    spec.name, spec.apis.style
+                ),
             }
+            .into());
         }
     }
 
@@ -68,29 +77,6 @@ pub fn validate_config(config: &Config) -> Result<()> {
     if root_dir.is_absolute() && !root_dir.exists() {
         return Err(ConfigError::Invalid {
             message: format!("Root directory does not exist: {}", config.root_dir),
-        }
-        .into());
-    }
-
-    // Validate schemas output path
-    let schemas_output = PathBuf::from(&config.schemas.output);
-    if schemas_output.is_absolute() {
-        validate_safe_path(&schemas_output)?;
-    }
-
-    // Validate apis output path
-    let apis_output = PathBuf::from(&config.apis.output);
-    if apis_output.is_absolute() {
-        validate_safe_path(&apis_output)?;
-    }
-
-    // Validate style
-    if config.apis.style != "fetch" {
-        return Err(ConfigError::Invalid {
-            message: format!(
-                "Unsupported API style: {}. Only 'fetch' is supported.",
-                config.apis.style
-            ),
         }
         .into());
     }
@@ -213,6 +199,9 @@ mod tests {
             crate::config::model::SpecEntry {
                 name: "auth".to_string(),
                 path: "specs/auth.yaml".to_string(),
+                schemas: crate::config::model::SchemasConfig::default(),
+                apis: crate::config::model::ApisConfig::default(),
+                modules: crate::config::model::ModulesConfig::default(),
             },
         ]);
 
@@ -250,10 +239,16 @@ mod tests {
             crate::config::model::SpecEntry {
                 name: "auth".to_string(),
                 path: "specs/auth.yaml".to_string(),
+                schemas: crate::config::model::SchemasConfig::default(),
+                apis: crate::config::model::ApisConfig::default(),
+                modules: crate::config::model::ModulesConfig::default(),
             },
             crate::config::model::SpecEntry {
                 name: "auth".to_string(),
                 path: "specs/auth2.yaml".to_string(),
+                schemas: crate::config::model::SchemasConfig::default(),
+                apis: crate::config::model::ApisConfig::default(),
+                modules: crate::config::model::ModulesConfig::default(),
             },
         ]);
 
@@ -269,6 +264,9 @@ mod tests {
         config.specs = Some(vec![crate::config::model::SpecEntry {
             name: "invalid name".to_string(), // contains space
             path: "specs/auth.yaml".to_string(),
+            schemas: None,
+            apis: None,
+            modules: None,
         }]);
 
         let result = validate_config(&config);
@@ -283,6 +281,9 @@ mod tests {
         config.specs = Some(vec![crate::config::model::SpecEntry {
             name: "".to_string(),
             path: "specs/auth.yaml".to_string(),
+            schemas: None,
+            apis: None,
+            modules: None,
         }]);
 
         let result = validate_config(&config);
@@ -297,6 +298,9 @@ mod tests {
         config.specs = Some(vec![crate::config::model::SpecEntry {
             name: "auth".to_string(),
             path: "".to_string(),
+            schemas: None,
+            apis: None,
+            modules: None,
         }]);
 
         let result = validate_config(&config);
@@ -312,10 +316,16 @@ mod tests {
             crate::config::model::SpecEntry {
                 name: "auth".to_string(),
                 path: "specs/auth.yaml".to_string(),
+                schemas: crate::config::model::SchemasConfig::default(),
+                apis: crate::config::model::ApisConfig::default(),
+                modules: crate::config::model::ModulesConfig::default(),
             },
             crate::config::model::SpecEntry {
                 name: "orders".to_string(),
                 path: "specs/orders.json".to_string(),
+                schemas: crate::config::model::SchemasConfig::default(),
+                apis: crate::config::model::ApisConfig::default(),
+                modules: crate::config::model::ModulesConfig::default(),
             },
         ]);
 

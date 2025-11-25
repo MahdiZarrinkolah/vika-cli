@@ -13,6 +13,8 @@ pub struct Cli {
 pub enum Commands {
     /// Initialize a new vika-cli project
     Init,
+    /// Add a new spec to existing project
+    Add,
     /// Generate TypeScript code from Swagger spec
     Generate {
         /// Path or URL to Swagger/OpenAPI spec (for single-spec mode)
@@ -38,14 +40,7 @@ pub enum Commands {
         force: bool,
     },
     /// Update existing generated code
-    Update {
-        /// Update specific spec by name (for multi-spec mode)
-        #[arg(long)]
-        spec_name: Option<String>,
-        /// Update all specs (for multi-spec mode)
-        #[arg(long)]
-        all_specs: bool,
-    },
+    Update,
     /// Inspect OpenAPI spec without generating code
     Inspect {
         /// Path or URL to Swagger/OpenAPI spec (for single-spec mode)

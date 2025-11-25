@@ -38,18 +38,20 @@ cargo install vika-cli
 vika-cli init
 ```
 
-This creates a `.vika.json` configuration file in your current directory.
+`init` collects the first spec (name, path, outputs) and writes `.vika.json`.  
+To register additional specs later, run `vika-cli add` and answer the same prompts.
 
 ### Step 2: Generate Code
 
 ```bash
-vika-cli generate --spec https://api.example.com/openapi.json
-```
+# Interactive selection (default)
+vika-cli generate
 
-Or use a local file:
+# Force a specific spec
+vika-cli generate --spec ecommerce
 
-```bash
-vika-cli generate --spec ./swagger.yaml
+# Regenerate everything
+vika-cli generate --all-specs
 ```
 
 ### Step 3: Select Modules
@@ -94,7 +96,7 @@ This uses your saved configuration and regenerates all previously selected modul
 Before generating, inspect what will be generated:
 
 ```bash
-vika-cli inspect --spec ./swagger.yaml
+vika-cli inspect --spec ecommerce
 ```
 
 ### Using Caching
@@ -102,7 +104,7 @@ vika-cli inspect --spec ./swagger.yaml
 For remote specs, use caching for faster regeneration:
 
 ```bash
-vika-cli generate --spec https://api.example.com/openapi.json --cache
+vika-cli generate --spec ecommerce --cache
 ```
 
 ### Creating Backups
@@ -110,7 +112,7 @@ vika-cli generate --spec https://api.example.com/openapi.json --cache
 Always create backups before regenerating:
 
 ```bash
-vika-cli generate --spec ./swagger.yaml --backup
+vika-cli generate --spec ecommerce --backup
 ```
 
 ## Next Steps

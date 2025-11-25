@@ -96,38 +96,23 @@ cargo build --release
 vika-cli init
 ```
 
-Creates a `.vika.json` configuration file.
+`init` now captures your first spec (name, path, schema/api outputs, module preferences) and writes `.vika.json`.  
+Need more specs later? Run `vika-cli add` each time you want to register another service.
 
-## 2️ Generate code from an OpenAPI specification
-
-### Single Spec Mode
-
-Remote:
+## 2️ Generate code from your configured specs
 
 ```bash
-vika-cli generate --spec https://example.com/openapi.json
-```
-
-Local:
-
-```bash
-vika-cli generate --spec ./swagger.yaml
-```
-
-### Multi-Spec Mode (Microservices)
-
-When your `.vika.json` contains a `specs` array, you can generate from multiple specs:
-
-```bash
-# Generate all specs
-vika-cli generate --all-specs
-
-# Generate a specific spec by name
-vika-cli generate --spec ecommerce
-
 # Interactive selection (default)
 vika-cli generate
+
+# Force a specific spec
+vika-cli generate --spec ecommerce
+
+# Regenerate everything
+vika-cli generate --all-specs
 ```
+
+Generation always uses the specs defined in `.vika.json`; the CLI no longer accepts raw spec paths. Remote URLs and local files are supported via each spec’s `path`.
 
 Flags:
 
@@ -230,80 +215,65 @@ Produces:
 
 # ⚙️ Configuration (`.vika.json`)
 
-## Single Spec Mode
+`vika-cli` now uses a single, always-multi-spec configuration model. Every spec lives inside the `specs` array and declares its own schema/API/module configuration.
 
 ```json
 {
-  "rootDir": "src",
-  "schemas": {
-    "output": "src/schemas",
-    "naming": "PascalCase"
-  },
-  "apis": {
-    "output": "src/apis",
-    "style": "fetch",
-    "baseUrl": "/api/v1",
-    "headerStrategy": "bearerToken"
-  },
-  "modules": {
-    "ignore": ["Auth"]
-  },
-  "spec_path": "https://example.com/openapi.json"
-}
-```
-
-## Multi-Spec Mode (Microservices)
-
-```json
-{
-  "rootDir": "src",
-  "schemas": {
-    "output": "src/schemas",
-    "naming": "PascalCase"
-  },
-  "apis": {
-    "output": "src/apis",
-    "style": "fetch",
-    "headerStrategy": "consumerInjected"
-  },
-  "modules": {
-    "ignore": [],
-    "selected": ["products", "orders", "users"]
+  "$schema": "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json",
+  "root_dir": "src",
+  "generation": {
+    "enable_cache": true,
+    "enable_backup": false,
+    "conflict_strategy": "ask"
   },
   "specs": [
     {
       "name": "ecommerce",
-      "path": "http://localhost:3000/swagger-ecommerce.json"
-    },
-    {
-      "name": "admin",
-      "path": "http://localhost:3000/swagger-admin.json"
-    },
-    {
-      "name": "public",
-      "path": "http://localhost:3000/swagger-public.json"
+      "path": "http://localhost:3000/swagger-ecommerce.json",
+      "schemas": {
+        "output": "src/schemas/ecommerce",
+        "naming": "PascalCase"
+      },
+      "apis": {
+        "output": "src/apis/ecommerce",
+        "style": "fetch",
+        "base_url": "https://api.example.com",
+        "header_strategy": "consumerInjected"
+      },
+      "modules": {
+        "ignore": [],
+        "selected": ["orders", "payments", "users"]
+      }
     }
   ]
 }
 ```
 
-### Configuration Options
+### Global settings
 
 | Key | Description |
-| --------------------- | ------------------------------------------ |
-| `spec_path` | Single spec path (URL or file path) - **mutually exclusive with `specs`** |
-| `specs` | Array of spec entries for multi-spec mode - **mutually exclusive with `spec_path`** |
-| `specs[].name` | Spec identifier (kebab-case recommended, e.g., "ecommerce", "admin") |
-| `specs[].path` | Spec path (URL or file path) |
-| `schemas.output` | Directory for types + Zod schemas |
-| `schemas.naming` | Naming convention for generated types |
-| `apis.output` | Directory for API clients |
-| `apis.baseUrl` | Base URL prefix for client requests |
-| `apis.headerStrategy` | `bearerToken`, `fixed`, `consumerInjected` |
-| `modules.ignore` | Skip tagged modules |
-| `modules.selected` | Only generate these modules (if specified) |
+| --- | --- |
+| `root_dir` | Base directory for generated files (`src` by default). |
+| `generation.enable_cache` | Cache parsed specs for faster re-runs (default `true`). |
+| `generation.enable_backup` | Create timestamped backups before overwriting (default `false`). |
+| `generation.conflict_strategy` | How to handle modified files: `ask`, `force`, or `skip`. |
 
-**Important**: `spec_path` and `specs` are mutually exclusive. Use `spec_path` for single-spec projects, or `specs` for multi-spec microservices architectures.
+### Spec entry reference
+
+| Key | Description |
+| --- | --- |
+| `specs[].name` | Unique spec identifier (kebab-case recommended). |
+| `specs[].path` | Local file path or URL to the OpenAPI document. |
+| `specs[].schemas.output` | Destination folder for TypeScript + Zod output for this spec. |
+| `specs[].schemas.naming` | Naming convention (`PascalCase`, `camelCase`, `snake_case`, `kebab-case`). |
+| `specs[].apis.output` | Output folder for this spec’s API clients. |
+| `specs[].apis.style` | Client style. Currently only `fetch`. |
+| `specs[].apis.base_url` | Optional base URL baked into generated clients. |
+| `specs[].apis.header_strategy` | `consumerInjected`, `bearerToken`, or `fixed`. |
+| `specs[].modules.ignore` | Tags to skip entirely. |
+| `specs[].modules.selected` | Tags to generate. Filled automatically after the first run or when using interactive prompts. |
+
+Add new specs via `vika-cli add` (appends to `specs`). `vika-cli init` only creates the first entry, keeping multi-spec workflows predictable.
 
 Full reference: [`docs/configuration.md`](docs/configuration.md)
 

@@ -1,59 +1,26 @@
-use crate::config::model::{Config, SpecEntry};
+use crate::config::model::{Config, SpecEntry, SchemasConfig, ApisConfig, ModulesConfig};
 use crate::error::{ConfigError, GenerationError, Result};
 use dialoguer::Select;
 
-/// Determines if the config is in multi-spec mode
-pub fn is_multi_spec_mode(config: &Config) -> bool {
-    config.specs.is_some()
-}
-
 /// Lists all specs from the config
 pub fn list_specs(config: &Config) -> Vec<SpecEntry> {
-    if let Some(ref specs) = config.specs {
-        specs.clone()
-    } else if let Some(ref spec_path) = config.spec_path {
-        // Single spec mode: create a virtual SpecEntry
-        vec![SpecEntry {
-            name: "default".to_string(),
-            path: spec_path.clone(),
-        }]
-    } else {
-        vec![]
-    }
+    config.specs.clone()
 }
 
 /// Gets a spec by name from the config
 pub fn get_spec_by_name(config: &Config, name: &str) -> Result<SpecEntry> {
-    if let Some(ref specs) = config.specs {
-        specs
-            .iter()
-            .find(|s| s.name == name)
-            .cloned()
-            .ok_or_else(|| {
-                let available: Vec<String> = specs.iter().map(|s| s.name.clone()).collect();
-                GenerationError::SpecNotFound {
-                    name: name.to_string(),
-                    available,
-                }
-                .into()
-            })
-    } else if let Some(ref spec_path) = config.spec_path {
-        // Single spec mode: only "default" is valid
-        if name == "default" {
-            Ok(SpecEntry {
-                name: "default".to_string(),
-                path: spec_path.clone(),
-            })
-        } else {
-            Err(GenerationError::SpecNotFound {
+    config.specs
+        .iter()
+        .find(|s| s.name == name)
+        .cloned()
+        .ok_or_else(|| {
+            let available: Vec<String> = config.specs.iter().map(|s| s.name.clone()).collect();
+            GenerationError::SpecNotFound {
                 name: name.to_string(),
-                available: vec!["default".to_string()],
+                available,
             }
-            .into())
-        }
-    } else {
-        Err(ConfigError::NoSpecDefined.into())
-    }
+            .into()
+        })
 }
 
 /// Resolves which specs to generate based on CLI flags and config
@@ -62,24 +29,24 @@ pub fn resolve_spec_selection(
     cli_spec: Option<String>,
     all_specs: bool,
 ) -> Result<Vec<SpecEntry>> {
+    let specs = list_specs(config);
+    
+    if specs.is_empty() {
+        return Err(ConfigError::NoSpecDefined.into());
+    }
+    
     if all_specs {
         // Generate all specs
-        let specs = list_specs(config);
-        if specs.is_empty() {
-            return Err(ConfigError::NoSpecDefined.into());
-        }
         Ok(specs)
     } else if let Some(spec_name) = cli_spec {
         // Generate specific spec by name
         let spec = get_spec_by_name(config, &spec_name)?;
         Ok(vec![spec])
-    } else if is_multi_spec_mode(config) {
-        // Multi-spec mode but no flag: prompt user
-        let specs = list_specs(config);
-        if specs.is_empty() {
-            return Err(ConfigError::NoSpecDefined.into());
-        }
-
+    } else if specs.len() == 1 {
+        // Single spec: use it automatically
+        Ok(specs)
+    } else {
+        // Multiple specs but no flag: prompt user
         let spec_names: Vec<String> = specs.iter().map(|s| s.name.clone()).collect();
         let selection = Select::new()
             .with_prompt("Which spec do you want to generate?")
@@ -96,16 +63,6 @@ pub fn resolve_spec_selection(
         })?;
 
         Ok(vec![selected_spec.clone()])
-    } else {
-        // Single spec mode: use the single spec
-        if let Some(ref spec_path) = config.spec_path {
-            Ok(vec![SpecEntry {
-                name: "default".to_string(),
-                path: spec_path.clone(),
-            }])
-        } else {
-            Err(ConfigError::NoSpecDefined.into())
-        }
     }
 }
 
@@ -125,6 +82,9 @@ mod tests {
         config.specs = Some(vec![SpecEntry {
             name: "auth".to_string(),
             path: "specs/auth.yaml".to_string(),
+            schemas: None,
+            apis: None,
+            modules: None,
         }]);
         assert!(is_multi_spec_mode(&config));
     }
@@ -147,10 +107,16 @@ mod tests {
             SpecEntry {
                 name: "auth".to_string(),
                 path: "specs/auth.yaml".to_string(),
+                schemas: SchemasConfig::default(),
+                apis: ApisConfig::default(),
+                modules: ModulesConfig::default(),
             },
             SpecEntry {
                 name: "orders".to_string(),
                 path: "specs/orders.json".to_string(),
+                schemas: SchemasConfig::default(),
+                apis: ApisConfig::default(),
+                modules: ModulesConfig::default(),
             },
         ]);
 
@@ -180,10 +146,16 @@ mod tests {
             SpecEntry {
                 name: "auth".to_string(),
                 path: "specs/auth.yaml".to_string(),
+                schemas: SchemasConfig::default(),
+                apis: ApisConfig::default(),
+                modules: ModulesConfig::default(),
             },
             SpecEntry {
                 name: "orders".to_string(),
                 path: "specs/orders.json".to_string(),
+                schemas: SchemasConfig::default(),
+                apis: ApisConfig::default(),
+                modules: ModulesConfig::default(),
             },
         ]);
 
@@ -202,10 +174,16 @@ mod tests {
             SpecEntry {
                 name: "auth".to_string(),
                 path: "specs/auth.yaml".to_string(),
+                schemas: SchemasConfig::default(),
+                apis: ApisConfig::default(),
+                modules: ModulesConfig::default(),
             },
             SpecEntry {
                 name: "orders".to_string(),
                 path: "specs/orders.json".to_string(),
+                schemas: SchemasConfig::default(),
+                apis: ApisConfig::default(),
+                modules: ModulesConfig::default(),
             },
         ]);
 
@@ -220,10 +198,16 @@ mod tests {
             SpecEntry {
                 name: "auth".to_string(),
                 path: "specs/auth.yaml".to_string(),
+                schemas: SchemasConfig::default(),
+                apis: ApisConfig::default(),
+                modules: ModulesConfig::default(),
             },
             SpecEntry {
                 name: "orders".to_string(),
                 path: "specs/orders.json".to_string(),
+                schemas: SchemasConfig::default(),
+                apis: ApisConfig::default(),
+                modules: ModulesConfig::default(),
             },
         ]);
 

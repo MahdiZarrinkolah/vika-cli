@@ -8,7 +8,13 @@ async fn main() {
 
     match cli.command {
         vika_cli::cli::Commands::Init => {
-            if let Err(e) = vika_cli::commands::init::run() {
+            if let Err(e) = vika_cli::commands::init::run().await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        vika_cli::cli::Commands::Add => {
+            if let Err(e) = vika_cli::commands::add::run().await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -37,8 +43,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        vika_cli::cli::Commands::Update { spec_name, all_specs } => {
-            if let Err(e) = vika_cli::commands::update::run(spec_name, all_specs).await {
+        vika_cli::cli::Commands::Update => {
+            if let Err(e) = vika_cli::commands::update::run().await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

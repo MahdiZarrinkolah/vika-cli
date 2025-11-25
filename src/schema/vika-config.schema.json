@@ -1,0 +1,179 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json",
+  "title": "Vika CLI Configuration",
+  "description": "Global configuration for the vika-cli code generation tool. Defines generation preferences and per-spec output settings.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["specs"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON schema reference URL",
+      "default": "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json"
+    },
+    "root_dir": {
+      "type": "string",
+      "description": "Root directory (relative to the project) used as the base for generated assets. Absolute paths are also supported but must be safe (e.g., not /etc).",
+      "default": "src"
+    },
+    "generation": {
+      "type": "object",
+      "description": "Global generation preferences that apply to all specs.",
+      "additionalProperties": false,
+      "properties": {
+        "enable_cache": {
+          "type": "boolean",
+          "description": "Whether to cache parsed OpenAPI specs for faster regeneration.",
+          "default": true
+        },
+        "enable_backup": {
+          "type": "boolean",
+          "description": "Create timestamped backups before overwriting generated files.",
+          "default": false
+        },
+        "conflict_strategy": {
+          "type": "string",
+          "description": "How to handle modified files during regeneration.",
+          "enum": ["ask", "force", "skip"],
+          "default": "ask"
+        }
+      },
+      "default": {
+        "enable_cache": true,
+        "enable_backup": false,
+        "conflict_strategy": "ask"
+      }
+    },
+    "specs": {
+      "type": "array",
+      "description": "List of OpenAPI specs to generate. Each entry controls its own schema/API outputs and module selection.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "path", "schemas", "apis", "modules"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique identifier for the spec (kebab-case recommended).",
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "path": {
+            "type": "string",
+            "description": "File system path or URL to the OpenAPI document."
+          },
+          "schemas": {
+            "type": "object",
+            "description": "Configuration for generated TypeScript types and Zod schemas.",
+            "additionalProperties": false,
+            "required": ["output", "naming"],
+            "properties": {
+              "output": {
+                "type": "string",
+                "description": "Directory where schema files are written (relative or absolute).",
+                "default": "src/schemas"
+              },
+              "naming": {
+                "type": "string",
+                "description": "Case convention used when generating schema/type names.",
+                "enum": ["PascalCase", "camelCase", "snake_case", "kebab-case"],
+                "default": "PascalCase"
+              }
+            }
+          },
+          "apis": {
+            "type": "object",
+            "description": "Configuration for API client generation.",
+            "additionalProperties": false,
+            "required": ["output", "style", "header_strategy"],
+            "properties": {
+              "output": {
+                "type": "string",
+                "description": "Directory where API client files are written.",
+                "default": "src/apis"
+              },
+              "style": {
+                "type": "string",
+                "description": "API client style. Currently only 'fetch' is supported.",
+                "enum": ["fetch"],
+                "default": "fetch"
+              },
+              "base_url": {
+                "type": "string",
+                "description": "Optional base URL that will be hard-coded into the generated client.",
+                "minLength": 1
+              },
+              "header_strategy": {
+                "type": "string",
+                "description": "How request headers are managed inside generated clients.",
+                "enum": ["consumerInjected", "bearerToken", "fixed"],
+                "default": "consumerInjected"
+              }
+            }
+          },
+          "modules": {
+            "type": "object",
+            "description": "Module/tag filtering rules for this spec.",
+            "additionalProperties": false,
+            "properties": {
+              "ignore": {
+                "type": "array",
+                "description": "Modules (tags) that should be explicitly skipped.",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "default": []
+              },
+              "selected": {
+                "type": "array",
+                "description": "Modules (tags) that should be generated. When empty, the CLI prompts during generation.",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "default": []
+              }
+            },
+            "default": {
+              "ignore": [],
+              "selected": []
+            }
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "$schema": "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json",
+      "root_dir": "src",
+      "generation": {
+        "enable_cache": true,
+        "enable_backup": false,
+        "conflict_strategy": "ask"
+      },
+      "specs": [
+        {
+          "name": "ecommerce",
+          "path": "http://localhost:3000/swagger-ecommerce.json",
+          "schemas": {
+            "output": "src/schemas/ecommerce",
+            "naming": "PascalCase"
+          },
+          "apis": {
+            "output": "src/apis/ecommerce",
+            "style": "fetch",
+            "base_url": "https://api.example.com",
+            "header_strategy": "consumerInjected"
+          },
+          "modules": {
+            "ignore": [],
+            "selected": ["orders", "payments", "users"]
+          }
+        }
+      ]
+    }
+  ]
+}

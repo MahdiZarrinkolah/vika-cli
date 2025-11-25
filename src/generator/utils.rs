@@ -44,9 +44,11 @@ pub fn sanitize_property_name(name: &str) -> String {
 }
 
 /// Sanitizes module names for use as directory/file names
-/// Replaces spaces with hyphens and removes other invalid characters
+/// Replaces spaces with hyphens, converts to lowercase, and removes other invalid characters
+/// This ensures consistent casing across case-insensitive filesystems (like macOS)
 pub fn sanitize_module_name(name: &str) -> String {
     name.replace(' ', "-")
+        .to_lowercase()
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_' || *c == '/')
         .collect()
@@ -155,8 +157,9 @@ mod tests {
     #[test]
     fn test_sanitize_module_name() {
         assert_eq!(sanitize_module_name("cart"), "cart");
-        assert_eq!(sanitize_module_name("AI Chat"), "AI-Chat");
+        assert_eq!(sanitize_module_name("AI Chat"), "ai-chat");
         assert_eq!(sanitize_module_name("admin/orders"), "admin/orders");
         assert_eq!(sanitize_module_name("test module name"), "test-module-name");
+        assert_eq!(sanitize_module_name("Inventory"), "inventory");
     }
 }

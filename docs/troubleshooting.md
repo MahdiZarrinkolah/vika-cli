@@ -28,25 +28,24 @@ Common issues and solutions when using `vika-cli`.
 
 ## Generation Issues
 
-### "Spec path required" error
+### "Spec path required" / "No specs configured" error
 
-**Problem**: No spec path provided.
+**Problem**: The CLI couldn’t find any spec entries to work with.
 
 **Solutions**:
-- Provide `--spec` flag: `vika-cli generate --spec ./swagger.yaml`
-- Set `spec_path` in `.vika.json`
-- Ensure `.vika.json` exists (run `vika-cli init`)
+- Make sure `.vika.json` exists (run `vika-cli init`).
+- Add at least one spec via `vika-cli add`.
+- Use the spec name when generating: `vika-cli generate --spec ecommerce`.
 
 ### "Failed to fetch spec" error
 
 **Problem**: Cannot fetch remote OpenAPI spec.
 
 **Solutions**:
-- Check internet connection
-- Verify URL is accessible
-- Check if URL requires authentication
-- Use local file instead: `vika-cli generate --spec ./local-spec.yaml`
-- Try with `--cache` if you've fetched before
+- Check internet connection.
+- Verify the spec `path` in `.vika.json` is reachable (URL or local file).
+- If the URL requires authentication, download the file locally and point the spec `path` to the local copy.
+- Use `--cache` if the spec was previously fetched successfully.
 
 ### Circular dependency warnings
 
@@ -83,7 +82,7 @@ Common issues and solutions when using `vika-cli`.
 **Problem**: Generated files don't appear in expected location.
 
 **Solutions**:
-- Check `rootDir` and output paths in `.vika.json`
+- Check `root_dir` and output paths in `.vika.json`
 - Ensure paths are relative, not absolute
 - Verify directory permissions
 - Check for typos in paths
@@ -95,7 +94,7 @@ Common issues and solutions when using `vika-cli`.
 **Problem**: Generated file was modified by user, tool refuses to overwrite.
 
 **Solutions**:
-- Use `--force` to overwrite: `vika-cli generate --spec ./swagger.yaml --force`
+- Use `--force` to overwrite: `vika-cli generate --spec ecommerce --force`
 - Use `--backup` to create backup first
 - Manually restore from backup if needed
 - Review changes before overwriting

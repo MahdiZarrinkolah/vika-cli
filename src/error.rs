@@ -91,10 +91,7 @@ pub enum ConfigError {
     #[error("Invalid output directory: {path}")]
     InvalidOutputDirectory { path: String },
 
-    #[error("Both 'spec_path' and 'specs' are defined. Use only one.")]
-    BothSpecAndSpecs,
-
-    #[error("Neither 'spec_path' nor 'specs' is defined. At least one spec must be configured.")]
+    #[error("No specs are defined. At least one spec must be configured in the 'specs' array.")]
     NoSpecDefined,
 
     #[error("Duplicate spec name found: {name}")]

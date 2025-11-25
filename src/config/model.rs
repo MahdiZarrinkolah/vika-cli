@@ -7,6 +7,15 @@ pub struct SpecEntry {
     pub name: String,
     /// Path or URL to the OpenAPI specification file
     pub path: String,
+    
+    /// Required per-spec schema output directory and naming configuration
+    pub schemas: SchemasConfig,
+    
+    /// Required per-spec API output directory and configuration
+    pub apis: ApisConfig,
+    
+    /// Required per-spec module selection configuration
+    pub modules: ModulesConfig,
 }
 
 /// Main configuration structure for vika-cli.
@@ -31,26 +40,11 @@ pub struct Config {
     pub root_dir: String,
 
     #[serde(default)]
-    pub schemas: SchemasConfig,
-
-    #[serde(default)]
-    pub apis: ApisConfig,
-
-    #[serde(default)]
-    pub modules: ModulesConfig,
-
-    #[serde(default)]
     pub generation: GenerationConfig,
 
-    /// Single spec path (for backward compatibility)
-    /// Mutually exclusive with `specs` field
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub spec_path: Option<String>,
-
-    /// Multiple specs configuration (for multi-spec/microservices mode)
-    /// Mutually exclusive with `spec_path` field
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub specs: Option<Vec<SpecEntry>>,
+    /// Specs configuration - always use array, even for single spec
+    #[serde(default)]
+    pub specs: Vec<SpecEntry>,
 }
 
 pub fn default_schema() -> String {
@@ -166,23 +160,8 @@ impl Default for Config {
         Self {
             schema: default_schema(),
             root_dir: default_root_dir(),
-            schemas: SchemasConfig {
-                output: default_schemas_output(),
-                naming: default_naming(),
-            },
-            apis: ApisConfig {
-                output: default_apis_output(),
-                style: default_style(),
-                base_url: None,
-                header_strategy: default_header_strategy(),
-            },
-            modules: ModulesConfig {
-                ignore: vec![],
-                selected: vec![],
-            },
             generation: GenerationConfig::default(),
-            spec_path: None,
-            specs: None,
+            specs: vec![],
         }
     }
 }
@@ -207,6 +186,7 @@ impl Default for ApisConfig {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -215,10 +195,8 @@ mod tests {
     fn test_load_default_config() {
         let config = Config::default();
         assert_eq!(config.root_dir, "src");
-        assert_eq!(config.schemas.output, "src/schemas");
-        assert_eq!(config.apis.output, "src/apis");
-        assert_eq!(config.apis.style, "fetch");
         assert!(!config.schema.is_empty());
+        assert_eq!(config.specs.len(), 0);
     }
 
     #[test]
@@ -227,8 +205,7 @@ mod tests {
         let json = serde_json::to_string_pretty(&config).unwrap();
 
         assert!(json.contains("\"root_dir\""));
-        assert!(json.contains("\"schemas\""));
-        assert!(json.contains("\"apis\""));
+        assert!(json.contains("\"specs\""));
         assert!(json.contains("\"$schema\""));
     }
 
@@ -238,28 +215,35 @@ mod tests {
         {
             "$schema": "https://example.com/schema.json",
             "root_dir": "test",
-            "schemas": {
-                "output": "test/schemas",
-                "naming": "camelCase"
-            },
-            "apis": {
-                "output": "test/apis",
-                "style": "fetch",
-                "header_strategy": "bearerToken"
-            },
-            "modules": {
-                "ignore": ["test"],
-                "selected": []
-            }
+            "specs": [
+                {
+                    "name": "test-spec",
+                    "path": "test.yaml",
+                    "schemas": {
+                        "output": "test/schemas",
+                        "naming": "camelCase"
+                    },
+                    "apis": {
+                        "output": "test/apis",
+                        "style": "fetch",
+                        "header_strategy": "bearerToken"
+                    },
+                    "modules": {
+                        "ignore": ["test"],
+                        "selected": []
+                    }
+                }
+            ]
         }
         "#;
 
         let config: Config = serde_json::from_str(json).unwrap();
         assert_eq!(config.root_dir, "test");
-        assert_eq!(config.schemas.output, "test/schemas");
-        assert_eq!(config.schemas.naming, "camelCase");
-        assert_eq!(config.apis.header_strategy, "bearerToken");
-        assert_eq!(config.modules.ignore, vec!["test"]);
+        assert_eq!(config.specs.len(), 1);
+        assert_eq!(config.specs[0].schemas.output, "test/schemas");
+        assert_eq!(config.specs[0].schemas.naming, "camelCase");
+        assert_eq!(config.specs[0].apis.header_strategy, "bearerToken");
+        assert_eq!(config.specs[0].modules.ignore, vec!["test"]);
     }
 
     #[test]
@@ -281,7 +265,16 @@ mod tests {
     #[test]
     fn test_config_with_base_url() {
         let mut config = Config::default();
-        config.apis.base_url = Some("/api/v1".to_string());
+        config.specs.push(SpecEntry {
+            name: "test".to_string(),
+            path: "test.yaml".to_string(),
+            schemas: SchemasConfig::default(),
+            apis: ApisConfig {
+                base_url: Some("/api/v1".to_string()),
+                ..ApisConfig::default()
+            },
+            modules: ModulesConfig::default(),
+        });
 
         let json = serde_json::to_string_pretty(&config).unwrap();
         assert!(json.contains("\"base_url\""));
@@ -383,6 +376,9 @@ mod tests {
         let entry = SpecEntry {
             name: "test-spec".to_string(),
             path: "specs/test.yaml".to_string(),
+            schemas: SchemasConfig::default(),
+            apis: ApisConfig::default(),
+            modules: ModulesConfig::default(),
         };
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("\"name\""));

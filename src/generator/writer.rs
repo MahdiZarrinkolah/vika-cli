@@ -36,14 +36,34 @@ pub fn write_schemas_with_options(
     backup: bool,
     force: bool,
 ) -> Result<Vec<PathBuf>> {
-    // Build module directory path: {output_dir}/{spec_name}/{module_name} for multi-spec mode
-    let module_dir = if let Some(spec) = spec_name {
-        output_dir
-            .join(sanitize_module_name(spec))
-            .join(sanitize_module_name(module_name))
-    } else {
-        output_dir.join(sanitize_module_name(module_name))
-    };
+    write_schemas_with_module_mapping(
+        output_dir,
+        module_name,
+        types,
+        zod_schemas,
+        spec_name,
+        backup,
+        force,
+        None, // module_schemas - will be added later if needed
+        &[], // common_schemas
+    )
+}
+
+pub fn write_schemas_with_module_mapping(
+    output_dir: &Path,
+    module_name: &str,
+    types: &[TypeScriptType],
+    zod_schemas: &[ZodSchema],
+    spec_name: Option<&str>,
+    backup: bool,
+    force: bool,
+    module_schemas: Option<&std::collections::HashMap<String, Vec<String>>>,
+    common_schemas: &[String],
+) -> Result<Vec<PathBuf>> {
+    // Build module directory path: {output_dir}/{module_name}
+    // Note: output_dir already includes spec_name if needed (from config)
+    // spec_name is only used for import path calculations, not directory structure
+    let module_dir = output_dir.join(sanitize_module_name(module_name));
     ensure_directory(&module_dir)?;
 
     let mut written_files = Vec::new();
@@ -88,12 +108,14 @@ pub fn write_schemas_with_options(
             .join("\n\n");
 
         // Check if we need to import Common types
+        // In single-spec mode: schemas/<module>/types.ts -> ../common
+        // In multi-spec mode: schemas/<spec_name>/<module>/types.ts -> ../common
         let needs_common_import = types_content_raw.contains("Common.");
         let common_import = if needs_common_import {
-            // Calculate relative path based on module depth
-            // In multi-spec mode, add 1 extra level for spec_name
-            let depth = module_name.matches('/').count() + 1 + if spec_name.is_some() { 1 } else { 0 };
-            let relative_path = "../".repeat(depth);
+            // We're at schemas/{spec_name}/{module}/types.ts (multi-spec) or schemas/{module}/types.ts (single-spec)
+            // Common is at schemas/{spec_name}/common (multi-spec) or schemas/common (single-spec)
+            // So we go up 1 level (module -> spec_name or module -> schemas), then down to common
+            let relative_path = "../";
             format!("import * as Common from \"{}common\";\n\n", relative_path)
         } else {
             String::new()
@@ -116,24 +138,167 @@ pub fn write_schemas_with_options(
             .join("\n\n");
 
         // Check if we need to import Common schemas
+        // In single-spec mode: schemas/<module>/schemas.ts -> ../common
+        // In multi-spec mode: schemas/<spec_name>/<module>/schemas.ts -> ../common
         let needs_common_import = zod_content_raw.contains("Common.");
         let common_import = if needs_common_import {
-            // Calculate relative path based on module depth
-            // In multi-spec mode, add 1 extra level for spec_name
-            let depth = module_name.matches('/').count() + 1 + if spec_name.is_some() { 1 } else { 0 };
-            let relative_path = "../".repeat(depth);
+            // We're at schemas/{spec_name}/{module}/schemas.ts (multi-spec) or schemas/{module}/schemas.ts (single-spec)
+            // Common is at schemas/{spec_name}/common (multi-spec) or schemas/common (single-spec)
+            // So we go up 1 level (module -> spec_name or module -> schemas), then down to common
+            let relative_path = "../";
             format!("import * as Common from \"{}common\";\n\n", relative_path)
         } else {
             String::new()
         };
 
+        // Detect cross-module enum schema references and add imports
+        // This handles cases where a module references an enum from another module
+        // (e.g., orders module using CodeEnumSchema from currencies module)
+        let mut cross_module_imports: std::collections::HashMap<String, std::collections::HashSet<String>> = std::collections::HashMap::new();
+        if let Some(module_schemas_map) = module_schemas {
+            let current_module_schemas: std::collections::HashSet<String> = module_schemas_map
+                .get(module_name)
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .collect();
+            
+            // Check which enums are defined locally in this module's zod_schemas
+            let locally_defined_enums: std::collections::HashSet<String> = zod_schemas
+                .iter()
+                .filter_map(|z| {
+                    // Extract enum name from "export const XEnumSchema = z.enum([...])"
+                    if let Some(start) = z.content.find("export const ") {
+                        let after_export = &z.content[start + 13..];
+                        if let Some(end) = after_export.find("EnumSchema") {
+                            let enum_name = &after_export[..end + "EnumSchema".len()];
+                            if enum_name.ends_with("EnumSchema") {
+                                return Some(enum_name.to_string());
+                            }
+                        }
+                    }
+                    None
+                })
+                .collect();
+            
+            // Find enum schema references in the content (pattern: XEnumSchema where X is not Common)
+            // We'll search for patterns like "CodeEnumSchema", "CountryCodeEnumSchema", etc.
+            let mut pos = 0;
+            while let Some(start) = zod_content_raw[pos..].find("EnumSchema") {
+                let actual_start = pos + start;
+                // Find the start of the enum name (go backwards to find word boundary)
+                let mut name_start = actual_start;
+                while name_start > 0 {
+                    let ch = zod_content_raw.chars().nth(name_start - 1).unwrap_or(' ');
+                    if !ch.is_alphanumeric() && ch != '_' {
+                        break;
+                    }
+                    name_start -= 1;
+                }
+                let enum_name = &zod_content_raw[name_start..actual_start + "EnumSchema".len()];
+                
+                // Skip if it's Common.EnumSchema (already imported)
+                if enum_name.starts_with("Common.") {
+                    pos = actual_start + "EnumSchema".len();
+                    continue;
+                }
+                
+                // Skip if this enum is defined locally in this module
+                if locally_defined_enums.contains(enum_name) {
+                    pos = actual_start + "EnumSchema".len();
+                    continue;
+                }
+                
+                // Extract schema name from enum name (e.g., CodeEnumSchema -> Code)
+                let schema_name = enum_name.replace("EnumSchema", "");
+                
+                // Check if this enum is not defined locally AND not in common
+                // If it's not defined locally but IS in common, we should use Common.EnumSchema instead
+                if !locally_defined_enums.contains(enum_name) && !common_schemas.contains(&schema_name) {
+                    // Find which module defines this schema (and thus exports the enum)
+                    // Try exact match first
+                    let mut found_module: Option<String> = None;
+                    for (other_module, other_schemas) in module_schemas_map {
+                        if other_module != module_name && other_schemas.contains(&schema_name) {
+                            // Found it! But check if it's not in common schemas
+                            // If it's in common, the enum should be imported from common, not this module
+                            if !common_schemas.contains(&schema_name) {
+                                found_module = Some(other_module.clone());
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // If not found with exact match, try case-insensitive and partial matches
+                    // This handles cases where schema names might have different casing or prefixes
+                    if found_module.is_none() {
+                        let schema_name_lower = schema_name.to_lowercase();
+                        for (other_module, other_schemas) in module_schemas_map {
+                            if other_module != module_name {
+                                // Check if any schema name matches (case-insensitive or contains the enum name)
+                                for other_schema in other_schemas {
+                                    let other_schema_lower = other_schema.to_lowercase();
+                                    // Match if schema name equals enum base name (case-insensitive)
+                                    // or if enum name is contained in schema name
+                                    if (other_schema_lower == schema_name_lower
+                                        || other_schema_lower.contains(&schema_name_lower)
+                                        || schema_name_lower.contains(&other_schema_lower))
+                                        && !common_schemas.contains(other_schema)
+                                    {
+                                        found_module = Some(other_module.clone());
+                                        break;
+                                    }
+                                }
+                                if found_module.is_some() {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // If we found a module, add the import
+                    if let Some(module) = found_module {
+                        cross_module_imports
+                            .entry(module)
+                            .or_insert_with(std::collections::HashSet::new)
+                            .insert(enum_name.to_string());
+                    }
+                    // Note: Disabled heuristic matching as it was too aggressive and caused false imports
+                    // If an enum is truly needed from another module, it should be found via exact or fuzzy schema name match
+                }
+                
+                pos = actual_start + "EnumSchema".len();
+            }
+        }
+
+        // Build cross-module imports (deduplicated)
+        let mut cross_module_import_lines = String::new();
+        for (other_module, enum_names_set) in &cross_module_imports {
+            let mut enum_names: Vec<String> = enum_names_set.iter().cloned().collect();
+            enum_names.sort(); // Sort for consistent output
+            if !enum_names.is_empty() {
+                let relative_path = "../";
+                let module_import = format!(
+                    "import {{ {} }} from \"{}{}\";\n",
+                    enum_names.join(", "),
+                    relative_path,
+                    sanitize_module_name(other_module)
+                );
+                cross_module_import_lines.push_str(&module_import);
+            }
+        }
+        if !cross_module_import_lines.is_empty() {
+            cross_module_import_lines.push('\n');
+        }
+
         let zod_content = format_typescript_code(&format!(
-            "import {{ z }} from \"zod\";\n{}{}",
+            "import {{ z }} from \"zod\";\n{}{}{}",
             if !common_import.is_empty() {
                 &common_import
             } else {
                 ""
             },
+            cross_module_import_lines,
             zod_content_raw
         ));
 
@@ -180,14 +345,10 @@ pub fn write_api_client_with_options(
     backup: bool,
     force: bool,
 ) -> Result<Vec<PathBuf>> {
-    // Build module directory path: {output_dir}/{spec_name}/{module_name} for multi-spec mode
-    let module_dir = if let Some(spec) = spec_name {
-        output_dir
-            .join(sanitize_module_name(spec))
-            .join(sanitize_module_name(module_name))
-    } else {
-        output_dir.join(sanitize_module_name(module_name))
-    };
+    // Build module directory path: {output_dir}/{module_name}
+    // Note: output_dir already includes spec_name if needed (from config)
+    // spec_name is only used for import path calculations, not directory structure
+    let module_dir = output_dir.join(sanitize_module_name(module_name));
     ensure_directory(&module_dir)?;
 
     let mut written_files = Vec::new();
@@ -592,12 +753,76 @@ pub fn write_file_with_backup(path: &Path, content: &str, backup: bool, force: b
         if let Ok(metadata) = load_file_metadata(path) {
             let current_hash = compute_content_hash(content);
             let file_hash = compute_file_hash(path)?;
+            
+            // If metadata hash doesn't match current or file hash, check if it's just formatting
             if metadata.hash != current_hash && metadata.hash != file_hash {
-                // File was modified by user
-                return Err(FileSystemError::FileModifiedByUser {
-                    path: path.display().to_string(),
+                // Try to detect formatter by walking up the directory tree
+                // This handles the case where file was formatted but spec didn't change
+                use crate::formatter::FormatterManager;
+                
+                // Find formatter by checking parent directories (where config files are likely located)
+                let mut search_dir = path.parent().unwrap_or_else(|| Path::new("."));
+                let mut formatter = None;
+                
+                // Walk up the directory tree to find formatter config
+                while search_dir != Path::new("/") && search_dir != Path::new("") {
+                    if let Some(fmt) = FormatterManager::detect_formatter_from_dir(search_dir) {
+                        formatter = Some(fmt);
+                        break;
+                    }
+                    if let Some(parent) = search_dir.parent() {
+                        search_dir = parent;
+                    } else {
+                        break;
+                    }
                 }
-                .into());
+                
+                // Also try current directory as fallback
+                if formatter.is_none() {
+                    formatter = FormatterManager::detect_formatter();
+                }
+                
+                if let Some(fmt) = formatter {
+                    // Format the new content and compare with file
+                    match FormatterManager::format_content(content, fmt, path) {
+                        Ok(formatted_content) => {
+                            let formatted_hash = compute_content_hash(&formatted_content);
+                            if formatted_hash == file_hash {
+                                // File matches formatted version of new content - it's just formatting, allow overwrite
+                                // Continue to write the file
+                            } else {
+                                // File doesn't match formatted new content
+                                // Check if spec changed - if so, differences are expected
+                                if current_hash == metadata.hash {
+                                    // Spec didn't change, so file should match formatted version if it's just formatting
+                                    // Since it doesn't match, it's likely a user modification
+                                    return Err(FileSystemError::FileModifiedByUser {
+                                        path: path.display().to_string(),
+                                    }
+                                    .into());
+                                }
+                                // Spec changed - file differences are expected, allow overwrite
+                                // (formatted new content won't match formatted old content when spec changes)
+                            }
+                        }
+                        Err(_) => {
+                            // Formatting failed - check if spec changed
+                            if current_hash == metadata.hash {
+                                // Spec didn't change but formatting failed - can't verify
+                                // Since metadata update after formatting should handle this, allow overwrite
+                            }
+                            // If spec changed, allow overwrite (differences are expected)
+                        }
+                    }
+                } else {
+                    // No formatter detected - check if spec changed
+                    if current_hash == metadata.hash {
+                        // Spec didn't change, but file_hash != metadata.hash
+                        // This likely means file was formatted, but we can't verify without formatter
+                        // Since metadata update after formatting should handle this, allow overwrite
+                    }
+                    // If spec changed, allow overwrite (differences are expected)
+                }
             }
         }
     }
@@ -682,7 +907,87 @@ fn compute_file_hash(path: &Path) -> Result<String> {
     Ok(compute_content_hash(&content))
 }
 
-fn save_file_metadata(path: &Path, content: &str) -> Result<()> {
+/// Update metadata for a file from its current content on disk
+/// Useful after formatting files to update metadata hash
+pub fn update_file_metadata_from_disk(path: &Path) -> Result<()> {
+    let content = std::fs::read_to_string(path).map_err(|e| FileSystemError::ReadFileFailed {
+        path: path.display().to_string(),
+        source: e,
+    })?;
+    save_file_metadata(path, &content)
+}
+
+/// Batch update metadata for multiple files from disk
+/// Much more efficient than calling update_file_metadata_from_disk for each file
+/// Reads metadata JSON once, updates all files, writes once
+pub fn batch_update_file_metadata_from_disk(paths: &[PathBuf]) -> Result<()> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+
+    let metadata_dir = PathBuf::from(".vika-cache");
+    std::fs::create_dir_all(&metadata_dir).map_err(|e| FileSystemError::CreateDirectoryFailed {
+        path: metadata_dir.display().to_string(),
+        source: e,
+    })?;
+
+    let metadata_file = metadata_dir.join("file-metadata.json");
+    let mut metadata_map: std::collections::HashMap<String, FileMetadata> =
+        if metadata_file.exists() {
+            let content = std::fs::read_to_string(&metadata_file).map_err(|e| {
+                FileSystemError::ReadFileFailed {
+                    path: metadata_file.display().to_string(),
+                    source: e,
+                }
+            })?;
+            serde_json::from_str(&content).unwrap_or_default()
+        } else {
+            std::collections::HashMap::new()
+        };
+
+    let generated_at = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    // Update metadata for all files in batch
+    for path in paths {
+        match std::fs::read_to_string(path) {
+            Ok(content) => {
+                let hash = compute_content_hash(&content);
+                metadata_map.insert(
+                    path.display().to_string(),
+                    FileMetadata {
+                        hash,
+                        generated_at,
+                        generated_by: "vika-cli".to_string(),
+                    },
+                );
+            }
+            Err(e) => {
+                // Log but continue with other files
+                eprintln!("Warning: Failed to read {}: {}", path.display(), e);
+            }
+        }
+    }
+
+    // Write updated metadata once
+    let json = serde_json::to_string_pretty(&metadata_map).map_err(|e| {
+        FileSystemError::WriteFileFailed {
+            path: metadata_file.display().to_string(),
+            source: std::io::Error::new(std::io::ErrorKind::InvalidData, format!("{}", e)),
+        }
+    })?;
+
+    std::fs::write(&metadata_file, json).map_err(|e| FileSystemError::WriteFileFailed {
+        path: metadata_file.display().to_string(),
+        source: e,
+    })?;
+
+    Ok(())
+}
+
+pub fn save_file_metadata(path: &Path, content: &str) -> Result<()> {
     let metadata_dir = PathBuf::from(".vika-cache");
     std::fs::create_dir_all(&metadata_dir).map_err(|e| FileSystemError::CreateDirectoryFailed {
         path: metadata_dir.display().to_string(),

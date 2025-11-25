@@ -34,12 +34,8 @@ pub async fn run_single_spec(
     options: &GenerateOptions,
 ) -> Result<GenerationStats> {
     let mut progress = ProgressReporter::new(options.verbose);
-    let is_multi_spec = crate::specs::manager::is_multi_spec_mode(config);
-    let spec_name = if is_multi_spec {
-        Some(spec.name.as_str())
-    } else {
-        None
-    };
+    // Always use spec name (even for single spec)
+    let spec_name = Some(spec.name.as_str());
 
     progress.start_spinner(&format!("Fetching spec from: {}", spec.path));
     let parsed = crate::generator::swagger_parser::fetch_and_parse_spec_with_cache_and_name(
@@ -53,11 +49,16 @@ pub async fn run_single_spec(
         parsed.modules.len()
     ));
 
-    // Filter out ignored modules
+    // Use spec-specific configs (required per spec)
+    let schemas_config = &spec.schemas;
+    let apis_config = &spec.apis;
+    let modules_config = &spec.modules;
+
+    // Filter out ignored modules (using spec-specific or global)
     let available_modules: Vec<String> = parsed
         .modules
         .iter()
-        .filter(|m| !config.modules.ignore.contains(m))
+        .filter(|m| !modules_config.ignore.contains(m))
         .cloned()
         .collect();
 
@@ -65,16 +66,16 @@ pub async fn run_single_spec(
         return Err(crate::error::GenerationError::NoModulesAvailable.into());
     }
 
-    // Select modules interactively
-    let selected_modules = select_modules(&available_modules, &config.modules.ignore)?;
+    // Select modules interactively (using spec-specific or global ignore list)
+    let selected_modules = select_modules(&available_modules, &modules_config.ignore)?;
 
     // Filter common schemas based on selected modules only
     let (filtered_module_schemas, common_schemas) =
         filter_common_schemas(&parsed.module_schemas, &selected_modules);
 
-    // Generate code for each module
-    let schemas_dir = PathBuf::from(&config.schemas.output);
-    let apis_dir = PathBuf::from(&config.apis.output);
+    // Generate code for each module (using spec-specific or global output directories)
+    let schemas_dir = PathBuf::from(&schemas_config.output);
+    let apis_dir = PathBuf::from(&apis_config.output);
 
     // Ensure http.ts file exists (only once per output directory)
     let http_file = apis_dir.join("http.ts");
@@ -101,29 +102,32 @@ pub async fn run_single_spec(
             crate::templates::engine::TemplateEngine::new(project_root.as_deref())?;
 
         // Generate TypeScript typings for common schemas
+        // Pass empty common_schemas list so common schemas don't prefix themselves with "Common."
         let common_types = generate_typings_with_registry_and_engine_and_spec(
             &parsed.openapi,
             &parsed.schemas,
             &common_schemas,
             &mut shared_enum_registry,
-            &common_schemas,
+            &[], // Empty list - common schemas shouldn't prefix themselves
             Some(&template_engine),
             spec_name,
         )?;
 
         // Generate Zod schemas for common schemas (using same registry)
+        // Pass empty common_schemas list so common schemas don't prefix themselves with "Common."
         let common_zod_schemas = generate_zod_schemas_with_registry_and_engine_and_spec(
             &parsed.openapi,
             &parsed.schemas,
             &common_schemas,
             &mut shared_enum_registry,
-            &common_schemas,
+            &[], // Empty list - common schemas shouldn't prefix themselves
             Some(&template_engine),
             spec_name,
         )?;
 
         // Write common schemas
-        let common_files = write_schemas_with_options(
+        use crate::generator::writer::write_schemas_with_module_mapping;
+        let common_files = write_schemas_with_module_mapping(
             &schemas_dir,
             "common",
             &common_types,
@@ -131,6 +135,8 @@ pub async fn run_single_spec(
             spec_name,
             options.use_backup,
             options.use_force,
+            Some(&filtered_module_schemas),
+            &common_schemas,
         )?;
         total_files += common_files.len();
         progress.finish_spinner(&format!(
@@ -214,7 +220,9 @@ pub async fn run_single_spec(
         all_types.extend(api_result.response_types);
 
         // Write schemas (with backup and conflict detection)
-        let schema_files = write_schemas_with_options(
+        // Pass module_schemas mapping to enable cross-module enum imports
+        use crate::generator::writer::write_schemas_with_module_mapping;
+        let schema_files = write_schemas_with_module_mapping(
             &schemas_dir,
             module,
             &all_types,
@@ -222,6 +230,8 @@ pub async fn run_single_spec(
             spec_name,
             options.use_backup,
             options.use_force,
+            Some(&filtered_module_schemas),
+            &common_schemas,
         )?;
         total_files += schema_files.len();
 
@@ -258,10 +268,30 @@ pub async fn run_single_spec(
 
     // Format files if formatter is available
     if !all_generated_files.is_empty() {
-        let output_base = schemas_dir
+        // Get current directory to resolve relative paths
+        let current_dir = std::env::current_dir().map_err(|e| {
+            crate::error::FileSystemError::ReadFileFailed {
+                path: ".".to_string(),
+                source: e,
+            }
+        })?;
+        
+        // Resolve to absolute paths
+        let schemas_dir_abs = if schemas_dir.is_absolute() {
+            schemas_dir.clone()
+        } else {
+            current_dir.join(&schemas_dir)
+        };
+        let apis_dir_abs = if apis_dir.is_absolute() {
+            apis_dir.clone()
+        } else {
+            current_dir.join(&apis_dir)
+        };
+        
+        let output_base = schemas_dir_abs
             .parent()
             .and_then(|p| p.parent())
-            .or_else(|| apis_dir.parent().and_then(|p| p.parent()));
+            .or_else(|| apis_dir_abs.parent().and_then(|p| p.parent()));
 
         let formatter = if let Some(base_dir) = output_base {
             FormatterManager::detect_formatter_from_dir(base_dir)
@@ -280,39 +310,64 @@ pub async fn run_single_spec(
             })?;
 
             if let Some(output_base) = output_base {
-                std::env::set_current_dir(output_base).map_err(|e| {
-                    crate::error::FileSystemError::ReadFileFailed {
-                        path: output_base.display().to_string(),
-                        source: e,
-                    }
-                })?;
-
-                let relative_files: Vec<PathBuf> = all_generated_files
-                    .iter()
-                    .filter_map(|p| p.strip_prefix(output_base).ok().map(|p| p.to_path_buf()))
-                    .collect();
-
-                if !relative_files.is_empty() {
-                    let result = FormatterManager::format_files(&relative_files, formatter);
-
-                    std::env::set_current_dir(&original_dir).map_err(|e| {
-                        crate::error::FileSystemError::ReadFileFailed {
-                            path: original_dir.display().to_string(),
-                            source: e,
-                        }
-                    })?;
-
-                    result?;
+                // Ensure output_base is not empty
+                if output_base.as_os_str().is_empty() {
+                    // Fallback: use current directory
+                    FormatterManager::format_files(&all_generated_files, formatter)?;
                 } else {
-                    std::env::set_current_dir(&original_dir).map_err(|e| {
+                    std::env::set_current_dir(output_base).map_err(|e| {
                         crate::error::FileSystemError::ReadFileFailed {
-                            path: original_dir.display().to_string(),
+                            path: output_base.display().to_string(),
                             source: e,
                         }
                     })?;
+
+                    let relative_files: Vec<PathBuf> = all_generated_files
+                        .iter()
+                        .filter_map(|p| {
+                            p.strip_prefix(output_base)
+                                .ok()
+                                .map(|p| p.to_path_buf())
+                                .filter(|p| !p.as_os_str().is_empty())
+                        })
+                        .collect();
+
+                    if !relative_files.is_empty() {
+                        let result = FormatterManager::format_files(&relative_files, formatter);
+
+                        std::env::set_current_dir(&original_dir).map_err(|e| {
+                            crate::error::FileSystemError::ReadFileFailed {
+                                path: original_dir.display().to_string(),
+                                source: e,
+                            }
+                        })?;
+
+                        result?;
+                        
+                        // Update metadata for formatted files to reflect formatted content hash (batch update)
+                        use crate::generator::writer::batch_update_file_metadata_from_disk;
+                        if let Err(e) = batch_update_file_metadata_from_disk(&all_generated_files) {
+                            // Log but don't fail - metadata update is best effort
+                            progress.warning(&format!("Failed to update metadata: {}", e));
+                        }
+                    } else {
+                        std::env::set_current_dir(&original_dir).map_err(|e| {
+                            crate::error::FileSystemError::ReadFileFailed {
+                                path: original_dir.display().to_string(),
+                                source: e,
+                            }
+                        })?;
+                    }
                 }
             } else {
                 FormatterManager::format_files(&all_generated_files, formatter)?;
+                
+                // Update metadata for formatted files to reflect formatted content hash (batch update)
+                use crate::generator::writer::batch_update_file_metadata_from_disk;
+                if let Err(e) = batch_update_file_metadata_from_disk(&all_generated_files) {
+                    // Log but don't fail - metadata update is best effort
+                    progress.warning(&format!("Failed to update metadata: {}", e));
+                }
             }
             progress.finish_spinner("Files formatted");
         }
@@ -351,6 +406,10 @@ fn collect_ts_files(dir: &std::path::Path, files: &mut Vec<PathBuf>) -> Result<(
                 source: e,
             })?;
             let path = entry.path();
+            // Skip if path is empty or invalid
+            if path.as_os_str().is_empty() {
+                continue;
+            }
             if path.is_dir() {
                 collect_ts_files(&path, files)?;
             } else if path.extension().and_then(|s| s.to_str()) == Some("ts") {

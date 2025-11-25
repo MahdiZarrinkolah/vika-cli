@@ -139,9 +139,6 @@ fn generate_zod_for_schema(
                 enum_values.sort();
                 let enum_key = enum_values.join(",");
                 let schema_context_key = format!("schema_enum:{}", name);
-                if enum_registry.get(&schema_context_key).is_some() {
-                    return Ok(());
-                }
 
                 // Use schema name if available, otherwise generate from values
                 let enum_name = if !name.is_empty() {
@@ -156,22 +153,28 @@ fn generate_zod_for_schema(
                     format!("Enum{}", value_hash)
                 };
 
-                // Store in registry (schema-specific + base key for reuse)
-                enum_registry.insert(schema_context_key, enum_name.clone());
-                if !enum_registry.contains_key(&enum_key) {
-                    enum_registry.insert(enum_key.clone(), enum_name.clone());
-                }
-                if !name.is_empty() {
-                    enum_registry.insert(format!("schema:{}", name), enum_name.clone());
-                }
+                // Check if already generated in THIS zod_schemas collection
+                let schema_export = format!("export const {}Schema", enum_name);
+                let already_generated = zod_schemas.iter().any(|s| s.content.contains(&schema_export));
+                
+                if !already_generated {
+                    // Store in registry (schema-specific + base key for reuse)
+                    enum_registry.insert(schema_context_key, enum_name.clone());
+                    if !enum_registry.contains_key(&enum_key) {
+                        enum_registry.insert(enum_key.clone(), enum_name.clone());
+                    }
+                    if !name.is_empty() {
+                        enum_registry.insert(format!("schema:{}", name), enum_name.clone());
+                    }
 
-                if let Some(engine) = template_engine {
-                    let context = ZodContext::enum_schema(enum_name.clone(), enum_values.clone(), spec_name.map(|s| s.to_string()));
-                    let content = engine.render(TemplateId::ZodEnum, &context)?;
-                    zod_schemas.push(ZodSchema { content });
-                } else {
-                    let enum_schema = generate_enum_zod(&enum_name, &enum_values);
-                    zod_schemas.push(enum_schema);
+                    if let Some(engine) = template_engine {
+                        let context = ZodContext::enum_schema(enum_name.clone(), enum_values.clone(), spec_name.map(|s| s.to_string()));
+                        let content = engine.render(TemplateId::ZodEnum, &context)?;
+                        zod_schemas.push(ZodSchema { content });
+                    } else {
+                        let enum_schema = generate_enum_zod(&enum_name, &enum_values);
+                        zod_schemas.push(enum_schema);
+                    }
                 }
                 return Ok(());
             }
@@ -272,6 +275,8 @@ fn schema_to_zod(
                             let enum_key = enum_values.join(",");
 
                             // For generic property names, include context in the key to avoid conflicts
+                            // Only do this for truly generic names like status/type/state/kind
+                            // For other generic identifiers (key/code/id/name), let them reuse based on values
                             let context_key = if let Some((prop_name, parent_schema)) = context {
                                 let generic_names = ["status", "type", "state", "kind"];
                                 if generic_names.contains(&prop_name.to_lowercase().as_str())
@@ -289,6 +294,7 @@ fn schema_to_zod(
                             // Check if this enum already exists in registry
                             // First check context_key (for context-aware enums)
                             // Then check base enum_key to deduplicate enums with same values
+                            // This ensures enums with the same values reuse the same enum name
                             let existing_enum_name = enum_registry
                                 .get(&context_key)
                                 .or_else(|| enum_registry.get(&enum_key))
@@ -299,12 +305,11 @@ fn schema_to_zod(
                                 enum_registry.insert(context_key.clone(), existing_name.clone());
 
                                 // Check if enum schema has already been generated
-                                // Check for both "export const {name}Schema" and just "{name}Schema" patterns
+                                // Must match the actual definition, not just a reference
                                 let schema_already_generated = zod_schemas.iter().any(|s| {
                                     let schema_name_pattern = format!("{}Schema", existing_name);
                                     s.content
-                                        .contains(&format!("export const {}", schema_name_pattern))
-                                        || s.content.contains(&schema_name_pattern)
+                                        .contains(&format!("export const {} =", schema_name_pattern))
                                 });
 
                                 // If not generated yet, generate it now
@@ -365,7 +370,47 @@ fn schema_to_zod(
                                         format!("{}{}Enum", parent_clean, prop_pascal)
                                     }
                                 } else {
-                                    format!("{}Enum", prop_pascal)
+                                    // For non-generic property names, check if parent schema name suggests a better enum name
+                                    // This helps with cases like "key" and "provider" in "AvailableProviderDto" both referring to provider enums
+                                    if !parent_schema.is_empty() {
+                                        let parent_pascal = to_pascal_case(parent_schema);
+                                        let parent_clean = parent_pascal
+                                            .trim_end_matches("ResponseDto")
+                                            .trim_end_matches("Dto")
+                                            .trim_end_matches("Response")
+                                            .to_string();
+                                        
+                                        // If parent contains a word that matches the property conceptually, use that
+                                        // For example, "AvailableProviderDto" contains "Provider", so "key" property should use "ProviderEnum"
+                                        let prop_lower = prop_pascal.to_lowercase();
+                                        let parent_lower = parent_clean.to_lowercase();
+                                        
+                                        // Check if parent contains a more descriptive word (like "Provider" in "AvailableProvider")
+                                        // and the property is a generic identifier (like "key", "id", "name", "code")
+                                        let generic_identifiers = ["key", "id", "name", "value", "code"];
+                                        if generic_identifiers.contains(&prop_name.to_lowercase().as_str()) {
+                                            // For generic identifiers, always use parent schema to create unique enum names
+                                            // This prevents conflicts when different schemas have the same property name
+                                            // (e.g., CurrencyResponseDto.code vs OrderValidationErrorDto.code)
+                                            let meaningful_part = parent_clean
+                                                .trim_start_matches("Available")
+                                                .trim_start_matches("Get")
+                                                .trim_start_matches("Create")
+                                                .trim_start_matches("Update")
+                                                .trim_start_matches("Delete");
+                                            
+                                            // Always include parent schema name for generic identifiers to avoid conflicts
+                                            if !meaningful_part.is_empty() {
+                                                format!("{}{}Enum", meaningful_part, prop_pascal)
+                                            } else {
+                                                format!("{}{}Enum", parent_clean, prop_pascal)
+                                            }
+                                        } else {
+                                            format!("{}Enum", prop_pascal)
+                                        }
+                                    } else {
+                                        format!("{}Enum", prop_pascal)
+                                    }
                                 }
                             } else if !enum_values.is_empty() {
                                 // Fallback: use first value to create name

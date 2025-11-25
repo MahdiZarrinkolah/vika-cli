@@ -355,14 +355,14 @@ fn generate_function_for_operation(
         ));
     }
 
-    // HTTP client is at apis/http.ts, and we're generating apis/<module>/index.ts
-    // Calculate relative path based on module depth
-    let depth = module_name.matches('/').count();
-    let http_relative_path = if depth == 0 {
-        "../http"
-    } else {
-        &format!("{}../http", "../".repeat(depth))
-    };
+    // HTTP client is at {output_dir}/http.ts
+    // Note: output_dir already includes spec_name if needed (from config)
+    // So the file structure is: {output_dir}/{module}/index.ts and {output_dir}/http.ts
+    // For example: src/apis/ecommerce/addresses/index.ts and src/apis/ecommerce/http.ts
+    // From addresses/index.ts: go up 1 level to ecommerce/, then http.ts is at the same level
+    // So depth = 1 (just the module directory)
+    let module_depth = module_name.matches('/').count() + 1; // +1 for the module directory itself
+    let http_relative_path = format!("{}http", "../".repeat(module_depth));
     let http_import = http_relative_path;
 
     // Determine if response type is in common schemas or module-specific
@@ -393,19 +393,37 @@ fn generate_function_for_operation(
     }
 
     // Add imports
+    // File is at: {output_dir}/{module}/index.ts
+    // output_dir already includes spec_name (e.g., src/apis/tenant)
+    // To get to schemas: go up from module to output_dir, then up to apis/, then up to src/, then into schemas/
+    // From auth/index.ts: go up 1 to tenant/, up 1 more to apis/, up 1 more to src/, then into schemas/
+    // So depth = module_depth (1) + 1 (to apis/) + 1 (to src/) = module_depth + 2
     if needs_common_import {
-        let schemas_depth = depth + 1; // +1 to go from apis/ to schemas/
-        let common_import = format!("{}../schemas/common", "../".repeat(schemas_depth));
+        let schemas_depth = module_depth + 2; // +1 to apis/, +1 to src/
+        let common_import = if let Some(spec) = spec_name {
+            format!("{}schemas/{}/common", "../".repeat(schemas_depth), sanitize_module_name(spec))
+        } else {
+            format!("{}schemas/common", "../".repeat(schemas_depth))
+        };
         type_imports.push_str(&format!("import * as Common from \"{}\";\n", common_import));
     }
     if needs_namespace_import {
-        let schemas_depth = depth + 1; // +1 to go from apis/ to schemas/
+        let schemas_depth = module_depth + 2; // +1 to apis/, +1 to src/
         let sanitized_module_name = sanitize_module_name(module_name);
-        let schemas_import = format!(
-            "{}../schemas/{}",
-            "../".repeat(schemas_depth),
-            sanitized_module_name
-        );
+        let schemas_import = if let Some(spec) = spec_name {
+            format!(
+                "{}schemas/{}/{}",
+                "../".repeat(schemas_depth),
+                sanitize_module_name(spec),
+                sanitized_module_name
+            )
+        } else {
+            format!(
+                "{}schemas/{}",
+                "../".repeat(schemas_depth),
+                sanitized_module_name
+            )
+        };
         type_imports.push_str(&format!(
             "import * as {} from \"{}\";\n",
             namespace_name, schemas_import
@@ -448,13 +466,24 @@ fn generate_function_for_operation(
     // Add type import if we have response types (separate line)
     if !response_type_imports.is_empty() {
         // Calculate relative path based on module depth
-        let schemas_depth = depth + 1; // +1 to go from apis/ to schemas/
+        // module_depth already includes +1 for the module directory itself
+        // +1 to apis/, +1 to src/ = module_depth + 2
+        let schemas_depth = module_depth + 2;
         let sanitized_module_name = sanitize_module_name(module_name);
-        let schemas_import = format!(
-            "{}../schemas/{}",
-            "../".repeat(schemas_depth),
-            sanitized_module_name
-        );
+        let schemas_import = if let Some(spec) = spec_name {
+            format!(
+                "{}schemas/{}/{}",
+                "../".repeat(schemas_depth),
+                sanitize_module_name(spec),
+                sanitized_module_name
+            )
+        } else {
+            format!(
+                "{}schemas/{}",
+                "../".repeat(schemas_depth),
+                sanitized_module_name
+            )
+        };
         let type_import_line = format!(
             "import type {{ {} }} from \"{}\";",
             response_type_imports.join(", "),
@@ -469,13 +498,24 @@ fn generate_function_for_operation(
 
     // Add enum type imports if we have any
     if !enum_types.is_empty() {
-        let schemas_depth = depth + 1; // +1 to go from apis/ to schemas/
+        // module_depth already includes +1 for the module directory itself
+        // +1 to apis/, +1 to src/ = module_depth + 2
+        let schemas_depth = module_depth + 2;
         let sanitized_module_name = sanitize_module_name(module_name);
-        let schemas_import = format!(
-            "{}../schemas/{}",
-            "../".repeat(schemas_depth),
-            sanitized_module_name
-        );
+        let schemas_import = if let Some(spec) = spec_name {
+            format!(
+                "{}schemas/{}/{}",
+                "../".repeat(schemas_depth),
+                sanitize_module_name(spec),
+                sanitized_module_name
+            )
+        } else {
+            format!(
+                "{}schemas/{}",
+                "../".repeat(schemas_depth),
+                sanitized_module_name
+            )
+        };
         let enum_names: Vec<String> = enum_types.iter().map(|(name, _)| name.clone()).collect();
         let enum_import_line = format!(
             "import type {{ {} }} from \"{}\";",

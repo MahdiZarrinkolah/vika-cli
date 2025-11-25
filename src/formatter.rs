@@ -61,28 +61,24 @@ impl FormatterManager {
     fn format_with_prettier(files: &[std::path::PathBuf]) -> Result<()> {
         let file_paths: Vec<String> = files
             .iter()
-            .filter_map(|p| p.to_str().map(|s| s.to_string()))
+            .filter_map(|p| {
+                p.to_str()
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+            })
             .collect();
 
         if file_paths.is_empty() {
             return Ok(());
         }
 
-        // Use glob pattern if we have many files to avoid command line length issues
-        let output = if file_paths.len() > 50 {
-            // Use glob pattern instead
-            Command::new("npx")
-                .arg("prettier")
-                .arg("--write")
-                .arg("src/**/*.ts")
-                .output()
-        } else {
-            Command::new("npx")
-                .arg("prettier")
-                .arg("--write")
-                .args(&file_paths)
-                .output()
-        };
+        // Always use explicit file paths to avoid glob pattern issues
+        // Modern systems can handle long command lines, and if not, we'll handle it gracefully
+        let output = Command::new("npx")
+            .arg("prettier")
+            .arg("--write")
+            .args(&file_paths)
+            .output();
 
         match output {
             Ok(output) => {
@@ -108,7 +104,11 @@ impl FormatterManager {
     fn format_with_biome(files: &[std::path::PathBuf]) -> Result<()> {
         let file_paths: Vec<String> = files
             .iter()
-            .filter_map(|p| p.to_str().map(|s| s.to_string()))
+            .filter_map(|p| {
+                p.to_str()
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+            })
             .collect();
 
         if file_paths.is_empty() {
@@ -128,6 +128,97 @@ impl FormatterManager {
                 // Silently fail if biome is not available
                 eprintln!("Warning: Failed to run biome: {}", e);
                 Ok(())
+            }
+        }
+    }
+
+    /// Format a single content string using the specified formatter
+    /// Returns the formatted content, or original content if formatting fails
+    /// Uses stdin/stdout to format, ensuring formatter config is found
+    pub fn format_content(content: &str, formatter: Formatter, file_path: &Path) -> Result<String> {
+        use std::process::Stdio;
+
+        // Determine the working directory (where config files are likely located)
+        let work_dir = file_path.parent().unwrap_or(Path::new("."));
+        
+        // Use stdin/stdout for formatting to ensure config files are found
+        let format_result = match formatter {
+            Formatter::Prettier => {
+                let mut cmd = Command::new("npx");
+                cmd.arg("prettier")
+                    .arg("--stdin-filepath")
+                    .arg(file_path.to_str().unwrap_or("file.ts"))
+                    .current_dir(work_dir)
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped());
+                
+                let mut child = cmd.spawn().map_err(|e| {
+                    crate::error::VikaError::from(crate::error::FileSystemError::ReadFileFailed {
+                        path: file_path.display().to_string(),
+                        source: e,
+                    })
+                })?;
+                
+                // Write content to stdin
+                if let Some(mut stdin) = child.stdin.take() {
+                    use std::io::Write;
+                    stdin.write_all(content.as_bytes()).map_err(|e| {
+                        crate::error::VikaError::from(crate::error::FileSystemError::WriteFileFailed {
+                            path: "stdin".to_string(),
+                            source: e,
+                        })
+                    })?;
+                }
+                
+                child.wait_with_output()
+            }
+            Formatter::Biome => {
+                let mut cmd = Command::new("npx");
+                cmd.arg("@biomejs/biome")
+                    .arg("format")
+                    .arg("--stdin-file-path")
+                    .arg(file_path.to_str().unwrap_or("file.ts"))
+                    .current_dir(work_dir)
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped());
+                
+                let mut child = cmd.spawn().map_err(|e| {
+                    crate::error::VikaError::from(crate::error::FileSystemError::ReadFileFailed {
+                        path: file_path.display().to_string(),
+                        source: e,
+                    })
+                })?;
+                
+                // Write content to stdin
+                if let Some(mut stdin) = child.stdin.take() {
+                    use std::io::Write;
+                    stdin.write_all(content.as_bytes()).map_err(|e| {
+                        crate::error::VikaError::from(crate::error::FileSystemError::WriteFileFailed {
+                            path: "stdin".to_string(),
+                            source: e,
+                        })
+                    })?;
+                }
+                
+                child.wait_with_output()
+            }
+        };
+
+        // Read the formatted content from stdout
+        match format_result {
+            Ok(output) if output.status.success() => {
+                String::from_utf8(output.stdout).map_err(|e| {
+                    crate::error::VikaError::from(crate::error::FileSystemError::ReadFileFailed {
+                        path: "stdout".to_string(),
+                        source: std::io::Error::new(std::io::ErrorKind::InvalidData, e),
+                    })
+                })
+            }
+            _ => {
+                // Formatting failed, return original content
+                Ok(content.to_string())
             }
         }
     }
