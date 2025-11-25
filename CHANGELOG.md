@@ -132,6 +132,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING**: Refactored configuration model to support detailed per-spec configuration
+  - `SpecEntry` now requires `schemas`, `apis`, and `modules` fields (previously optional)
+  - Removed top-level `spec_path` field from `Config` (use `specs` array instead)
+  - `specs` field changed from `Option<Vec<SpecEntry>>` to `Vec<SpecEntry>` (always present, empty array if no specs)
+  - Each spec entry now has its own `SchemasConfig`, `ApisConfig`, and `ModulesConfig` for fine-grained control
+  - Improved error messages for configuration validation
+  - All configuration fields now have `Default` implementations for easier initialization
+
+### Fixed
+
+- Fixed all Clippy warnings across the codebase
+  - Removed unused imports and variables
+  - Fixed unnecessary borrows for generic arguments (`&format!()` -> `format!()`)
+  - Fixed unnecessary lazy evaluations (`ok_or_else(|| ...)` -> `ok_or(...)`)
+  - Fixed useless comparisons (`cycles.len() >= 0` -> proper assertion)
+  - Suppressed deprecation warnings for `assert_cmd::Command::cargo_bin` (to be migrated in future)
+- Fixed test compilation errors after configuration model refactoring
+- Updated all integration tests to use new configuration API
+- Fixed snapshot tests to match new import ordering in generated code
+- Fixed writer tests to correctly handle spec-specific output directories
+- Fixed directory restoration in snapshot tests to prevent path resolution issues
+
+### Refactored
+
+- Simplified prompt formatting in command files (`add.rs`, `init.rs`)
+- Removed unused constants (`SPEC_CACHE_FILE`, `SPEC_META_FILE`) and functions (`collect_ts_files`, `is_multi_spec_mode`)
+- Improved code organization and readability across multiple files
+- Updated test helpers to use new configuration structure with helper functions
+- Enhanced test coverage for multi-spec scenarios
+- Standardized test patterns for creating `SpecEntry` instances with default configs
+
 ### Planned
 
 - Template customization system
