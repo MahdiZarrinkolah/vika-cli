@@ -33,7 +33,10 @@ pub async fn run() -> Result<()> {
 
     for spec in &specs {
         println!();
-        println!("{}", format!("🔄 Updating spec: {}", spec.name).bright_cyan());
+        println!(
+            "{}",
+            format!("🔄 Updating spec: {}", spec.name).bright_cyan()
+        );
         println!();
 
         let spec_path = &spec.path;
@@ -76,23 +79,29 @@ pub async fn run() -> Result<()> {
             );
             printed_urls.insert(spec_path.clone());
         }
-        
+
         // Use caching for update command (same as generate)
         let use_cache = config.generation.enable_cache;
-        let parsed =
-            crate::generator::swagger_parser::fetch_and_parse_spec_with_cache_and_name(
-                spec_path,
-                use_cache,
-                Some(&spec.name),
-            )
-            .await?;
-        
+        let parsed = crate::generator::swagger_parser::fetch_and_parse_spec_with_cache_and_name(
+            spec_path,
+            use_cache,
+            Some(&spec.name),
+        )
+        .await?;
+
         // Get selected modules from config, or select interactively if empty
         let selected_modules = if modules_config.selected.is_empty() {
             // No modules selected in config, select interactively
-            println!("{}", format!("No modules selected for spec '{}'. Please select modules to update:", spec.name).bright_yellow());
+            println!(
+                "{}",
+                format!(
+                    "No modules selected for spec '{}'. Please select modules to update:",
+                    spec.name
+                )
+                .bright_yellow()
+            );
             println!();
-            
+
             // Filter out ignored modules
             let available_modules: Vec<String> = parsed
                 .modules
@@ -100,16 +109,19 @@ pub async fn run() -> Result<()> {
                 .filter(|m| !modules_config.ignore.contains(m))
                 .cloned()
                 .collect();
-            
+
             if available_modules.is_empty() {
-                println!("{}", format!("⚠️  Skipping spec '{}': No modules available", spec.name).yellow());
+                println!(
+                    "{}",
+                    format!("⚠️  Skipping spec '{}': No modules available", spec.name).yellow()
+                );
                 continue;
             }
-            
+
             // Select modules interactively
             use crate::generator::module_selector::select_modules;
             let selected = select_modules(&available_modules, &modules_config.ignore)?;
-            
+
             // Update config with selected modules
             use crate::config::loader::load_config;
             let mut config = load_config()?;
@@ -118,7 +130,7 @@ pub async fn run() -> Result<()> {
             }
             use crate::config::loader::save_config;
             save_config(&config)?;
-            
+
             selected
         } else {
             modules_config.selected.clone()
@@ -145,7 +157,8 @@ pub async fn run() -> Result<()> {
 
         // Initialize template engine once for all modules
         let project_root = std::env::current_dir().ok();
-        let template_engine = crate::templates::engine::TemplateEngine::new(project_root.as_deref())?;
+        let template_engine =
+            crate::templates::engine::TemplateEngine::new(project_root.as_deref())?;
 
         // Generate code for each module (using spec-specific or global output directories)
         let schemas_dir = PathBuf::from(&schemas_config.output);
@@ -154,32 +167,33 @@ pub async fn run() -> Result<()> {
         let mut total_files = 0;
         let mut module_summary: Vec<(String, usize)> = Vec::new();
 
-    // Get force and backup settings from config
-    let use_force = config.generation.conflict_strategy == "force";
-    let use_backup = config.generation.enable_backup;
+        // Get force and backup settings from config
+        let use_force = config.generation.conflict_strategy == "force";
+        let use_backup = config.generation.enable_backup;
 
-    // Generate common module first if there are shared schemas
-    if !common_schemas.is_empty() {
-        println!("{}", "🔨 Regenerating common schemas...".bright_cyan());
+        // Generate common module first if there are shared schemas
+        if !common_schemas.is_empty() {
+            println!("{}", "🔨 Regenerating common schemas...".bright_cyan());
 
-        // Shared enum registry to ensure consistent naming between TypeScript and Zod
-        let mut shared_enum_registry = std::collections::HashMap::new();
+            // Shared enum registry to ensure consistent naming between TypeScript and Zod
+            let mut shared_enum_registry = std::collections::HashMap::new();
 
-        // Generate TypeScript typings for common schemas
-        // Pass empty common_schemas list so common schemas don't prefix themselves with "Common."
-        let common_types = crate::generator::ts_typings::generate_typings_with_registry_and_engine_and_spec(
-            &parsed.openapi,
-            &parsed.schemas,
-            &common_schemas,
-            &mut shared_enum_registry,
-            &[], // Empty list - common schemas shouldn't prefix themselves
-            Some(&template_engine),
-            Some(&spec.name),
-        )?;
+            // Generate TypeScript typings for common schemas
+            // Pass empty common_schemas list so common schemas don't prefix themselves with "Common."
+            let common_types =
+                crate::generator::ts_typings::generate_typings_with_registry_and_engine_and_spec(
+                    &parsed.openapi,
+                    &parsed.schemas,
+                    &common_schemas,
+                    &mut shared_enum_registry,
+                    &[], // Empty list - common schemas shouldn't prefix themselves
+                    Some(&template_engine),
+                    Some(&spec.name),
+                )?;
 
-        // Generate Zod schemas for common schemas (using same registry)
-        // Pass empty common_schemas list so common schemas don't prefix themselves with "Common."
-        let common_zod_schemas =
+            // Generate Zod schemas for common schemas (using same registry)
+            // Pass empty common_schemas list so common schemas don't prefix themselves with "Common."
+            let common_zod_schemas =
             crate::generator::zod_schema::generate_zod_schemas_with_registry_and_engine_and_spec(
                 &parsed.openapi,
                 &parsed.schemas,
@@ -190,56 +204,71 @@ pub async fn run() -> Result<()> {
                 Some(&spec.name),
             )?;
 
-                   // Write common schemas (use force if config says so)
-                   use crate::generator::writer::write_schemas_with_module_mapping;
-                   let common_files = write_schemas_with_module_mapping(
-                       &schemas_dir,
-                       "common",
-                       &common_types,
-                       &common_zod_schemas,
-                       Some(&spec.name), // spec_name for multi-spec mode
-                       use_backup,
-                       use_force,
-                       Some(&filtered_module_schemas),
-                       &common_schemas,
-                   )?;
-        total_files += common_files.len();
-        module_summary.push(("common".to_string(), common_files.len()));
-    }
-
-    for module in &selected_modules {
-        println!(
-            "{}",
-            format!("🔨 Regenerating code for module: {}", module).bright_cyan()
-        );
-
-        // Get operations for this module
-        let operations = parsed
-            .operations_by_tag
-            .get(module)
-            .cloned()
-            .unwrap_or_default();
-
-        if operations.is_empty() {
-            println!(
-                "{}",
-                format!("⚠️  No operations found for module: {}", module).yellow()
-            );
-            continue;
+            // Write common schemas (use force if config says so)
+            use crate::generator::writer::write_schemas_with_module_mapping;
+            let common_files = write_schemas_with_module_mapping(
+                &schemas_dir,
+                "common",
+                &common_types,
+                &common_zod_schemas,
+                Some(&spec.name), // spec_name for multi-spec mode
+                use_backup,
+                use_force,
+                Some(&filtered_module_schemas),
+                &common_schemas,
+            )?;
+            total_files += common_files.len();
+            module_summary.push(("common".to_string(), common_files.len()));
         }
 
-        // Get schema names used by this module (from filtered schemas)
-        let module_schema_names = filtered_module_schemas
-            .get(module)
-            .cloned()
-            .unwrap_or_default();
+        for module in &selected_modules {
+            println!(
+                "{}",
+                format!("🔨 Regenerating code for module: {}", module).bright_cyan()
+            );
 
-        // Shared enum registry to ensure consistent naming between TypeScript and Zod
-        let mut shared_enum_registry = std::collections::HashMap::new();
+            // Get operations for this module
+            let operations = parsed
+                .operations_by_tag
+                .get(module)
+                .cloned()
+                .unwrap_or_default();
 
-        // Generate TypeScript typings
-        let types = if !module_schema_names.is_empty() {
-            crate::generator::ts_typings::generate_typings_with_registry_and_engine_and_spec(
+            if operations.is_empty() {
+                println!(
+                    "{}",
+                    format!("⚠️  No operations found for module: {}", module).yellow()
+                );
+                continue;
+            }
+
+            // Get schema names used by this module (from filtered schemas)
+            let module_schema_names = filtered_module_schemas
+                .get(module)
+                .cloned()
+                .unwrap_or_default();
+
+            // Shared enum registry to ensure consistent naming between TypeScript and Zod
+            let mut shared_enum_registry = std::collections::HashMap::new();
+
+            // Generate TypeScript typings
+            let types = if !module_schema_names.is_empty() {
+                crate::generator::ts_typings::generate_typings_with_registry_and_engine_and_spec(
+                    &parsed.openapi,
+                    &parsed.schemas,
+                    &module_schema_names,
+                    &mut shared_enum_registry,
+                    &common_schemas,
+                    Some(&template_engine),
+                    Some(&spec.name),
+                )?
+            } else {
+                Vec::new()
+            };
+
+            // Generate Zod schemas (using same registry)
+            let zod_schemas = if !module_schema_names.is_empty() {
+                crate::generator::zod_schema::generate_zod_schemas_with_registry_and_engine_and_spec(
                 &parsed.openapi,
                 &parsed.schemas,
                 &module_schema_names,
@@ -248,27 +277,12 @@ pub async fn run() -> Result<()> {
                 Some(&template_engine),
                 Some(&spec.name),
             )?
-        } else {
-            Vec::new()
-        };
+            } else {
+                Vec::new()
+            };
 
-        // Generate Zod schemas (using same registry)
-        let zod_schemas = if !module_schema_names.is_empty() {
-            crate::generator::zod_schema::generate_zod_schemas_with_registry_and_engine_and_spec(
-                &parsed.openapi,
-                &parsed.schemas,
-                &module_schema_names,
-                &mut shared_enum_registry,
-                &common_schemas,
-                Some(&template_engine),
-                Some(&spec.name),
-            )?
-        } else {
-            Vec::new()
-        };
-
-        // Generate API client (using same enum registry as schemas)
-        let api_result =
+            // Generate API client (using same enum registry as schemas)
+            let api_result =
             crate::generator::api_client::generate_api_client_with_registry_and_engine_and_spec(
                 &parsed.openapi,
                 &operations,
@@ -279,58 +293,65 @@ pub async fn run() -> Result<()> {
                 Some(&spec.name),
             )?;
 
-        // Combine response types with schema types
-        let mut all_types = types;
-        all_types.extend(api_result.response_types);
+            // Combine response types with schema types
+            let mut all_types = types;
+            all_types.extend(api_result.response_types);
 
-        // Write schemas (use force if config says so)
-        use crate::generator::writer::write_schemas_with_module_mapping;
-        let schema_files = write_schemas_with_module_mapping(
-            &schemas_dir,
-            module,
-            &all_types,
-            &zod_schemas,
-            Some(&spec.name), // spec_name for multi-spec mode
-            use_backup,
-            use_force,
-            Some(&filtered_module_schemas),
-            &common_schemas,
-        )?;
-        total_files += schema_files.len();
+            // Write schemas (use force if config says so)
+            use crate::generator::writer::write_schemas_with_module_mapping;
+            let schema_files = write_schemas_with_module_mapping(
+                &schemas_dir,
+                module,
+                &all_types,
+                &zod_schemas,
+                Some(&spec.name), // spec_name for multi-spec mode
+                use_backup,
+                use_force,
+                Some(&filtered_module_schemas),
+                &common_schemas,
+            )?;
+            total_files += schema_files.len();
 
-        // Write API client (use force if config says so)
-        let api_files = write_api_client_with_options(
-            &apis_dir,
-            module,
-            &api_result.functions,
-            Some(&spec.name), // spec_name for multi-spec mode
-            use_backup,
-            use_force,
-        )?;
-        total_files += api_files.len();
+            // Write API client (use force if config says so)
+            let api_files = write_api_client_with_options(
+                &apis_dir,
+                module,
+                &api_result.functions,
+                Some(&spec.name), // spec_name for multi-spec mode
+                use_backup,
+                use_force,
+            )?;
+            total_files += api_files.len();
 
-        let module_file_count = schema_files.len() + api_files.len();
-        module_summary.push((module.clone(), module_file_count));
+            let module_file_count = schema_files.len() + api_files.len();
+            module_summary.push((module.clone(), module_file_count));
+            println!(
+                "{}",
+                format!(
+                    "✅ Regenerated {} files for module: {}",
+                    module_file_count, module
+                )
+                .green()
+            );
+        }
+
+        println!();
         println!(
             "{}",
             format!(
-                "✅ Regenerated {} files for module: {}",
-                module_file_count, module
+                "✨ Successfully updated {} files for spec '{}'!",
+                total_files, spec.name
             )
-            .green()
+            .bright_green()
         );
-    }
-
         println!();
         println!(
             "{}",
-            format!("✨ Successfully updated {} files for spec '{}'!", total_files, spec.name).bright_green()
+            format!("Updated files for '{}':", spec.name).bright_cyan()
         );
-        println!();
-        println!("{}", format!("Updated files for '{}':", spec.name).bright_cyan());
         println!("  📁 Schemas: {}", schemas_config.output);
         println!("  📁 APIs: {}", apis_config.output);
-        
+
         // Store summary for this spec
         all_specs_summary.push((spec.name.clone(), total_files, module_summary.clone()));
 
@@ -339,7 +360,7 @@ pub async fn run() -> Result<()> {
             path: ".".to_string(),
             source: e,
         })?;
-        
+
         let schemas_dir_abs = if schemas_dir.is_absolute() {
             schemas_dir.clone()
         } else {
@@ -369,7 +390,12 @@ pub async fn run() -> Result<()> {
     let total_all_files: usize = all_specs_summary.iter().map(|(_, count, _)| count).sum();
     println!(
         "{}",
-        format!("✨ Successfully updated {} files across {} spec(s)!", total_all_files, all_specs_summary.len()).bright_green()
+        format!(
+            "✨ Successfully updated {} files across {} spec(s)!",
+            total_all_files,
+            all_specs_summary.len()
+        )
+        .bright_green()
     );
     println!();
     println!("{}", "Summary by spec:".bright_cyan());
@@ -387,14 +413,12 @@ pub async fn run() -> Result<()> {
     if !all_generated_files.is_empty() {
         // Find the common parent directory (where config files are likely located)
         // Try to find it from the first file path, or use current directory
-        let output_base = all_generated_files
-            .first()
-            .and_then(|first_file| {
-                first_file
-                    .parent()
-                    .and_then(|p| p.parent())
-                    .and_then(|p| p.parent())
-            });
+        let output_base = all_generated_files.first().and_then(|first_file| {
+            first_file
+                .parent()
+                .and_then(|p| p.parent())
+                .and_then(|p| p.parent())
+        });
 
         let formatter = if let Some(base_dir) = output_base {
             FormatterManager::detect_formatter_from_dir(base_dir)
@@ -437,7 +461,7 @@ pub async fn run() -> Result<()> {
 
                     if !relative_files.is_empty() {
                         let result = FormatterManager::format_files(&relative_files, formatter);
-                        
+
                         // Restore original directory
                         std::env::set_current_dir(&original_dir).map_err(|e| {
                             FileSystemError::ReadFileFailed {
@@ -445,9 +469,9 @@ pub async fn run() -> Result<()> {
                                 source: e,
                             }
                         })?;
-                        
+
                         result?;
-                        
+
                         // Update metadata for formatted files to reflect formatted content hash (batch update)
                         use crate::generator::writer::batch_update_file_metadata_from_disk;
                         if let Err(e) = batch_update_file_metadata_from_disk(&all_generated_files) {
@@ -466,7 +490,7 @@ pub async fn run() -> Result<()> {
                 }
             } else {
                 FormatterManager::format_files(&all_generated_files, formatter)?;
-                
+
                 // Update metadata for formatted files to reflect formatted content hash (batch update)
                 use crate::generator::writer::batch_update_file_metadata_from_disk;
                 if let Err(e) = batch_update_file_metadata_from_disk(&all_generated_files) {

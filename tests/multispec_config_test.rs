@@ -61,7 +61,9 @@ fn test_validate_config_no_spec_defined_fails() {
     let result = validate_config(&config);
     assert!(result.is_err());
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Neither 'spec_path' nor 'specs'"));
+    assert!(error
+        .to_string()
+        .contains("Neither 'spec_path' nor 'specs'"));
 }
 
 #[test]
@@ -72,7 +74,9 @@ fn test_validate_config_empty_specs_array_fails() {
     let result = validate_config(&config);
     assert!(result.is_err());
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("At least one spec must be defined"));
+    assert!(error
+        .to_string()
+        .contains("At least one spec must be defined"));
 }
 
 #[test]
@@ -199,4 +203,3 @@ fn test_validate_config_valid_spec_names() {
     let result = validate_config(&config);
     assert!(result.is_ok());
 }
-

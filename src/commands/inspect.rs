@@ -23,7 +23,7 @@ pub async fn run(
     json: bool,
 ) -> Result<()> {
     use crate::error::GenerationError;
-    use crate::specs::manager::{list_specs, get_spec_by_name};
+    use crate::specs::manager::{get_spec_by_name, list_specs};
 
     // Load config
     let config = crate::config::loader::load_config()?;
@@ -31,7 +31,7 @@ pub async fn run(
 
     // Get specs from config
     let specs = list_specs(&config);
-    
+
     if specs.is_empty() {
         return Err(GenerationError::SpecPathRequired.into());
     }
@@ -45,7 +45,9 @@ pub async fn run(
                 // JSON output for all specs
                 let mut all_specs_data = Vec::new();
                 for spec_entry in &specs {
-                    let parsed = crate::generator::swagger_parser::fetch_and_parse_spec(&spec_entry.path).await?;
+                    let parsed =
+                        crate::generator::swagger_parser::fetch_and_parse_spec(&spec_entry.path)
+                            .await?;
                     all_specs_data.push(serde_json::json!({
                         "spec_name": spec_entry.name,
                         "spec_path": spec_entry.path,
@@ -63,13 +65,17 @@ pub async fn run(
                         }).collect::<Vec<_>>()
                     }));
                 }
-                println!("{}", serde_json::to_string_pretty(&serde_json::json!({
-                    "specs": all_specs_data
-                })).map_err(|e| {
-                    GenerationError::InvalidOperation {
-                        message: format!("Failed to serialize JSON: {}", e),
-                    }
-                })?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "specs": all_specs_data
+                    }))
+                    .map_err(|e| {
+                        GenerationError::InvalidOperation {
+                            message: format!("Failed to serialize JSON: {}", e),
+                        }
+                    })?
+                );
             } else {
                 // Human-readable output for all specs
                 println!("{}", "🔍 Inspecting all OpenAPI specs...".bright_cyan());
@@ -78,11 +84,17 @@ pub async fn run(
                 for spec_entry in &specs {
                     println!("{}", format!("📋 Spec: {}", spec_entry.name).bright_green());
                     println!("  Path: {}", spec_entry.path);
-                    let parsed = crate::generator::swagger_parser::fetch_and_parse_spec(&spec_entry.path).await?;
+                    let parsed =
+                        crate::generator::swagger_parser::fetch_and_parse_spec(&spec_entry.path)
+                            .await?;
                     println!("  • Total modules: {}", parsed.modules.len());
                     println!(
                         "  • Total endpoints: {}",
-                        parsed.operations_by_tag.values().map(|v| v.len()).sum::<usize>()
+                        parsed
+                            .operations_by_tag
+                            .values()
+                            .map(|v| v.len())
+                            .sum::<usize>()
                     );
                     println!("  • Total schemas: {}", parsed.schemas.len());
                     println!();
@@ -112,20 +124,30 @@ pub async fn run(
                         })
                     }).collect::<Vec<_>>()
                 });
-                println!("{}", serde_json::to_string_pretty(&output).map_err(|e| {
-                    GenerationError::InvalidOperation {
-                        message: format!("Failed to serialize JSON: {}", e),
-                    }
-                })?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output).map_err(|e| {
+                        GenerationError::InvalidOperation {
+                            message: format!("Failed to serialize JSON: {}", e),
+                        }
+                    })?
+                );
             } else {
-                println!("{}", format!("🔍 Inspecting OpenAPI spec: {}", name).bright_cyan());
+                println!(
+                    "{}",
+                    format!("🔍 Inspecting OpenAPI spec: {}", name).bright_cyan()
+                );
                 println!("  Path: {}", spec_path);
                 println!();
                 println!("{}", "📊 Spec Summary:".bright_cyan());
                 println!("  • Total modules: {}", parsed.modules.len());
                 println!(
                     "  • Total endpoints: {}",
-                    parsed.operations_by_tag.values().map(|v| v.len()).sum::<usize>()
+                    parsed
+                        .operations_by_tag
+                        .values()
+                        .map(|v| v.len())
+                        .sum::<usize>()
                 );
                 println!("  • Total schemas: {}", parsed.schemas.len());
                 println!();
@@ -161,7 +183,8 @@ pub async fn run(
                                 .get(m)
                                 .map(|v| v.len())
                                 .unwrap_or(0);
-                            let schemas_count = parsed.module_schemas.get(m).map(|v| v.len()).unwrap_or(0);
+                            let schemas_count =
+                                parsed.module_schemas.get(m).map(|v| v.len()).unwrap_or(0);
                             ModuleInfo {
                                 module: m.clone(),
                                 endpoints,
@@ -190,11 +213,17 @@ pub async fn run(
             for spec_entry in &specs {
                 println!("{}", format!("📋 Spec: {}", spec_entry.name).bright_green());
                 println!("  Path: {}", spec_entry.path);
-                let parsed = crate::generator::swagger_parser::fetch_and_parse_spec(&spec_entry.path).await?;
+                let parsed =
+                    crate::generator::swagger_parser::fetch_and_parse_spec(&spec_entry.path)
+                        .await?;
                 println!("  • Total modules: {}", parsed.modules.len());
                 println!(
                     "  • Total endpoints: {}",
-                    parsed.operations_by_tag.values().map(|v| v.len()).sum::<usize>()
+                    parsed
+                        .operations_by_tag
+                        .values()
+                        .map(|v| v.len())
+                        .sum::<usize>()
                 );
                 println!("  • Total schemas: {}", parsed.schemas.len());
                 println!();
@@ -210,7 +239,8 @@ pub async fn run(
         // CLI spec argument - try to find by name or use as path
         get_spec_by_name(&config, &cli_spec).unwrap_or_else(|_| {
             // If not found by name, treat as path and find matching spec
-            specs.iter()
+            specs
+                .iter()
                 .find(|s| s.path == cli_spec)
                 .cloned()
                 .ok_or_else(|| GenerationError::SpecPathRequired)
@@ -222,7 +252,10 @@ pub async fn run(
     };
 
     let spec_path = &spec_entry.path;
-    println!("{}", format!("🔍 Inspecting OpenAPI spec: {}", spec_entry.name).bright_cyan());
+    println!(
+        "{}",
+        format!("🔍 Inspecting OpenAPI spec: {}", spec_entry.name).bright_cyan()
+    );
     println!();
 
     let parsed = fetch_and_parse_spec(spec_path).await?;

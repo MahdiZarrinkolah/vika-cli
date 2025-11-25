@@ -17,10 +17,14 @@ async fn test_full_multi_spec_generation_flow() {
     let fixtures_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/multi-spec");
     let specs_dir = temp_dir.path().join("specs");
     fs::create_dir_all(&specs_dir).unwrap();
-    
+
     // Copy spec files
     fs::copy(fixtures_dir.join("auth.yaml"), specs_dir.join("auth.yaml")).unwrap();
-    fs::copy(fixtures_dir.join("orders.json"), specs_dir.join("orders.json")).unwrap();
+    fs::copy(
+        fixtures_dir.join("orders.json"),
+        specs_dir.join("orders.json"),
+    )
+    .unwrap();
 
     // Create multi-spec config
     let config = Config {
@@ -155,8 +159,12 @@ fn test_multi_spec_directory_structure_verification() {
     // Verify all spec directories exist
     for spec_name in &["auth", "orders", "products"] {
         let spec_dir = schemas_dir.join(spec_name).join("test");
-        assert!(spec_dir.exists(), "Expected directory for spec {} to exist", spec_name);
-        
+        assert!(
+            spec_dir.exists(),
+            "Expected directory for spec {} to exist",
+            spec_name
+        );
+
         let types_file = spec_dir.join("types.ts");
         assert!(types_file.exists());
     }
@@ -170,4 +178,3 @@ fn test_multi_spec_directory_structure_verification() {
     assert_ne!(orders_dir, products_dir);
     assert_ne!(auth_dir, products_dir);
 }
-

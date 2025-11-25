@@ -44,7 +44,11 @@ impl TypeContext {
     }
 
     /// Create a new TypeContext for an enum type.
-    pub fn enum_type(type_name: String, enum_values: Vec<String>, spec_name: Option<String>) -> Self {
+    pub fn enum_type(
+        type_name: String,
+        enum_values: Vec<String>,
+        spec_name: Option<String>,
+    ) -> Self {
         Self {
             type_name,
             fields: Vec::new(),

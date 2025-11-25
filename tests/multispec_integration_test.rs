@@ -151,4 +151,3 @@ fn test_single_spec_config_backward_compatibility() {
 
     std::env::set_current_dir(original_dir).unwrap();
 }
-

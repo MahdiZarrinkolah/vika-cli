@@ -1,4 +1,4 @@
-use crate::config::model::{Config, SpecEntry, SchemasConfig, ApisConfig, ModulesConfig};
+use crate::config::model::{ApisConfig, Config, ModulesConfig, SchemasConfig, SpecEntry};
 use crate::error::{ConfigError, GenerationError, Result};
 use dialoguer::Select;
 
@@ -9,7 +9,8 @@ pub fn list_specs(config: &Config) -> Vec<SpecEntry> {
 
 /// Gets a spec by name from the config
 pub fn get_spec_by_name(config: &Config, name: &str) -> Result<SpecEntry> {
-    config.specs
+    config
+        .specs
         .iter()
         .find(|s| s.name == name)
         .cloned()
@@ -30,11 +31,11 @@ pub fn resolve_spec_selection(
     all_specs: bool,
 ) -> Result<Vec<SpecEntry>> {
     let specs = list_specs(config);
-    
+
     if specs.is_empty() {
         return Err(ConfigError::NoSpecDefined.into());
     }
-    
+
     if all_specs {
         // Generate all specs
         Ok(specs)
@@ -56,11 +57,12 @@ pub fn resolve_spec_selection(
                 message: format!("Failed to get user selection: {}", e),
             })?;
 
-        let selected_spec = specs.get(selection).ok_or_else(|| {
-            GenerationError::InvalidOperation {
-                message: "Invalid selection".to_string(),
-            }
-        })?;
+        let selected_spec =
+            specs
+                .get(selection)
+                .ok_or_else(|| GenerationError::InvalidOperation {
+                    message: "Invalid selection".to_string(),
+                })?;
 
         Ok(vec![selected_spec.clone()])
     }
@@ -226,4 +228,3 @@ mod tests {
         assert_eq!(specs[0].name, "default");
     }
 }
-

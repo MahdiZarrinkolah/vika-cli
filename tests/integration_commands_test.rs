@@ -71,7 +71,16 @@ paths:
 
     // Test inspect without module filter
     let spec_str = spec_path.to_str().unwrap().to_string();
-    let result = inspect::run(Some(spec_str.clone()), false, None, None, false, false, false).await;
+    let result = inspect::run(
+        Some(spec_str.clone()),
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+    )
+    .await;
     assert!(result.is_ok());
 
     // Test inspect with schemas flag

@@ -103,7 +103,10 @@ pub async fn run() -> Result<()> {
             })?;
 
         println!();
-        println!("{}", format!("📋 Configuration for spec '{}'", spec_name.trim()).bright_cyan());
+        println!(
+            "{}",
+            format!("📋 Configuration for spec '{}'", spec_name.trim()).bright_cyan()
+        );
         println!();
 
         // Per-spec schemas config
@@ -111,7 +114,10 @@ pub async fn run() -> Result<()> {
         println!();
 
         let spec_schemas_output: String = Input::new()
-            .with_prompt(&format!("Schemas output directory for '{}'", spec_name.trim()))
+            .with_prompt(&format!(
+                "Schemas output directory for '{}'",
+                spec_name.trim()
+            ))
             .default(format!("src/schemas/{}", spec_name.trim()))
             .interact_text()
             .map_err(|e| GenerationError::InvalidOperation {
@@ -122,7 +128,10 @@ pub async fn run() -> Result<()> {
 
         let spec_naming_options = ["PascalCase", "camelCase", "snake_case", "kebab-case"];
         let spec_naming_index = Select::new()
-            .with_prompt(&format!("Schema naming convention for '{}'", spec_name.trim()))
+            .with_prompt(&format!(
+                "Schema naming convention for '{}'",
+                spec_name.trim()
+            ))
             .items(&[
                 "PascalCase - ProductDto, UserProfile (recommended)",
                 "camelCase - productDto, userProfile",
@@ -166,7 +175,10 @@ pub async fn run() -> Result<()> {
         println!();
 
         let spec_base_url_input: String = Input::new()
-            .with_prompt(&format!("API base URL for '{}' (optional, press Enter to skip)", spec_name.trim()))
+            .with_prompt(&format!(
+                "API base URL for '{}' (optional, press Enter to skip)",
+                spec_name.trim()
+            ))
             .allow_empty(true)
             .interact_text()
             .map_err(|e| GenerationError::InvalidOperation {
@@ -194,7 +206,8 @@ pub async fn run() -> Result<()> {
             .map_err(|e| GenerationError::InvalidOperation {
                 message: format!("Failed to get user selection: {}", e),
             })?;
-        let spec_header_strategy = spec_header_strategy_options[spec_header_strategy_index].to_string();
+        let spec_header_strategy =
+            spec_header_strategy_options[spec_header_strategy_index].to_string();
 
         println!();
 
@@ -252,7 +265,12 @@ pub async fn run() -> Result<()> {
             write_http_client_template(&http_client_path)?;
             println!(
                 "{}",
-                format!("✅ Created {} for spec '{}'", http_client_path.display(), spec.name).green()
+                format!(
+                    "✅ Created {} for spec '{}'",
+                    http_client_path.display(),
+                    spec.name
+                )
+                .green()
             );
         } else {
             println!(
@@ -275,30 +293,36 @@ pub async fn run() -> Result<()> {
     if !config.specs.is_empty() {
         println!("{}", "🚀 Starting code generation...".bright_cyan());
         println!();
-        
+
         // Call generate command internally
         use crate::commands::generate;
         if let Err(e) = generate::run(
-            None, // spec - will use config.specs
-            false, // all_specs
-            None, // spec_name
-            false, // verbose
-            config.generation.enable_cache, // cache
-            config.generation.enable_backup, // backup
+            None,                                           // spec - will use config.specs
+            false,                                          // all_specs
+            None,                                           // spec_name
+            false,                                          // verbose
+            config.generation.enable_cache,                 // cache
+            config.generation.enable_backup,                // backup
             config.generation.conflict_strategy == "force", // force
         )
         .await
         {
             println!();
-            println!("{}", "⚠️  Generation failed, but initialization completed.".yellow());
+            println!(
+                "{}",
+                "⚠️  Generation failed, but initialization completed.".yellow()
+            );
             println!("{}", format!("Error: {}", e).red());
             println!();
             println!("You can run 'vika-cli generate' manually to retry.");
             return Ok(()); // Don't fail init if generation fails
         }
-        
+
         println!();
-        println!("{}", "✅ Initialization and generation completed!".bright_green());
+        println!(
+            "{}",
+            "✅ Initialization and generation completed!".bright_green()
+        );
         println!();
         println!("💡 To add more specs later, run: vika-cli add");
     } else {

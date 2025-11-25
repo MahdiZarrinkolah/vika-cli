@@ -29,13 +29,7 @@ async fn main() {
             force,
         } => {
             if let Err(e) = vika_cli::commands::generate::run(
-                spec,
-                all_specs,
-                spec_name,
-                verbose,
-                cache,
-                backup,
-                force,
+                spec, all_specs, spec_name, verbose, cache, backup, force,
             )
             .await
             {
@@ -59,13 +53,7 @@ async fn main() {
             json,
         } => {
             if let Err(e) = vika_cli::commands::inspect::run(
-                spec,
-                all_specs,
-                spec_name,
-                module,
-                schemas,
-                graph,
-                json,
+                spec, all_specs, spec_name, module, schemas, graph, json,
             )
             .await
             {

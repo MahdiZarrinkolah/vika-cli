@@ -53,7 +53,10 @@ pub async fn run() -> Result<()> {
         })?;
 
     println!();
-    println!("{}", format!("📋 Configuration for spec '{}'", spec_name.trim()).bright_cyan());
+    println!(
+        "{}",
+        format!("📋 Configuration for spec '{}'", spec_name.trim()).bright_cyan()
+    );
     println!();
 
     // Per-spec schemas config
@@ -61,7 +64,10 @@ pub async fn run() -> Result<()> {
     println!();
 
     let spec_schemas_output: String = Input::new()
-        .with_prompt(&format!("Schemas output directory for '{}'", spec_name.trim()))
+        .with_prompt(&format!(
+            "Schemas output directory for '{}'",
+            spec_name.trim()
+        ))
         .default(format!("src/schemas/{}", spec_name.trim()))
         .interact_text()
         .map_err(|e| GenerationError::InvalidOperation {
@@ -72,7 +78,10 @@ pub async fn run() -> Result<()> {
 
     let spec_naming_options = ["PascalCase", "camelCase", "snake_case", "kebab-case"];
     let spec_naming_index = Select::new()
-        .with_prompt(&format!("Schema naming convention for '{}'", spec_name.trim()))
+        .with_prompt(&format!(
+            "Schema naming convention for '{}'",
+            spec_name.trim()
+        ))
         .items(&[
             "PascalCase - ProductDto, UserProfile (recommended)",
             "camelCase - productDto, userProfile",
@@ -116,7 +125,10 @@ pub async fn run() -> Result<()> {
     println!();
 
     let spec_base_url_input: String = Input::new()
-        .with_prompt(&format!("API base URL for '{}' (optional, press Enter to skip)", spec_name.trim()))
+        .with_prompt(&format!(
+            "API base URL for '{}' (optional, press Enter to skip)",
+            spec_name.trim()
+        ))
         .allow_empty(true)
         .interact_text()
         .map_err(|e| GenerationError::InvalidOperation {
@@ -173,7 +185,7 @@ pub async fn run() -> Result<()> {
 
     // Validate updated config
     validate_config(&config)?;
-    
+
     // Save config
     save_config(&config)?;
     println!("{}", "✅ Added spec to .vika.json".green());
@@ -192,7 +204,12 @@ pub async fn run() -> Result<()> {
         write_http_client_template(&http_client_path)?;
         println!(
             "{}",
-            format!("✅ Created {} for spec '{}'", http_client_path.display(), new_spec.name).green()
+            format!(
+                "✅ Created {} for spec '{}'",
+                http_client_path.display(),
+                new_spec.name
+            )
+            .green()
         );
     } else {
         println!(
@@ -223,28 +240,34 @@ pub async fn run() -> Result<()> {
         println!();
         println!("{}", "🚀 Starting code generation...".bright_cyan());
         println!();
-        
+
         // Call generate command for this specific spec
         use crate::commands::generate;
         if let Err(e) = generate::run(
-            None, // spec - will use spec_name
-            false, // all_specs
-            Some(new_spec.name.clone()), // spec_name
-            false, // verbose
-            config.generation.enable_cache, // cache
-            config.generation.enable_backup, // backup
+            None,                                           // spec - will use spec_name
+            false,                                          // all_specs
+            Some(new_spec.name.clone()),                    // spec_name
+            false,                                          // verbose
+            config.generation.enable_cache,                 // cache
+            config.generation.enable_backup,                // backup
             config.generation.conflict_strategy == "force", // force
         )
         .await
         {
             println!();
-            println!("{}", "⚠️  Generation failed, but spec was added successfully.".yellow());
+            println!(
+                "{}",
+                "⚠️  Generation failed, but spec was added successfully.".yellow()
+            );
             println!("{}", format!("Error: {}", e).red());
             println!();
-            println!("You can run 'vika-cli generate --spec-name {}' manually to retry.", new_spec.name);
+            println!(
+                "You can run 'vika-cli generate --spec-name {}' manually to retry.",
+                new_spec.name
+            );
             return Ok(()); // Don't fail add if generation fails
         }
-        
+
         println!();
         println!("{}", "✅ Spec added and code generated!".bright_green());
     } else {
@@ -254,4 +277,3 @@ pub async fn run() -> Result<()> {
 
     Ok(())
 }
-

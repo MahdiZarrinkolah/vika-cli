@@ -11,7 +11,10 @@ fn test_single_spec_config_validation_still_works() {
 
     let result = validate_config(&config);
     assert!(result.is_ok(), "Single spec config should still validate");
-    assert!(!is_multi_spec_mode(&config), "Should not be in multi-spec mode");
+    assert!(
+        !is_multi_spec_mode(&config),
+        "Should not be in multi-spec mode"
+    );
 }
 
 #[test]
@@ -84,11 +87,11 @@ fn test_single_spec_output_structure_unchanged() {
 #[test]
 fn test_default_config_still_works() {
     let config = Config::default();
-    
+
     // Default config should have no spec_path or specs
     assert!(config.spec_path.is_none());
     assert!(config.specs.is_none());
-    
+
     // Validation should fail (no spec defined), but that's expected
     let result = validate_config(&config);
     assert!(result.is_err()); // Expected: no spec defined
@@ -120,4 +123,3 @@ fn test_config_with_only_specs() {
     let result = validate_config(&config);
     assert!(result.is_ok());
 }
-

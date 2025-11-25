@@ -7,13 +7,13 @@ pub struct SpecEntry {
     pub name: String,
     /// Path or URL to the OpenAPI specification file
     pub path: String,
-    
+
     /// Required per-spec schema output directory and naming configuration
     pub schemas: SchemasConfig,
-    
+
     /// Required per-spec API output directory and configuration
     pub apis: ApisConfig,
-    
+
     /// Required per-spec module selection configuration
     pub modules: ModulesConfig,
 }
@@ -185,7 +185,6 @@ impl Default for ApisConfig {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

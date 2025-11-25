@@ -215,8 +215,11 @@ fn generate_type_for_schema(
 
                 if let Some(engine) = template_engine {
                     let description = schema.schema_data.description.clone();
-                    let mut context =
-                        TypeContext::enum_type(enum_name.clone(), enum_values.clone(), spec_name.map(|s| s.to_string()));
+                    let mut context = TypeContext::enum_type(
+                        enum_name.clone(),
+                        enum_values.clone(),
+                        spec_name.map(|s| s.to_string()),
+                    );
                     context.description = description;
                     let content = engine.render(TemplateId::TypeEnum, &context)?;
                     types.push(TypeScriptType { content });
@@ -259,8 +262,11 @@ fn generate_type_for_schema(
             if obj.properties.is_empty() {
                 // Empty object with additionalProperties - use type alias for Record
                 if let Some(engine) = template_engine {
-                    let context =
-                        TypeContext::alias(type_name.clone(), "Record<string, any>".to_string(), spec_name.map(|s| s.to_string()));
+                    let context = TypeContext::alias(
+                        type_name.clone(),
+                        "Record<string, any>".to_string(),
+                        spec_name.map(|s| s.to_string()),
+                    );
                     let content = engine.render(TemplateId::TypeAlias, &context)?;
                     types.push(TypeScriptType { content });
                 } else {
@@ -273,7 +279,12 @@ fn generate_type_for_schema(
                 if let Some(engine) = template_engine {
                     let fields = build_fields_from_content(&content);
                     let description = schema.schema_data.description.clone();
-                    let context = TypeContext::interface(type_name.clone(), fields, description, spec_name.map(|s| s.to_string()));
+                    let context = TypeContext::interface(
+                        type_name.clone(),
+                        fields,
+                        description,
+                        spec_name.map(|s| s.to_string()),
+                    );
                     let content = engine.render(TemplateId::TypeInterface, &context)?;
                     types.push(TypeScriptType { content });
                 } else {
@@ -410,8 +421,11 @@ fn schema_to_typescript(
 
                             // Generate enum type
                             if let Some(engine) = template_engine {
-                                let context =
-                                    TypeContext::enum_type(enum_name.clone(), enum_values.clone(), spec_name.map(|s| s.to_string()));
+                                let context = TypeContext::enum_type(
+                                    enum_name.clone(),
+                                    enum_values.clone(),
+                                    spec_name.map(|s| s.to_string()),
+                                );
                                 let content = engine.render(TemplateId::TypeEnum, &context)?;
                                 types.push(TypeScriptType { content });
                             } else {

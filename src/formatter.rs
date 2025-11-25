@@ -61,11 +61,7 @@ impl FormatterManager {
     fn format_with_prettier(files: &[std::path::PathBuf]) -> Result<()> {
         let file_paths: Vec<String> = files
             .iter()
-            .filter_map(|p| {
-                p.to_str()
-                    .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
-            })
+            .filter_map(|p| p.to_str().filter(|s| !s.is_empty()).map(|s| s.to_string()))
             .collect();
 
         if file_paths.is_empty() {
@@ -104,11 +100,7 @@ impl FormatterManager {
     fn format_with_biome(files: &[std::path::PathBuf]) -> Result<()> {
         let file_paths: Vec<String> = files
             .iter()
-            .filter_map(|p| {
-                p.to_str()
-                    .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
-            })
+            .filter_map(|p| p.to_str().filter(|s| !s.is_empty()).map(|s| s.to_string()))
             .collect();
 
         if file_paths.is_empty() {
@@ -140,7 +132,7 @@ impl FormatterManager {
 
         // Determine the working directory (where config files are likely located)
         let work_dir = file_path.parent().unwrap_or(Path::new("."));
-        
+
         // Use stdin/stdout for formatting to ensure config files are found
         let format_result = match formatter {
             Formatter::Prettier => {
@@ -152,25 +144,27 @@ impl FormatterManager {
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped());
-                
+
                 let mut child = cmd.spawn().map_err(|e| {
                     crate::error::VikaError::from(crate::error::FileSystemError::ReadFileFailed {
                         path: file_path.display().to_string(),
                         source: e,
                     })
                 })?;
-                
+
                 // Write content to stdin
                 if let Some(mut stdin) = child.stdin.take() {
                     use std::io::Write;
                     stdin.write_all(content.as_bytes()).map_err(|e| {
-                        crate::error::VikaError::from(crate::error::FileSystemError::WriteFileFailed {
-                            path: "stdin".to_string(),
-                            source: e,
-                        })
+                        crate::error::VikaError::from(
+                            crate::error::FileSystemError::WriteFileFailed {
+                                path: "stdin".to_string(),
+                                source: e,
+                            },
+                        )
                     })?;
                 }
-                
+
                 child.wait_with_output()
             }
             Formatter::Biome => {
@@ -183,25 +177,27 @@ impl FormatterManager {
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped());
-                
+
                 let mut child = cmd.spawn().map_err(|e| {
                     crate::error::VikaError::from(crate::error::FileSystemError::ReadFileFailed {
                         path: file_path.display().to_string(),
                         source: e,
                     })
                 })?;
-                
+
                 // Write content to stdin
                 if let Some(mut stdin) = child.stdin.take() {
                     use std::io::Write;
                     stdin.write_all(content.as_bytes()).map_err(|e| {
-                        crate::error::VikaError::from(crate::error::FileSystemError::WriteFileFailed {
-                            path: "stdin".to_string(),
-                            source: e,
-                        })
+                        crate::error::VikaError::from(
+                            crate::error::FileSystemError::WriteFileFailed {
+                                path: "stdin".to_string(),
+                                source: e,
+                            },
+                        )
                     })?;
                 }
-                
+
                 child.wait_with_output()
             }
         };

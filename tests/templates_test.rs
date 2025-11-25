@@ -160,7 +160,11 @@ fn test_template_engine_render_api_client() {
 #[test]
 fn test_template_engine_render_type_alias() {
     let engine = TemplateEngine::new(None).unwrap();
-    let context = TypeContext::alias("RecordType".to_string(), "Record<string, any>".to_string(), None);
+    let context = TypeContext::alias(
+        "RecordType".to_string(),
+        "Record<string, any>".to_string(),
+        None,
+    );
     let result = engine.render(TemplateId::TypeAlias, &context);
     assert!(result.is_ok());
     let output = result.unwrap();

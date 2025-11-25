@@ -401,7 +401,11 @@ fn generate_function_for_operation(
     if needs_common_import {
         let schemas_depth = module_depth + 2; // +1 to apis/, +1 to src/
         let common_import = if let Some(spec) = spec_name {
-            format!("{}schemas/{}/common", "../".repeat(schemas_depth), sanitize_module_name(spec))
+            format!(
+                "{}schemas/{}/common",
+                "../".repeat(schemas_depth),
+                sanitize_module_name(spec)
+            )
         } else {
             format!("{}schemas/common", "../".repeat(schemas_depth))
         };

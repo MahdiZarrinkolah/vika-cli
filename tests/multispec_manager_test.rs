@@ -157,4 +157,3 @@ fn test_resolve_spec_selection_nonexistent_spec_fails() {
     let error = result.unwrap_err();
     assert!(error.to_string().contains("Spec not found"));
 }
-

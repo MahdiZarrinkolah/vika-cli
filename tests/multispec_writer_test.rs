@@ -13,7 +13,8 @@ fn test_write_schemas_with_spec_name() {
     }];
 
     let zod_schemas = vec![ZodSchema {
-        content: "export const UserSchema = z.object({ id: z.string(), name: z.string() });".to_string(),
+        content: "export const UserSchema = z.object({ id: z.string(), name: z.string() });"
+            .to_string(),
     }];
 
     // Write with spec name
@@ -32,7 +33,11 @@ fn test_write_schemas_with_spec_name() {
 
     // Verify directory structure: schemas/auth/users/
     let expected_dir = output_dir.join("auth").join("users");
-    assert!(expected_dir.exists(), "Expected directory {:?} to exist", expected_dir);
+    assert!(
+        expected_dir.exists(),
+        "Expected directory {:?} to exist",
+        expected_dir
+    );
 
     // Verify files exist
     let types_file = expected_dir.join("types.ts");
@@ -73,11 +78,18 @@ fn test_write_schemas_without_spec_name() {
 
     // Verify directory structure: schemas/users/ (no spec name prefix)
     let expected_dir = output_dir.join("users");
-    assert!(expected_dir.exists(), "Expected directory {:?} to exist", expected_dir);
+    assert!(
+        expected_dir.exists(),
+        "Expected directory {:?} to exist",
+        expected_dir
+    );
 
     // Verify no spec-name directory exists
     let spec_dir = output_dir.join("auth");
-    assert!(!spec_dir.exists(), "Spec directory should not exist in single-spec mode");
+    assert!(
+        !spec_dir.exists(),
+        "Spec directory should not exist in single-spec mode"
+    );
 }
 
 #[test]
@@ -97,21 +109,19 @@ export const getUser = async (id: string): Promise<User> => {
     }];
 
     // Write with spec name
-    let files = write_api_client_with_options(
-        &output_dir,
-        "users",
-        &functions,
-        Some("auth"),
-        false,
-        false,
-    )
-    .unwrap();
+    let files =
+        write_api_client_with_options(&output_dir, "users", &functions, Some("auth"), false, false)
+            .unwrap();
 
     assert!(!files.is_empty());
 
     // Verify directory structure: apis/auth/users/
     let expected_dir = output_dir.join("auth").join("users");
-    assert!(expected_dir.exists(), "Expected directory {:?} to exist", expected_dir);
+    assert!(
+        expected_dir.exists(),
+        "Expected directory {:?} to exist",
+        expected_dir
+    );
 
     // Verify index file exists
     let index_file = expected_dir.join("index.ts");
@@ -135,25 +145,25 @@ export const getUser = async (id: string): Promise<User> => {
     }];
 
     // Write without spec name (single-spec mode)
-    let files = write_api_client_with_options(
-        &output_dir,
-        "users",
-        &functions,
-        None,
-        false,
-        false,
-    )
-    .unwrap();
+    let files = write_api_client_with_options(&output_dir, "users", &functions, None, false, false)
+        .unwrap();
 
     assert!(!files.is_empty());
 
     // Verify directory structure: apis/users/ (no spec name prefix)
     let expected_dir = output_dir.join("users");
-    assert!(expected_dir.exists(), "Expected directory {:?} to exist", expected_dir);
+    assert!(
+        expected_dir.exists(),
+        "Expected directory {:?} to exist",
+        expected_dir
+    );
 
     // Verify no spec-name directory exists
     let spec_dir = output_dir.join("auth");
-    assert!(!spec_dir.exists(), "Spec directory should not exist in single-spec mode");
+    assert!(
+        !spec_dir.exists(),
+        "Spec directory should not exist in single-spec mode"
+    );
 }
 
 #[test]
@@ -202,4 +212,3 @@ fn test_multi_spec_directory_isolation() {
     assert!(orders_dir.exists());
     assert_ne!(auth_dir, orders_dir);
 }
-

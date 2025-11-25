@@ -155,8 +155,10 @@ fn generate_zod_for_schema(
 
                 // Check if already generated in THIS zod_schemas collection
                 let schema_export = format!("export const {}Schema", enum_name);
-                let already_generated = zod_schemas.iter().any(|s| s.content.contains(&schema_export));
-                
+                let already_generated = zod_schemas
+                    .iter()
+                    .any(|s| s.content.contains(&schema_export));
+
                 if !already_generated {
                     // Store in registry (schema-specific + base key for reuse)
                     enum_registry.insert(schema_context_key, enum_name.clone());
@@ -168,7 +170,11 @@ fn generate_zod_for_schema(
                     }
 
                     if let Some(engine) = template_engine {
-                        let context = ZodContext::enum_schema(enum_name.clone(), enum_values.clone(), spec_name.map(|s| s.to_string()));
+                        let context = ZodContext::enum_schema(
+                            enum_name.clone(),
+                            enum_values.clone(),
+                            spec_name.map(|s| s.to_string()),
+                        );
                         let content = engine.render(TemplateId::ZodEnum, &context)?;
                         zod_schemas.push(ZodSchema { content });
                     } else {
@@ -220,7 +226,12 @@ fn generate_zod_for_schema(
                             spec_name.map(|s| s.to_string()),
                         )
                     } else {
-                        ZodContext::schema(schema_name.clone(), zod_expr, description, spec_name.map(|s| s.to_string()))
+                        ZodContext::schema(
+                            schema_name.clone(),
+                            zod_expr,
+                            description,
+                            spec_name.map(|s| s.to_string()),
+                        )
                     };
                     let content = engine.render(TemplateId::ZodSchema, &context)?;
                     zod_schemas.push(ZodSchema { content });
@@ -308,8 +319,10 @@ fn schema_to_zod(
                                 // Must match the actual definition, not just a reference
                                 let schema_already_generated = zod_schemas.iter().any(|s| {
                                     let schema_name_pattern = format!("{}Schema", existing_name);
-                                    s.content
-                                        .contains(&format!("export const {} =", schema_name_pattern))
+                                    s.content.contains(&format!(
+                                        "export const {} =",
+                                        schema_name_pattern
+                                    ))
                                 });
 
                                 // If not generated yet, generate it now
@@ -379,16 +392,19 @@ fn schema_to_zod(
                                             .trim_end_matches("Dto")
                                             .trim_end_matches("Response")
                                             .to_string();
-                                        
+
                                         // If parent contains a word that matches the property conceptually, use that
                                         // For example, "AvailableProviderDto" contains "Provider", so "key" property should use "ProviderEnum"
                                         let prop_lower = prop_pascal.to_lowercase();
                                         let parent_lower = parent_clean.to_lowercase();
-                                        
+
                                         // Check if parent contains a more descriptive word (like "Provider" in "AvailableProvider")
                                         // and the property is a generic identifier (like "key", "id", "name", "code")
-                                        let generic_identifiers = ["key", "id", "name", "value", "code"];
-                                        if generic_identifiers.contains(&prop_name.to_lowercase().as_str()) {
+                                        let generic_identifiers =
+                                            ["key", "id", "name", "value", "code"];
+                                        if generic_identifiers
+                                            .contains(&prop_name.to_lowercase().as_str())
+                                        {
                                             // For generic identifiers, always use parent schema to create unique enum names
                                             // This prevents conflicts when different schemas have the same property name
                                             // (e.g., CurrencyResponseDto.code vs OrderValidationErrorDto.code)
@@ -398,7 +414,7 @@ fn schema_to_zod(
                                                 .trim_start_matches("Create")
                                                 .trim_start_matches("Update")
                                                 .trim_start_matches("Delete");
-                                            
+
                                             // Always include parent schema name for generic identifiers to avoid conflicts
                                             if !meaningful_part.is_empty() {
                                                 format!("{}{}Enum", meaningful_part, prop_pascal)
@@ -433,8 +449,11 @@ fn schema_to_zod(
 
                             // Generate enum schema
                             if let Some(engine) = template_engine {
-                                let context =
-                                    ZodContext::enum_schema(enum_name.clone(), enum_values.clone(), spec_name.map(|s| s.to_string()));
+                                let context = ZodContext::enum_schema(
+                                    enum_name.clone(),
+                                    enum_values.clone(),
+                                    spec_name.map(|s| s.to_string()),
+                                );
                                 let content = engine.render(TemplateId::ZodEnum, &context)?;
                                 zod_schemas.push(ZodSchema { content });
                             } else {
@@ -751,7 +770,12 @@ fn schema_to_zod(
                                                                             ZodContext::enum_schema(
                                                                                 enum_name.clone(),
                                                                                 enum_values.clone(),
-                                                                                spec_name.map(|s| s.to_string()),
+                                                                                spec_name.map(
+                                                                                    |s| {
+                                                                                        s.to_string(
+                                                                                        )
+                                                                                    },
+                                                                                ),
                                                                             );
                                                                         let content = engine
                                                                             .render(

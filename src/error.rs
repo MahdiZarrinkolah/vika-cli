@@ -166,7 +166,10 @@ pub enum GenerationError {
     SpecPathRequired,
 
     #[error("Spec not found: {name}. Available specs: {available:?}")]
-    SpecNotFound { name: String, available: Vec<String> },
+    SpecNotFound {
+        name: String,
+        available: Vec<String>,
+    },
 
     #[error("Failed to generate TypeScript types: {0}")]
     TypeScriptGenerationFailed(String),

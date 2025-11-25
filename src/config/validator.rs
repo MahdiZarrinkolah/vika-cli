@@ -195,15 +195,13 @@ mod tests {
     fn test_validate_config_both_spec_and_specs() {
         let mut config = Config::default();
         config.spec_path = Some("openapi.json".to_string());
-        config.specs = Some(vec![
-            crate::config::model::SpecEntry {
-                name: "auth".to_string(),
-                path: "specs/auth.yaml".to_string(),
-                schemas: crate::config::model::SchemasConfig::default(),
-                apis: crate::config::model::ApisConfig::default(),
-                modules: crate::config::model::ModulesConfig::default(),
-            },
-        ]);
+        config.specs = Some(vec![crate::config::model::SpecEntry {
+            name: "auth".to_string(),
+            path: "specs/auth.yaml".to_string(),
+            schemas: crate::config::model::SchemasConfig::default(),
+            apis: crate::config::model::ApisConfig::default(),
+            modules: crate::config::model::ModulesConfig::default(),
+        }]);
 
         let result = validate_config(&config);
         assert!(result.is_err());
@@ -218,7 +216,9 @@ mod tests {
         let result = validate_config(&config);
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert!(error.to_string().contains("Neither 'spec_path' nor 'specs'"));
+        assert!(error
+            .to_string()
+            .contains("Neither 'spec_path' nor 'specs'"));
     }
 
     #[test]
@@ -229,7 +229,9 @@ mod tests {
         let result = validate_config(&config);
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert!(error.to_string().contains("At least one spec must be defined"));
+        assert!(error
+            .to_string()
+            .contains("At least one spec must be defined"));
     }
 
     #[test]

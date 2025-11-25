@@ -83,101 +83,101 @@ pub async fn run(
         }
     }
 
-        let options = GenerateOptions {
-            use_cache: if cache {
-                true
-            } else {
-                config.generation.enable_cache
-            },
-            use_backup: if backup {
-                true
-            } else {
-                config.generation.enable_backup
-            },
-            use_force: if force {
-                true
-            } else {
-                config.generation.conflict_strategy == "force"
-            },
-            verbose,
-        };
-
-        if specs_to_generate.len() > 1 {
-            // Generate all selected specs
-            progress.success("Starting multi-spec generation...");
-            println!();
-
-            let stats = run_all_specs(&specs_to_generate, &config, &options).await?;
-
-            // Update config with selected modules for each spec
-            for stat in &stats {
-                if let Some(spec_entry) = config.specs.iter_mut().find(|s| s.name == stat.spec_name) {
-                    spec_entry.modules.selected = stat.modules.clone();
-                }
-            }
-            save_config(&config)?;
-
-            println!();
-            progress.success(&format!(
-                "Successfully generated code for {} spec(s)!",
-                stats.len()
-            ));
-            println!();
-
-            // Display summary
-            use tabled::{Table, Tabled};
-            #[derive(Tabled)]
-            struct SpecSummary {
-                #[tabled(rename = "Spec")]
-                spec: String,
-                #[tabled(rename = "Modules")]
-                modules: usize,
-                #[tabled(rename = "Files")]
-                files: usize,
-            }
-
-            let table_data: Vec<SpecSummary> = stats
-                .iter()
-                .map(|s| SpecSummary {
-                    spec: s.spec_name.clone(),
-                    modules: s.modules_generated,
-                    files: s.files_generated,
-                })
-                .collect();
-
-            let table = Table::new(table_data);
-            println!("{}", "Generation summary:".bright_cyan());
-            println!("{}", table);
-            println!();
+    let options = GenerateOptions {
+        use_cache: if cache {
+            true
         } else {
-            // Generate single spec
-            let spec_entry = &specs_to_generate[0];
-            let stats = run_single_spec(spec_entry, &config, &options).await?;
+            config.generation.enable_cache
+        },
+        use_backup: if backup {
+            true
+        } else {
+            config.generation.enable_backup
+        },
+        use_force: if force {
+            true
+        } else {
+            config.generation.conflict_strategy == "force"
+        },
+        verbose,
+    };
 
-            // Update config with selected modules
-            if let Some(spec_entry) = config.specs.iter_mut().find(|s| s.name == stats.spec_name) {
-                spec_entry.modules.selected = stats.modules.clone();
+    if specs_to_generate.len() > 1 {
+        // Generate all selected specs
+        progress.success("Starting multi-spec generation...");
+        println!();
+
+        let stats = run_all_specs(&specs_to_generate, &config, &options).await?;
+
+        // Update config with selected modules for each spec
+        for stat in &stats {
+            if let Some(spec_entry) = config.specs.iter_mut().find(|s| s.name == stat.spec_name) {
+                spec_entry.modules.selected = stat.modules.clone();
             }
-            save_config(&config)?;
+        }
+        save_config(&config)?;
 
-            println!();
-            progress.success(&format!(
-                "Successfully generated {} files for spec '{}'!",
-                stats.files_generated, stats.spec_name
-            ));
-            println!();
-            
-            // Use spec-specific configs for output paths
-            let schemas_config = &spec_entry.schemas;
-            let apis_config = &spec_entry.apis;
-            
-            println!("{}", "Generated files:".bright_cyan());
-            println!("  📁 Schemas: {}", schemas_config.output);
-            println!("  📁 APIs: {}", apis_config.output);
-            println!();
+        println!();
+        progress.success(&format!(
+            "Successfully generated code for {} spec(s)!",
+            stats.len()
+        ));
+        println!();
+
+        // Display summary
+        use tabled::{Table, Tabled};
+        #[derive(Tabled)]
+        struct SpecSummary {
+            #[tabled(rename = "Spec")]
+            spec: String,
+            #[tabled(rename = "Modules")]
+            modules: usize,
+            #[tabled(rename = "Files")]
+            files: usize,
         }
 
-        return Ok(());
+        let table_data: Vec<SpecSummary> = stats
+            .iter()
+            .map(|s| SpecSummary {
+                spec: s.spec_name.clone(),
+                modules: s.modules_generated,
+                files: s.files_generated,
+            })
+            .collect();
+
+        let table = Table::new(table_data);
+        println!("{}", "Generation summary:".bright_cyan());
+        println!("{}", table);
+        println!();
+    } else {
+        // Generate single spec
+        let spec_entry = &specs_to_generate[0];
+        let stats = run_single_spec(spec_entry, &config, &options).await?;
+
+        // Update config with selected modules
+        if let Some(spec_entry) = config.specs.iter_mut().find(|s| s.name == stats.spec_name) {
+            spec_entry.modules.selected = stats.modules.clone();
+        }
+        save_config(&config)?;
+
+        println!();
+        progress.success(&format!(
+            "Successfully generated {} files for spec '{}'!",
+            stats.files_generated, stats.spec_name
+        ));
+        println!();
+
+        // Use spec-specific configs for output paths
+        let schemas_config = &spec_entry.schemas;
+        let apis_config = &spec_entry.apis;
+
+        println!("{}", "Generated files:".bright_cyan());
+        println!("  📁 Schemas: {}", schemas_config.output);
+        println!("  📁 APIs: {}", apis_config.output);
+        println!();
+    }
+
+    return Ok(());
 
     // This should never be reached - all code generation goes through run_single_spec or run_all_specs above
     unreachable!("All specs should be handled by run_single_spec or run_all_specs")

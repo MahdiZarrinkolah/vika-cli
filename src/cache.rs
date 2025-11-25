@@ -23,7 +23,10 @@ fn cache_file_names(cache_key: &str) -> (String, String) {
     let mut hasher = DefaultHasher::new();
     cache_key.hash(&mut hasher);
     let hash = format!("{:x}", hasher.finish());
-    (format!("spec_{}.json", hash), format!("spec_{}.meta.json", hash))
+    (
+        format!("spec_{}.json", hash),
+        format!("spec_{}.meta.json", hash),
+    )
 }
 
 #[derive(Debug, Serialize, Deserialize)]

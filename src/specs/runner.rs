@@ -1,12 +1,12 @@
 use crate::config::model::{Config, SpecEntry};
 use crate::error::Result;
 use crate::formatter::FormatterManager;
+use crate::generator::api_client::generate_api_client_with_registry_and_engine_and_spec;
 use crate::generator::module_selector::select_modules;
 use crate::generator::swagger_parser::filter_common_schemas;
 use crate::generator::ts_typings::generate_typings_with_registry_and_engine_and_spec;
-use crate::generator::zod_schema::generate_zod_schemas_with_registry_and_engine_and_spec;
-use crate::generator::api_client::generate_api_client_with_registry_and_engine_and_spec;
 use crate::generator::writer::{write_api_client_with_options, write_schemas_with_options};
+use crate::generator::zod_schema::generate_zod_schemas_with_registry_and_engine_and_spec;
 use crate::progress::ProgressReporter;
 use std::path::PathBuf;
 
@@ -269,13 +269,12 @@ pub async fn run_single_spec(
     // Format files if formatter is available
     if !all_generated_files.is_empty() {
         // Get current directory to resolve relative paths
-        let current_dir = std::env::current_dir().map_err(|e| {
-            crate::error::FileSystemError::ReadFileFailed {
+        let current_dir =
+            std::env::current_dir().map_err(|e| crate::error::FileSystemError::ReadFileFailed {
                 path: ".".to_string(),
                 source: e,
-            }
-        })?;
-        
+            })?;
+
         // Resolve to absolute paths
         let schemas_dir_abs = if schemas_dir.is_absolute() {
             schemas_dir.clone()
@@ -287,7 +286,7 @@ pub async fn run_single_spec(
         } else {
             current_dir.join(&apis_dir)
         };
-        
+
         let output_base = schemas_dir_abs
             .parent()
             .and_then(|p| p.parent())
@@ -343,7 +342,7 @@ pub async fn run_single_spec(
                         })?;
 
                         result?;
-                        
+
                         // Update metadata for formatted files to reflect formatted content hash (batch update)
                         use crate::generator::writer::batch_update_file_metadata_from_disk;
                         if let Err(e) = batch_update_file_metadata_from_disk(&all_generated_files) {
@@ -361,7 +360,7 @@ pub async fn run_single_spec(
                 }
             } else {
                 FormatterManager::format_files(&all_generated_files, formatter)?;
-                
+
                 // Update metadata for formatted files to reflect formatted content hash (batch update)
                 use crate::generator::writer::batch_update_file_metadata_from_disk;
                 if let Err(e) = batch_update_file_metadata_from_disk(&all_generated_files) {
@@ -397,10 +396,12 @@ pub async fn run_all_specs(
 
 fn collect_ts_files(dir: &std::path::Path, files: &mut Vec<PathBuf>) -> Result<()> {
     if dir.is_dir() {
-        for entry in std::fs::read_dir(dir).map_err(|e| crate::error::FileSystemError::ReadFileFailed {
-            path: dir.display().to_string(),
-            source: e,
-        })? {
+        for entry in
+            std::fs::read_dir(dir).map_err(|e| crate::error::FileSystemError::ReadFileFailed {
+                path: dir.display().to_string(),
+                source: e,
+            })?
+        {
             let entry = entry.map_err(|e| crate::error::FileSystemError::ReadFileFailed {
                 path: dir.display().to_string(),
                 source: e,
@@ -419,4 +420,3 @@ fn collect_ts_files(dir: &std::path::Path, files: &mut Vec<PathBuf>) -> Result<(
     }
     Ok(())
 }
-

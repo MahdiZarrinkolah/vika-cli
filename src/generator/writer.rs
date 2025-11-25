@@ -24,7 +24,15 @@ pub fn write_schemas(
     types: &[TypeScriptType],
     zod_schemas: &[ZodSchema],
 ) -> Result<Vec<PathBuf>> {
-    write_schemas_with_options(output_dir, module_name, types, zod_schemas, None, false, false)
+    write_schemas_with_options(
+        output_dir,
+        module_name,
+        types,
+        zod_schemas,
+        None,
+        false,
+        false,
+    )
 }
 
 pub fn write_schemas_with_options(
@@ -45,7 +53,7 @@ pub fn write_schemas_with_options(
         backup,
         force,
         None, // module_schemas - will be added later if needed
-        &[], // common_schemas
+        &[],  // common_schemas
     )
 }
 
@@ -154,7 +162,10 @@ pub fn write_schemas_with_module_mapping(
         // Detect cross-module enum schema references and add imports
         // This handles cases where a module references an enum from another module
         // (e.g., orders module using CodeEnumSchema from currencies module)
-        let mut cross_module_imports: std::collections::HashMap<String, std::collections::HashSet<String>> = std::collections::HashMap::new();
+        let mut cross_module_imports: std::collections::HashMap<
+            String,
+            std::collections::HashSet<String>,
+        > = std::collections::HashMap::new();
         if let Some(module_schemas_map) = module_schemas {
             let current_module_schemas: std::collections::HashSet<String> = module_schemas_map
                 .get(module_name)
@@ -162,7 +173,7 @@ pub fn write_schemas_with_module_mapping(
                 .unwrap_or_default()
                 .into_iter()
                 .collect();
-            
+
             // Check which enums are defined locally in this module's zod_schemas
             let locally_defined_enums: std::collections::HashSet<String> = zod_schemas
                 .iter()
@@ -180,7 +191,7 @@ pub fn write_schemas_with_module_mapping(
                     None
                 })
                 .collect();
-            
+
             // Find enum schema references in the content (pattern: XEnumSchema where X is not Common)
             // We'll search for patterns like "CodeEnumSchema", "CountryCodeEnumSchema", etc.
             let mut pos = 0;
@@ -196,25 +207,27 @@ pub fn write_schemas_with_module_mapping(
                     name_start -= 1;
                 }
                 let enum_name = &zod_content_raw[name_start..actual_start + "EnumSchema".len()];
-                
+
                 // Skip if it's Common.EnumSchema (already imported)
                 if enum_name.starts_with("Common.") {
                     pos = actual_start + "EnumSchema".len();
                     continue;
                 }
-                
+
                 // Skip if this enum is defined locally in this module
                 if locally_defined_enums.contains(enum_name) {
                     pos = actual_start + "EnumSchema".len();
                     continue;
                 }
-                
+
                 // Extract schema name from enum name (e.g., CodeEnumSchema -> Code)
                 let schema_name = enum_name.replace("EnumSchema", "");
-                
+
                 // Check if this enum is not defined locally AND not in common
                 // If it's not defined locally but IS in common, we should use Common.EnumSchema instead
-                if !locally_defined_enums.contains(enum_name) && !common_schemas.contains(&schema_name) {
+                if !locally_defined_enums.contains(enum_name)
+                    && !common_schemas.contains(&schema_name)
+                {
                     // Find which module defines this schema (and thus exports the enum)
                     // Try exact match first
                     let mut found_module: Option<String> = None;
@@ -228,7 +241,7 @@ pub fn write_schemas_with_module_mapping(
                             }
                         }
                     }
-                    
+
                     // If not found with exact match, try case-insensitive and partial matches
                     // This handles cases where schema names might have different casing or prefixes
                     if found_module.is_none() {
@@ -255,7 +268,7 @@ pub fn write_schemas_with_module_mapping(
                             }
                         }
                     }
-                    
+
                     // If we found a module, add the import
                     if let Some(module) = found_module {
                         cross_module_imports
@@ -266,7 +279,7 @@ pub fn write_schemas_with_module_mapping(
                     // Note: Disabled heuristic matching as it was too aggressive and caused false imports
                     // If an enum is truly needed from another module, it should be found via exact or fuzzy schema name match
                 }
-                
+
                 pos = actual_start + "EnumSchema".len();
             }
         }
@@ -753,17 +766,17 @@ pub fn write_file_with_backup(path: &Path, content: &str, backup: bool, force: b
         if let Ok(metadata) = load_file_metadata(path) {
             let current_hash = compute_content_hash(content);
             let file_hash = compute_file_hash(path)?;
-            
+
             // If metadata hash doesn't match current or file hash, check if it's just formatting
             if metadata.hash != current_hash && metadata.hash != file_hash {
                 // Try to detect formatter by walking up the directory tree
                 // This handles the case where file was formatted but spec didn't change
                 use crate::formatter::FormatterManager;
-                
+
                 // Find formatter by checking parent directories (where config files are likely located)
                 let mut search_dir = path.parent().unwrap_or_else(|| Path::new("."));
                 let mut formatter = None;
-                
+
                 // Walk up the directory tree to find formatter config
                 while search_dir != Path::new("/") && search_dir != Path::new("") {
                     if let Some(fmt) = FormatterManager::detect_formatter_from_dir(search_dir) {
@@ -776,12 +789,12 @@ pub fn write_file_with_backup(path: &Path, content: &str, backup: bool, force: b
                         break;
                     }
                 }
-                
+
                 // Also try current directory as fallback
                 if formatter.is_none() {
                     formatter = FormatterManager::detect_formatter();
                 }
-                
+
                 if let Some(fmt) = formatter {
                     // Format the new content and compare with file
                     match FormatterManager::format_content(content, fmt, path) {
