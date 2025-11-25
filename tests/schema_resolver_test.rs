@@ -218,7 +218,8 @@ components:
     resolver.build_dependency_graph().unwrap();
 
     let cycles = resolver.detect_circular_dependencies().unwrap();
-    assert!(cycles.len() >= 0);
+    // cycles.len() is always >= 0 (usize), so just verify it doesn't panic
+    let _ = cycles.len();
 }
 
 #[tokio::test]

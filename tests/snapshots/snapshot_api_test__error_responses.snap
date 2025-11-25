@@ -20,7 +20,7 @@ export type GetProductErrors = {
 export type GetProductError = GetProductErrors[keyof GetProductErrors];
 
 import { http } from "../http";
-import type { GetProductErrors, GetProductError } from "../../schemas/test";
+import type { GetProductErrors, GetProductError } from "../../../schemas/test";
 
 export const getProduct = async (id: string) => {
     const url = `/products/${id}`;

@@ -1,39 +1,46 @@
 use tempfile::TempDir;
 use vika_cli::config::loader::{load_config, save_config};
-use vika_cli::config::model::Config;
+use vika_cli::config::model::{Config, SpecEntry};
 use vika_cli::config::validator::validate_config;
-use vika_cli::specs::manager::is_multi_spec_mode;
 
 #[test]
 fn test_single_spec_config_validation_still_works() {
     let mut config = Config::default();
-    config.spec_path = Some("openapi.json".to_string());
+    config.specs = vec![SpecEntry {
+        name: "default".to_string(),
+        path: "openapi.json".to_string(),
+        schemas: vika_cli::config::model::SchemasConfig::default(),
+        apis: vika_cli::config::model::ApisConfig::default(),
+        modules: vika_cli::config::model::ModulesConfig::default(),
+    }];
 
     let result = validate_config(&config);
     assert!(result.is_ok(), "Single spec config should still validate");
-    assert!(
-        !is_multi_spec_mode(&config),
-        "Should not be in multi-spec mode"
-    );
 }
 
 #[test]
-fn test_single_spec_config_serialization_backward_compat() {
+fn test_single_spec_config_serialization() {
     let temp_dir = TempDir::new().unwrap();
     let original_dir = std::env::current_dir().unwrap();
     std::env::set_current_dir(temp_dir.path()).unwrap();
 
     let config = Config {
-        spec_path: Some("openapi.json".to_string()),
+        specs: vec![SpecEntry {
+            name: "default".to_string(),
+            path: "openapi.json".to_string(),
+            schemas: vika_cli::config::model::SchemasConfig::default(),
+            apis: vika_cli::config::model::ApisConfig::default(),
+            modules: vika_cli::config::model::ModulesConfig::default(),
+        }],
         ..Config::default()
     };
 
     save_config(&config).unwrap();
     let loaded = load_config().unwrap();
 
-    assert_eq!(loaded.spec_path, Some("openapi.json".to_string()));
-    assert!(loaded.specs.is_none());
-    assert!(!is_multi_spec_mode(&loaded));
+    assert_eq!(loaded.specs.len(), 1);
+    assert_eq!(loaded.specs[0].name, "default");
+    assert_eq!(loaded.specs[0].path, "openapi.json");
 
     std::env::set_current_dir(original_dir).unwrap();
 }
@@ -88,9 +95,8 @@ fn test_single_spec_output_structure_unchanged() {
 fn test_default_config_still_works() {
     let config = Config::default();
 
-    // Default config should have no spec_path or specs
-    assert!(config.spec_path.is_none());
-    assert!(config.specs.is_none());
+    // Default config should have no specs
+    assert!(config.specs.is_empty());
 
     // Validation should fail (no spec defined), but that's expected
     let result = validate_config(&config);
@@ -98,28 +104,40 @@ fn test_default_config_still_works() {
 }
 
 #[test]
-fn test_config_with_only_spec_path() {
+fn test_config_with_single_spec() {
     let mut config = Config::default();
-    config.spec_path = Some("specs/api.yaml".to_string());
-    config.specs = None;
+    config.specs = vec![SpecEntry {
+        name: "api".to_string(),
+        path: "specs/api.yaml".to_string(),
+        schemas: vika_cli::config::model::SchemasConfig::default(),
+        apis: vika_cli::config::model::ApisConfig::default(),
+        modules: vika_cli::config::model::ModulesConfig::default(),
+    }];
 
-    assert!(!is_multi_spec_mode(&config));
     let result = validate_config(&config);
     assert!(result.is_ok());
 }
 
 #[test]
-fn test_config_with_only_specs() {
-    use vika_cli::config::model::SpecEntry;
-
+fn test_config_with_multiple_specs() {
     let mut config = Config::default();
-    config.spec_path = None;
-    config.specs = Some(vec![SpecEntry {
-        name: "api".to_string(),
-        path: "specs/api.yaml".to_string(),
-    }]);
+    config.specs = vec![
+        SpecEntry {
+            name: "api".to_string(),
+            path: "specs/api.yaml".to_string(),
+            schemas: vika_cli::config::model::SchemasConfig::default(),
+            apis: vika_cli::config::model::ApisConfig::default(),
+            modules: vika_cli::config::model::ModulesConfig::default(),
+        },
+        SpecEntry {
+            name: "auth".to_string(),
+            path: "specs/auth.yaml".to_string(),
+            schemas: vika_cli::config::model::SchemasConfig::default(),
+            apis: vika_cli::config::model::ApisConfig::default(),
+            modules: vika_cli::config::model::ModulesConfig::default(),
+        },
+    ];
 
-    assert!(is_multi_spec_mode(&config));
     let result = validate_config(&config);
     assert!(result.is_ok());
 }

@@ -34,23 +34,25 @@ pub fn create_mock_config() -> Config {
 pub fn create_mock_config_with_paths(schemas_output: &str, apis_output: &str) -> Config {
     Config {
         root_dir: "src".to_string(),
-        schemas: vika_cli::config::model::SchemasConfig {
-            output: schemas_output.to_string(),
-            naming: "PascalCase".to_string(),
-        },
-        apis: vika_cli::config::model::ApisConfig {
-            output: apis_output.to_string(),
-            style: "fetch".to_string(),
-            base_url: None,
-            header_strategy: "consumerInjected".to_string(),
-        },
-        modules: vika_cli::config::model::ModulesConfig {
-            ignore: vec![],
-            selected: vec![],
-        },
         generation: vika_cli::config::model::GenerationConfig::default(),
-        spec_path: None,
-        specs: None,
+        specs: vec![vika_cli::config::model::SpecEntry {
+            name: "test".to_string(),
+            path: "test.yaml".to_string(),
+            schemas: vika_cli::config::model::SchemasConfig {
+                output: schemas_output.to_string(),
+                naming: "PascalCase".to_string(),
+            },
+            apis: vika_cli::config::model::ApisConfig {
+                output: apis_output.to_string(),
+                style: "fetch".to_string(),
+                base_url: None,
+                header_strategy: "consumerInjected".to_string(),
+            },
+            modules: vika_cli::config::model::ModulesConfig {
+                ignore: vec![],
+                selected: vec![],
+            },
+        }],
         schema: vika_cli::config::model::default_schema(),
     }
 }

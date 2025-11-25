@@ -1,7 +1,5 @@
 use std::str::FromStr;
-use vika_cli::templates::context::{
-    ApiContext, Parameter, RequestBody, Response, TypeContext, ZodContext,
-};
+use vika_cli::templates::context::{ApiContext, Parameter, Response, TypeContext, ZodContext};
 use vika_cli::templates::engine::TemplateEngine;
 use vika_cli::templates::loader::TemplateLoader;
 use vika_cli::templates::registry::TemplateId;

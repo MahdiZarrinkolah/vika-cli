@@ -1,3 +1,5 @@
+#![allow(deprecated)] // TODO: migrate to cargo::cargo_bin_cmd! macro
+
 use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs;
@@ -49,22 +51,10 @@ fn test_init_command_no_interaction() {
 fn test_generate_command_missing_spec() {
     let temp_dir = TempDir::new().unwrap();
 
-    // Create a config file
+    // Create a config file without specs (should fail validation)
     let config = r#"{
         "root_dir": "src",
-        "schemas": {
-            "output": "src/schemas",
-            "naming": "PascalCase"
-        },
-        "apis": {
-            "output": "src/apis",
-            "style": "fetch",
-            "header_strategy": "consumerInjected"
-        },
-        "modules": {
-            "ignore": [],
-            "selected": []
-        }
+        "specs": []
     }"#;
     fs::write(temp_dir.path().join(".vika.json"), config).unwrap();
 
@@ -151,10 +141,35 @@ paths:
     let spec_path = temp_dir.path().join("spec.yaml");
     fs::write(&spec_path, spec).unwrap();
 
+    // Create config file (inspect command requires config)
+    let config = r#"{
+        "root_dir": "src",
+        "specs": [
+            {
+                "name": "test",
+                "path": "spec.yaml",
+                "schemas": {
+                    "output": "src/schemas",
+                    "naming": "PascalCase"
+                },
+                "apis": {
+                    "output": "src/apis",
+                    "style": "fetch",
+                    "header_strategy": "consumerInjected"
+                },
+                "modules": {
+                    "ignore": [],
+                    "selected": []
+                }
+            }
+        ]
+    }"#;
+    fs::write(temp_dir.path().join(".vika.json"), config).unwrap();
+
     let mut cmd = Command::cargo_bin("vika-cli").unwrap();
     cmd.arg("inspect");
     cmd.arg("--spec");
-    cmd.arg(spec_path.to_str().unwrap());
+    cmd.arg("test"); // Use spec name instead of path
     cmd.current_dir(temp_dir.path());
 
     cmd.assert()
@@ -183,10 +198,35 @@ paths:
     let spec_path = temp_dir.path().join("spec.yaml");
     fs::write(&spec_path, spec).unwrap();
 
+    // Create config file (inspect command requires config)
+    let config = r#"{
+        "root_dir": "src",
+        "specs": [
+            {
+                "name": "test",
+                "path": "spec.yaml",
+                "schemas": {
+                    "output": "src/schemas",
+                    "naming": "PascalCase"
+                },
+                "apis": {
+                    "output": "src/apis",
+                    "style": "fetch",
+                    "header_strategy": "consumerInjected"
+                },
+                "modules": {
+                    "ignore": [],
+                    "selected": []
+                }
+            }
+        ]
+    }"#;
+    fs::write(temp_dir.path().join(".vika.json"), config).unwrap();
+
     let mut cmd = Command::cargo_bin("vika-cli").unwrap();
     cmd.arg("inspect");
     cmd.arg("--spec");
-    cmd.arg(spec_path.to_str().unwrap());
+    cmd.arg("test"); // Use spec name instead of path
     cmd.arg("--json");
     cmd.current_dir(temp_dir.path());
 
@@ -223,10 +263,35 @@ paths:
     let spec_path = temp_dir.path().join("spec.yaml");
     fs::write(&spec_path, spec).unwrap();
 
+    // Create config file (inspect command requires config)
+    let config = r#"{
+        "root_dir": "src",
+        "specs": [
+            {
+                "name": "test",
+                "path": "spec.yaml",
+                "schemas": {
+                    "output": "src/schemas",
+                    "naming": "PascalCase"
+                },
+                "apis": {
+                    "output": "src/apis",
+                    "style": "fetch",
+                    "header_strategy": "consumerInjected"
+                },
+                "modules": {
+                    "ignore": [],
+                    "selected": []
+                }
+            }
+        ]
+    }"#;
+    fs::write(temp_dir.path().join(".vika.json"), config).unwrap();
+
     let mut cmd = Command::cargo_bin("vika-cli").unwrap();
     cmd.arg("inspect");
     cmd.arg("--spec");
-    cmd.arg(spec_path.to_str().unwrap());
+    cmd.arg("test"); // Use spec name instead of path
     cmd.arg("--schemas");
     cmd.current_dir(temp_dir.path());
 
@@ -251,9 +316,15 @@ paths: {}
 
     let config = r#"{
         "root_dir": "src",
-        "schemas": {"output": "src/schemas", "naming": "PascalCase"},
-        "apis": {"output": "src/apis", "style": "fetch", "header_strategy": "consumerInjected"},
-        "modules": {"ignore": [], "selected": []}
+        "specs": [
+            {
+                "name": "test",
+                "path": "spec.yaml",
+                "schemas": {"output": "src/schemas", "naming": "PascalCase"},
+                "apis": {"output": "src/apis", "style": "fetch", "header_strategy": "consumerInjected"},
+                "modules": {"ignore": [], "selected": []}
+            }
+        ]
     }"#;
     fs::write(temp_dir.path().join(".vika.json"), config).unwrap();
 
@@ -399,10 +470,35 @@ paths:
     let spec_path = temp_dir.path().join("spec.yaml");
     fs::write(&spec_path, spec).unwrap();
 
+    // Create config file (inspect command requires config)
+    let config = r#"{
+        "root_dir": "src",
+        "specs": [
+            {
+                "name": "test",
+                "path": "spec.yaml",
+                "schemas": {
+                    "output": "src/schemas",
+                    "naming": "PascalCase"
+                },
+                "apis": {
+                    "output": "src/apis",
+                    "style": "fetch",
+                    "header_strategy": "consumerInjected"
+                },
+                "modules": {
+                    "ignore": [],
+                    "selected": []
+                }
+            }
+        ]
+    }"#;
+    fs::write(temp_dir.path().join(".vika.json"), config).unwrap();
+
     let mut cmd = Command::cargo_bin("vika-cli").unwrap();
     cmd.arg("inspect");
     cmd.arg("--spec");
-    cmd.arg(spec_path.to_str().unwrap());
+    cmd.arg("test"); // Use spec name instead of path
     cmd.arg("--module");
     cmd.arg("users");
     cmd.current_dir(temp_dir.path());

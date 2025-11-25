@@ -1,0 +1,28 @@
+---
+source: tests/multispec_snapshot_test.rs
+expression: content
+---
+import { http } from "../http";
+import * as Orders from "../../../schemas/orders/orders";
+import type { GetOrderResponses } from "../../../schemas/orders/orders";
+
+/**
+ * List orders
+
+ */
+export const listOrders = async () => {
+    const url = `/orders`;
+    return http.get<any>(url);
+};
+
+/**
+ * Get order
+
+ *
+ * @param id
+
+ */
+export const getOrder = async (id: string): Promise<GetOrderResponses[200]> => {
+    const url = `/orders/${id}`;
+    return http.get<Orders.Order>(url);
+};

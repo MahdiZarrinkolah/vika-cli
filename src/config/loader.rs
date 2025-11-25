@@ -50,14 +50,20 @@ mod tests {
 
         let _ = env::set_current_dir(&temp_dir);
 
-        let config = Config::default();
-
         // Save config should succeed
+        let mut config = Config::default();
+        config.specs = vec![crate::config::model::SpecEntry {
+            name: "test".to_string(),
+            path: "test.yaml".to_string(),
+            schemas: crate::config::model::SchemasConfig::default(),
+            apis: crate::config::model::ApisConfig::default(),
+            modules: crate::config::model::ModulesConfig::default(),
+        }];
         if save_config(&config).is_ok() {
             // Load config should succeed and match
             if let Ok(loaded) = load_config() {
                 assert_eq!(loaded.root_dir, config.root_dir);
-                assert_eq!(loaded.schemas.output, config.schemas.output);
+                assert_eq!(loaded.specs.len(), config.specs.len());
             }
         }
 

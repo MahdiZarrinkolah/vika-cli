@@ -17,9 +17,10 @@ fn test_write_schemas_with_spec_name() {
             .to_string(),
     }];
 
-    // Write with spec name
+    // Write with spec name (output_dir should include spec_name)
+    let auth_output_dir = output_dir.join("auth");
     let files = write_schemas_with_options(
-        &output_dir,
+        &auth_output_dir,
         "users",
         &types,
         &zod_schemas,
@@ -108,10 +109,17 @@ export const getUser = async (id: string): Promise<User> => {
         .to_string(),
     }];
 
-    // Write with spec name
-    let files =
-        write_api_client_with_options(&output_dir, "users", &functions, Some("auth"), false, false)
-            .unwrap();
+    // Write with spec name (output_dir should include spec_name)
+    let auth_output_dir = output_dir.join("auth");
+    let files = write_api_client_with_options(
+        &auth_output_dir,
+        "users",
+        &functions,
+        Some("auth"),
+        false,
+        false,
+    )
+    .unwrap();
 
     assert!(!files.is_empty());
 
@@ -180,9 +188,10 @@ fn test_multi_spec_directory_isolation() {
         content: "export const UserSchema = z.object({ id: z.string() });".to_string(),
     }];
 
-    // Write for auth spec
+    // Write for auth spec (output_dir should include spec_name)
+    let auth_schemas_dir = schemas_dir.join("auth");
     write_schemas_with_options(
-        &schemas_dir,
+        &auth_schemas_dir,
         "users",
         &types,
         &zod_schemas,
@@ -192,9 +201,10 @@ fn test_multi_spec_directory_isolation() {
     )
     .unwrap();
 
-    // Write for orders spec
+    // Write for orders spec (output_dir should include spec_name)
+    let orders_schemas_dir = schemas_dir.join("orders");
     write_schemas_with_options(
-        &schemas_dir,
+        &orders_schemas_dir,
         "users",
         &types,
         &zod_schemas,

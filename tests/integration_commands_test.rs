@@ -3,7 +3,7 @@ use std::fs;
 use tempfile::TempDir;
 use vika_cli::commands::{inspect, update};
 use vika_cli::config::loader::save_config;
-use vika_cli::config::model::Config;
+use vika_cli::config::model::{ApisConfig, Config, ModulesConfig, SchemasConfig, SpecEntry};
 
 // Init command requires interactive input, so we test config loading/saving separately
 
@@ -69,8 +69,19 @@ paths:
     let spec_path = temp_dir.path().join("spec.yaml");
     fs::write(&spec_path, spec_content).unwrap();
 
-    // Test inspect without module filter
+    // Create config with spec (inspect command requires config)
+    let mut config = Config::default();
     let spec_str = spec_path.to_str().unwrap().to_string();
+    config.specs = vec![SpecEntry {
+        name: "test".to_string(),
+        path: spec_str.clone(),
+        schemas: SchemasConfig::default(),
+        apis: ApisConfig::default(),
+        modules: ModulesConfig::default(),
+    }];
+    save_config(&config).unwrap();
+
+    // Test inspect without module filter
     let result = inspect::run(
         Some(spec_str.clone()),
         false,
@@ -103,19 +114,32 @@ openapi: 3.0.0
 info:
   title: Test API
   version: 1.0.0
-paths: {}
+tags:
+  - name: test
+paths:
+  /test:
+    get:
+      tags:
+        - test
+      responses:
+        '200':
+          description: Success
 "#;
     let spec_path = temp_dir.path().join("spec.yaml");
     fs::write(&spec_path, spec_content).unwrap();
 
-    // Create config with spec path
+    // Create config with spec (use relative path since we changed directory)
     let mut config = Config::default();
-    let spec_str = spec_path.to_str().unwrap().to_string();
-    config.spec_path = Some(spec_str);
-    save_config(&config).unwrap();
-
-    // Update command requires modules to be selected in config
-    config.modules.selected = vec!["test".to_string()];
+    config.specs = vec![SpecEntry {
+        name: "test".to_string(),
+        path: "spec.yaml".to_string(), // Relative path
+        schemas: SchemasConfig::default(),
+        apis: ApisConfig::default(),
+        modules: ModulesConfig {
+            ignore: vec![],
+            selected: vec!["test".to_string()],
+        },
+    }];
     save_config(&config).unwrap();
 
     // Update command succeeds even if no operations found (graceful handling)

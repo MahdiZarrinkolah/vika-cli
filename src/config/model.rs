@@ -331,43 +331,44 @@ mod tests {
     }
 
     #[test]
-    fn test_single_spec_deserialization() {
-        let json = r#"
-        {
-            "$schema": "https://example.com/schema.json",
-            "spec_path": "openapi.json"
-        }
-        "#;
-
-        let config: Config = serde_json::from_str(json).unwrap();
-        assert_eq!(config.spec_path, Some("openapi.json".to_string()));
-        assert!(config.specs.is_none());
-    }
-
-    #[test]
     fn test_multi_spec_deserialization() {
         let json = r#"
         {
             "$schema": "https://example.com/schema.json",
             "specs": [
-                { "name": "auth", "path": "specs/auth.yaml" },
-                { "name": "orders", "path": "specs/orders.json" },
-                { "name": "products", "path": "specs/products.yaml" }
+                { 
+                    "name": "auth", 
+                    "path": "specs/auth.yaml",
+                    "schemas": {},
+                    "apis": {},
+                    "modules": {}
+                },
+                { 
+                    "name": "orders", 
+                    "path": "specs/orders.json",
+                    "schemas": {},
+                    "apis": {},
+                    "modules": {}
+                },
+                { 
+                    "name": "products", 
+                    "path": "specs/products.yaml",
+                    "schemas": {},
+                    "apis": {},
+                    "modules": {}
+                }
             ]
         }
         "#;
 
         let config: Config = serde_json::from_str(json).unwrap();
-        assert!(config.spec_path.is_none());
-        assert!(config.specs.is_some());
-        let specs = config.specs.unwrap();
-        assert_eq!(specs.len(), 3);
-        assert_eq!(specs[0].name, "auth");
-        assert_eq!(specs[0].path, "specs/auth.yaml");
-        assert_eq!(specs[1].name, "orders");
-        assert_eq!(specs[1].path, "specs/orders.json");
-        assert_eq!(specs[2].name, "products");
-        assert_eq!(specs[2].path, "specs/products.yaml");
+        assert_eq!(config.specs.len(), 3);
+        assert_eq!(config.specs[0].name, "auth");
+        assert_eq!(config.specs[0].path, "specs/auth.yaml");
+        assert_eq!(config.specs[1].name, "orders");
+        assert_eq!(config.specs[1].path, "specs/orders.json");
+        assert_eq!(config.specs[2].name, "products");
+        assert_eq!(config.specs[2].path, "specs/products.yaml");
     }
 
     #[test]

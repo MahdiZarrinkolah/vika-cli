@@ -3,9 +3,19 @@ use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
 use vika_cli::config::loader::{load_config, save_config};
-use vika_cli::config::model::{Config, SpecEntry};
+use vika_cli::config::model::{ApisConfig, Config, ModulesConfig, SchemasConfig, SpecEntry};
 use vika_cli::config::validator::validate_config;
-use vika_cli::specs::manager::{is_multi_spec_mode, list_specs, resolve_spec_selection};
+use vika_cli::specs::manager::{list_specs, resolve_spec_selection};
+
+fn default_spec_entry(name: &str, path: &str) -> SpecEntry {
+    SpecEntry {
+        name: name.to_string(),
+        path: path.to_string(),
+        schemas: SchemasConfig::default(),
+        apis: ApisConfig::default(),
+        modules: ModulesConfig::default(),
+    }
+}
 
 #[tokio::test]
 async fn test_full_multi_spec_generation_flow() {
@@ -28,16 +38,10 @@ async fn test_full_multi_spec_generation_flow() {
 
     // Create multi-spec config
     let config = Config {
-        specs: Some(vec![
-            SpecEntry {
-                name: "auth".to_string(),
-                path: "specs/auth.yaml".to_string(),
-            },
-            SpecEntry {
-                name: "orders".to_string(),
-                path: "specs/orders.json".to_string(),
-            },
-        ]),
+        specs: vec![
+            default_spec_entry("auth", "specs/auth.yaml"),
+            default_spec_entry("orders", "specs/orders.json"),
+        ],
         ..Config::default()
     };
 
@@ -45,7 +49,6 @@ async fn test_full_multi_spec_generation_flow() {
     validate_config(&config).unwrap();
 
     // Verify multi-spec mode
-    assert!(is_multi_spec_mode(&config));
     let specs = list_specs(&config);
     assert_eq!(specs.len(), 2);
 
@@ -57,7 +60,7 @@ async fn test_full_multi_spec_generation_flow() {
     // Generate for auth spec (non-interactive - we'd need to mock module selection)
     // For now, just verify the config and spec files are set up correctly
     let loaded_config = load_config().unwrap();
-    assert!(is_multi_spec_mode(&loaded_config));
+    assert_eq!(loaded_config.specs.len(), 2);
 
     // Verify spec files exist
     assert!(specs_dir.join("auth.yaml").exists());
@@ -73,32 +76,21 @@ fn test_multi_spec_config_persistence() {
     env::set_current_dir(temp_dir.path()).unwrap();
 
     let config = Config {
-        specs: Some(vec![
-            SpecEntry {
-                name: "service1".to_string(),
-                path: "specs/service1.yaml".to_string(),
-            },
-            SpecEntry {
-                name: "service2".to_string(),
-                path: "specs/service2.yaml".to_string(),
-            },
-            SpecEntry {
-                name: "service3".to_string(),
-                path: "specs/service3.yaml".to_string(),
-            },
-        ]),
+        specs: vec![
+            default_spec_entry("service1", "specs/service1.yaml"),
+            default_spec_entry("service2", "specs/service2.yaml"),
+            default_spec_entry("service3", "specs/service3.yaml"),
+        ],
         ..Config::default()
     };
 
     save_config(&config).unwrap();
     let loaded = load_config().unwrap();
 
-    assert!(loaded.specs.is_some());
-    let specs = loaded.specs.unwrap();
-    assert_eq!(specs.len(), 3);
-    assert_eq!(specs[0].name, "service1");
-    assert_eq!(specs[1].name, "service2");
-    assert_eq!(specs[2].name, "service3");
+    assert_eq!(loaded.specs.len(), 3);
+    assert_eq!(loaded.specs[0].name, "service1");
+    assert_eq!(loaded.specs[1].name, "service2");
+    assert_eq!(loaded.specs[2].name, "service3");
 
     env::set_current_dir(original_dir).unwrap();
 }
@@ -108,10 +100,7 @@ fn test_multi_spec_error_handling() {
     use vika_cli::specs::manager::get_spec_by_name;
 
     let mut config = Config::default();
-    config.specs = Some(vec![SpecEntry {
-        name: "auth".to_string(),
-        path: "specs/auth.yaml".to_string(),
-    }]);
+    config.specs = vec![default_spec_entry("auth", "specs/auth.yaml")];
 
     // Test getting non-existent spec
     let result = get_spec_by_name(&config, "nonexistent");
@@ -143,9 +132,11 @@ fn test_multi_spec_directory_structure_verification() {
     }];
 
     // Write for multiple specs
+    // Note: output_dir should include spec_name, as write_schemas_with_options doesn't create spec directories
     for spec_name in &["auth", "orders", "products"] {
+        let spec_output_dir = schemas_dir.join(spec_name);
         write_schemas_with_options(
-            &schemas_dir,
+            &spec_output_dir,
             "test",
             &types,
             &zod_schemas,

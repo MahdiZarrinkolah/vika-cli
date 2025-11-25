@@ -1,8 +1,18 @@
 use std::fs;
 use tempfile::TempDir;
 use vika_cli::config::loader::{load_config, save_config};
-use vika_cli::config::model::{Config, SpecEntry};
-use vika_cli::specs::manager::{is_multi_spec_mode, list_specs, resolve_spec_selection};
+use vika_cli::config::model::{ApisConfig, Config, ModulesConfig, SchemasConfig, SpecEntry};
+use vika_cli::specs::manager::{list_specs, resolve_spec_selection};
+
+fn default_spec_entry(name: &str, path: &str) -> SpecEntry {
+    SpecEntry {
+        name: name.to_string(),
+        path: path.to_string(),
+        schemas: SchemasConfig::default(),
+        apis: ApisConfig::default(),
+        modules: ModulesConfig::default(),
+    }
+}
 
 fn create_test_spec(name: &str) -> String {
     format!(
@@ -68,16 +78,10 @@ async fn test_multi_spec_generation_structure() {
 
     // Create multi-spec config
     let config = Config {
-        specs: Some(vec![
-            SpecEntry {
-                name: "auth".to_string(),
-                path: "specs/auth.yaml".to_string(),
-            },
-            SpecEntry {
-                name: "orders".to_string(),
-                path: "specs/orders.json".to_string(),
-            },
-        ]),
+        specs: vec![
+            default_spec_entry("auth", "specs/auth.yaml"),
+            default_spec_entry("orders", "specs/orders.json"),
+        ],
         ..Config::default()
     };
 
@@ -85,7 +89,6 @@ async fn test_multi_spec_generation_structure() {
 
     // Verify config loads correctly
     let loaded_config = load_config().unwrap();
-    assert!(is_multi_spec_mode(&loaded_config));
     let specs = list_specs(&loaded_config);
     assert_eq!(specs.len(), 2);
 
@@ -104,50 +107,40 @@ fn test_multi_spec_config_roundtrip() {
     std::env::set_current_dir(temp_dir.path()).unwrap();
 
     let config = Config {
-        specs: Some(vec![
-            SpecEntry {
-                name: "auth".to_string(),
-                path: "specs/auth.yaml".to_string(),
-            },
-            SpecEntry {
-                name: "orders".to_string(),
-                path: "specs/orders.json".to_string(),
-            },
-        ]),
+        specs: vec![
+            default_spec_entry("auth", "specs/auth.yaml"),
+            default_spec_entry("orders", "specs/orders.json"),
+        ],
         ..Config::default()
     };
 
     save_config(&config).unwrap();
     let loaded = load_config().unwrap();
 
-    assert!(loaded.specs.is_some());
-    let specs = loaded.specs.unwrap();
-    assert_eq!(specs.len(), 2);
-    assert_eq!(specs[0].name, "auth");
-    assert_eq!(specs[1].name, "orders");
+    assert_eq!(loaded.specs.len(), 2);
+    assert_eq!(loaded.specs[0].name, "auth");
+    assert_eq!(loaded.specs[1].name, "orders");
 
     std::env::set_current_dir(original_dir).unwrap();
 }
 
 #[test]
-fn test_single_spec_config_backward_compatibility() {
+fn test_single_spec_config() {
     let temp_dir = TempDir::new().unwrap();
     let original_dir = std::env::current_dir().unwrap();
     std::env::set_current_dir(temp_dir.path()).unwrap();
 
     let config = Config {
-        spec_path: Some("openapi.json".to_string()),
+        specs: vec![default_spec_entry("default", "openapi.json")],
         ..Config::default()
     };
 
     save_config(&config).unwrap();
     let loaded = load_config().unwrap();
 
-    assert!(loaded.spec_path.is_some());
-    let spec_path = loaded.spec_path.clone();
-    assert_eq!(spec_path.unwrap(), "openapi.json");
-    assert!(loaded.specs.is_none());
-    assert!(!is_multi_spec_mode(&loaded));
+    assert_eq!(loaded.specs.len(), 1);
+    assert_eq!(loaded.specs[0].name, "default");
+    assert_eq!(loaded.specs[0].path, "openapi.json");
 
     std::env::set_current_dir(original_dir).unwrap();
 }
