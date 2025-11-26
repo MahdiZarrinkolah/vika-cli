@@ -188,7 +188,7 @@ pub fn generate_react_query_hooks(
         let mut needs_common_import = false;
         let mut needs_namespace_import = false;
         let namespace_name = to_pascal_case(&module_name.replace("/", "_"));
-        let mut needs_enum_import = !enum_types.is_empty();
+        let needs_enum_import = !enum_types.is_empty();
 
         // Check if body type needs import
         if let Some((body_type, _)) = &request_body_info {
@@ -239,7 +239,7 @@ pub fn generate_react_query_hooks(
                 )
             };
             if !schema_imports.is_empty() {
-                schema_imports.push_str("\n");
+                schema_imports.push('\n');
             }
             schema_imports.push_str(&format!(
                 "import * as {} from \"{}\";",
@@ -265,9 +265,9 @@ pub fn generate_react_query_hooks(
                 )
             };
             if !schema_imports.is_empty() {
-                schema_imports.push_str("\n");
+                schema_imports.push('\n');
             }
-            let enum_names: Vec<String> = enum_types.iter().cloned().collect();
+            let enum_names: Vec<String> = enum_types.to_vec();
             schema_imports.push_str(&format!(
                 "import type {{ {} }} from \"{}\";",
                 enum_names.join(", "),

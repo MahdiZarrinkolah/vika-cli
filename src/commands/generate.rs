@@ -6,6 +6,7 @@ use colored::*;
 use std::path::PathBuf;
 use tabled::Tabled;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     _spec: Option<String>,
     all_specs: bool,
