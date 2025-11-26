@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json",
+  "$id": "https://raw.githubusercontent.com/vikarno/vika-cli/main/cli/schema/vika-config.schema.json",
   "title": "Vika CLI Configuration",
   "description": "Global configuration for the vika-cli code generation tool. Defines generation preferences and per-spec output settings.",
   "type": "object",
@@ -10,7 +10,7 @@
     "$schema": {
       "type": "string",
       "description": "JSON schema reference URL",
-      "default": "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json"
+      "default": "https://raw.githubusercontent.com/vikarno/vika-cli/main/cli/schema/vika-config.schema.json"
     },
     "root_dir": {
       "type": "string",
@@ -175,7 +175,7 @@
   },
   "examples": [
     {
-      "$schema": "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json",
+      "$schema": "https://raw.githubusercontent.com/vikarno/vika-cli/main/cli/schema/vika-config.schema.json",
       "root_dir": "src",
       "generation": {
         "enable_cache": true,

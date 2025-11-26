@@ -52,7 +52,7 @@ pub struct Config {
 }
 
 pub fn default_schema() -> String {
-    "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json"
+    "https://raw.githubusercontent.com/vikarno/vika-cli/main/cli/schema/vika-config.schema.json"
         .to_string()
 }
 

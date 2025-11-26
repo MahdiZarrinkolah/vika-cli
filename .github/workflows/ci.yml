@@ -17,6 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Check formatting
+        working-directory: ./cli
         run: cargo fmt --check
 
   clippy:
@@ -28,6 +29,7 @@ jobs:
         with:
           components: clippy
       - name: Run clippy
+        working-directory: ./cli
         run: cargo clippy --all-targets --all-features -- -D warnings
 
   test:
@@ -37,8 +39,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Run unit tests
+        working-directory: ./cli
         run: cargo test --lib
       - name: Run integration tests
+        working-directory: ./cli
         # Run with single thread to avoid directory change conflicts in formatter tests
         run: cargo test --test '*' -- --test-threads=1
 
@@ -49,5 +53,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Build release
+        working-directory: ./cli
         run: cargo build --release
 

@@ -1,0 +1,10 @@
+{
+  "name": "vika",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "examples/*"
+  ]
+}
+

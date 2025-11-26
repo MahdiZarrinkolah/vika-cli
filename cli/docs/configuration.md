@@ -14,7 +14,7 @@ vika-cli init
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json",
+  "$schema": "https://raw.githubusercontent.com/vikarno/vika-cli/main/cli/schema/vika-config.schema.json",
   "root_dir": "src",
   "generation": {
     "enable_cache": true,

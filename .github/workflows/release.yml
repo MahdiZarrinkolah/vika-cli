@@ -39,15 +39,16 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build binary
+        working-directory: ./cli
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare binary
         shell: bash
         run: |
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            cp target/${{ matrix.target }}/release/vika-cli.exe ${{ matrix.asset_name }}
+            cp cli/target/${{ matrix.target }}/release/vika-cli.exe ${{ matrix.asset_name }}
           else
-            cp target/${{ matrix.target }}/release/vika-cli ${{ matrix.asset_name }}
+            cp cli/target/${{ matrix.target }}/release/vika-cli ${{ matrix.asset_name }}
             chmod +x ${{ matrix.asset_name }}
           fi
 
@@ -96,8 +97,8 @@ jobs:
           find artifacts -type f -exec cp {} release-assets/ \;
           
           # Copy install scripts to release assets
-          cp install.sh release-assets/
-          cp install.ps1 release-assets/
+          cp cli/install.sh release-assets/
+          cp cli/install.ps1 release-assets/
           
           # Make install scripts executable
           chmod +x release-assets/install.sh
@@ -112,7 +113,7 @@ jobs:
           body: |
             ## Changes
 
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/cli/CHANGELOG.md) for details.
 
             ## Installation
 

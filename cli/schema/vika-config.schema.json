@@ -7,7 +7,7 @@
     "$schema": {
       "type": "string",
       "description": "JSON schema reference URL",
-      "default": "https://raw.githubusercontent.com/vikarno/vika-cli/main/schema/vika-config.schema.json"
+      "default": "https://raw.githubusercontent.com/vikarno/vika-cli/main/cli/schema/vika-config.schema.json"
     },
     "root_dir": {
       "type": "string",
