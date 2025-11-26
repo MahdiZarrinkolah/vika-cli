@@ -63,11 +63,7 @@ pub async fn run() -> Result<()> {
         let modules_config = &spec.modules;
 
         // Get hooks config (use defaults if not specified)
-        let hooks_config = spec
-            .hooks
-            .as_ref()
-            .map(|h| h.clone())
-            .unwrap_or_else(|| crate::config::model::HooksConfig::default());
+        let hooks_config = spec.hooks.clone().unwrap_or_default();
 
         // Ensure runtime client exists at root_dir (shared across all specs)
         use crate::generator::writer::{ensure_directory, write_runtime_client};

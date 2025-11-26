@@ -13,6 +13,7 @@ use crate::templates::registry::TemplateId;
 use openapiv3::OpenAPI;
 
 /// Generate SWR hooks from operations.
+#[allow(clippy::too_many_arguments)]
 pub fn generate_swr_hooks(
     openapi: &OpenAPI,
     operations: &[OperationInfo],
@@ -248,7 +249,7 @@ pub fn generate_swr_hooks(
             };
 
             if schemas_relative.is_empty() {
-                format!("{}", "../".repeat(hooks_depth_from_common))
+                "../".repeat(hooks_depth_from_common)
             } else {
                 format!(
                     "{}{}",

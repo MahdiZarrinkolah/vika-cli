@@ -151,6 +151,9 @@ async fn test_multi_spec_api_client_structure() {
             &mut enum_registry,
             Some(&template_engine),
             Some("orders"),
+            None,
+            None,
+            None,
         )
         .unwrap();
 

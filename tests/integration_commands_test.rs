@@ -77,6 +77,7 @@ paths:
             path: spec_str.clone(),
             schemas: SchemasConfig::default(),
             apis: ApisConfig::default(),
+            hooks: None,
             modules: ModulesConfig::default(),
         }],
         ..Default::default()
@@ -137,6 +138,7 @@ paths:
             path: "spec.yaml".to_string(), // Relative path
             schemas: SchemasConfig::default(),
             apis: ApisConfig::default(),
+            hooks: None,
             modules: ModulesConfig {
                 ignore: vec![],
                 selected: vec!["test".to_string()],

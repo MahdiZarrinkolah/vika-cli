@@ -132,6 +132,7 @@ pub fn generate_api_client_with_registry_and_engine(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn generate_api_client_with_registry_and_engine_and_spec(
     openapi: &OpenAPI,
     operations: &[OperationInfo],
@@ -175,6 +176,7 @@ struct FunctionGenerationResult {
     response_types: Vec<TypeScriptType>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn generate_function_for_operation(
     openapi: &OpenAPI,
     op_info: &OperationInfo,
@@ -470,7 +472,7 @@ fn generate_function_for_operation(
 
             // Build relative path: go up total_depth, then into schemas_relative
             if schemas_relative.is_empty() {
-                format!("{}", "../".repeat(total_depth))
+                "../".repeat(total_depth)
             } else {
                 format!("{}{}", "../".repeat(total_depth), schemas_relative)
             }

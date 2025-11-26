@@ -104,11 +104,7 @@ pub async fn run_single_spec(
     let _root_dir = PathBuf::from(&config.root_dir);
 
     // Get hooks config (use defaults if not specified)
-    let hooks_config = spec
-        .hooks
-        .as_ref()
-        .map(|h| h.clone())
-        .unwrap_or_else(|| crate::config::model::HooksConfig::default());
+    let hooks_config = spec.hooks.clone().unwrap_or_default();
 
     // Runtime client is generated once at root_dir level (handled in generate.rs)
 

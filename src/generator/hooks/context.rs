@@ -36,7 +36,7 @@ impl HookContext {
     /// Note: apis_dir doesn't include spec_name (it's in config if needed), just like schemas
     pub fn calculate_api_import_path(
         module_name: &str,
-        spec_name: Option<&str>,
+        _spec_name: Option<&str>,
         apis_dir: Option<&str>,
     ) -> String {
         let module_depth = module_name.matches('/').count() + 1; // +1 for module directory
@@ -111,7 +111,7 @@ impl HookContext {
     /// Note: output_dir already includes spec_name if needed (from config), just like schemas/apis
     pub fn calculate_query_keys_import_path(
         module_name: &str,
-        spec_name: Option<&str>,
+        _spec_name: Option<&str>,
         hooks_dir: Option<&str>,
         query_keys_dir: Option<&str>,
     ) -> String {

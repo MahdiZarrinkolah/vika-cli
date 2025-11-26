@@ -13,6 +13,7 @@ use crate::templates::registry::TemplateId;
 use openapiv3::OpenAPI;
 
 /// Generate React Query hooks from operations.
+#[allow(clippy::too_many_arguments)]
 pub fn generate_react_query_hooks(
     openapi: &OpenAPI,
     operations: &[OperationInfo],
@@ -248,7 +249,7 @@ pub fn generate_react_query_hooks(
             };
 
             if schemas_relative.is_empty() {
-                format!("{}", "../".repeat(hooks_depth_from_common))
+                "../".repeat(hooks_depth_from_common)
             } else {
                 format!(
                     "{}{}",

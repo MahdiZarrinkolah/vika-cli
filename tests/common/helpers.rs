@@ -47,7 +47,9 @@ pub fn create_mock_config_with_paths(schemas_output: &str, apis_output: &str) ->
                 style: "fetch".to_string(),
                 base_url: None,
                 header_strategy: "consumerInjected".to_string(),
+                ..vika_cli::config::model::ApisConfig::default()
             },
+            hooks: None,
             modules: vika_cli::config::model::ModulesConfig {
                 ignore: vec![],
                 selected: vec![],

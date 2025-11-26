@@ -333,6 +333,7 @@ mod tests {
                 base_url: Some("/api/v1".to_string()),
                 ..ApisConfig::default()
             },
+            hooks: None,
             modules: ModulesConfig::default(),
         });
 
@@ -439,6 +440,7 @@ mod tests {
             path: "specs/test.yaml".to_string(),
             schemas: SchemasConfig::default(),
             apis: ApisConfig::default(),
+            hooks: None,
             modules: ModulesConfig::default(),
         };
         let json = serde_json::to_string(&entry).unwrap();

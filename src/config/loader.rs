@@ -71,6 +71,7 @@ mod tests {
             path: "test.yaml".to_string(),
             schemas: crate::config::model::SchemasConfig::default(),
             apis: crate::config::model::ApisConfig::default(),
+            hooks: None,
             modules: crate::config::model::ModulesConfig::default(),
         }];
         if save_config(&config).is_ok() {

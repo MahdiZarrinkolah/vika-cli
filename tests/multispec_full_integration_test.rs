@@ -13,6 +13,7 @@ fn default_spec_entry(name: &str, path: &str) -> SpecEntry {
         path: path.to_string(),
         schemas: SchemasConfig::default(),
         apis: ApisConfig::default(),
+        hooks: None,
         modules: ModulesConfig::default(),
     }
 }

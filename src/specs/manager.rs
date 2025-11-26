@@ -82,6 +82,7 @@ mod tests {
                     path: "specs/auth.yaml".to_string(),
                     schemas: SchemasConfig::default(),
                     apis: ApisConfig::default(),
+                    hooks: None,
                     modules: ModulesConfig::default(),
                 },
                 SpecEntry {
@@ -89,6 +90,7 @@ mod tests {
                     path: "specs/orders.json".to_string(),
                     schemas: SchemasConfig::default(),
                     apis: ApisConfig::default(),
+                    hooks: None,
                     modules: ModulesConfig::default(),
                 },
             ],
@@ -109,6 +111,7 @@ mod tests {
                 path: "openapi.json".to_string(),
                 schemas: SchemasConfig::default(),
                 apis: ApisConfig::default(),
+                hooks: None,
                 modules: ModulesConfig::default(),
             }],
             ..Default::default()
@@ -131,6 +134,7 @@ mod tests {
                     path: "specs/auth.yaml".to_string(),
                     schemas: SchemasConfig::default(),
                     apis: ApisConfig::default(),
+                    hooks: None,
                     modules: ModulesConfig::default(),
                 },
                 SpecEntry {
@@ -138,6 +142,7 @@ mod tests {
                     path: "specs/orders.json".to_string(),
                     schemas: SchemasConfig::default(),
                     apis: ApisConfig::default(),
+                    hooks: None,
                     modules: ModulesConfig::default(),
                 },
             ],
@@ -161,6 +166,7 @@ mod tests {
                     path: "specs/auth.yaml".to_string(),
                     schemas: SchemasConfig::default(),
                     apis: ApisConfig::default(),
+                    hooks: None,
                     modules: ModulesConfig::default(),
                 },
                 SpecEntry {
@@ -168,6 +174,7 @@ mod tests {
                     path: "specs/orders.json".to_string(),
                     schemas: SchemasConfig::default(),
                     apis: ApisConfig::default(),
+                    hooks: None,
                     modules: ModulesConfig::default(),
                 },
             ],
@@ -187,6 +194,7 @@ mod tests {
                     path: "specs/auth.yaml".to_string(),
                     schemas: SchemasConfig::default(),
                     apis: ApisConfig::default(),
+                    hooks: None,
                     modules: ModulesConfig::default(),
                 },
                 SpecEntry {
@@ -194,6 +202,7 @@ mod tests {
                     path: "specs/orders.json".to_string(),
                     schemas: SchemasConfig::default(),
                     apis: ApisConfig::default(),
+                    hooks: None,
                     modules: ModulesConfig::default(),
                 },
             ],
@@ -213,6 +222,7 @@ mod tests {
                 path: "openapi.json".to_string(),
                 schemas: SchemasConfig::default(),
                 apis: ApisConfig::default(),
+                hooks: None,
                 modules: ModulesConfig::default(),
             }],
             ..Default::default()

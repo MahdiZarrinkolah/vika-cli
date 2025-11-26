@@ -11,6 +11,7 @@ fn test_single_spec_config_validation_still_works() {
             path: "openapi.json".to_string(),
             schemas: vika_cli::config::model::SchemasConfig::default(),
             apis: vika_cli::config::model::ApisConfig::default(),
+            hooks: None,
             modules: vika_cli::config::model::ModulesConfig::default(),
         }],
         ..Default::default()
@@ -32,6 +33,7 @@ fn test_single_spec_config_serialization() {
             path: "openapi.json".to_string(),
             schemas: vika_cli::config::model::SchemasConfig::default(),
             apis: vika_cli::config::model::ApisConfig::default(),
+            hooks: None,
             modules: vika_cli::config::model::ModulesConfig::default(),
         }],
         ..Config::default()
@@ -113,6 +115,7 @@ fn test_config_with_single_spec() {
             path: "specs/api.yaml".to_string(),
             schemas: vika_cli::config::model::SchemasConfig::default(),
             apis: vika_cli::config::model::ApisConfig::default(),
+            hooks: None,
             modules: vika_cli::config::model::ModulesConfig::default(),
         }],
         ..Default::default()
@@ -131,6 +134,7 @@ fn test_config_with_multiple_specs() {
             path: "specs/api.yaml".to_string(),
             schemas: vika_cli::config::model::SchemasConfig::default(),
             apis: vika_cli::config::model::ApisConfig::default(),
+            hooks: None,
             modules: vika_cli::config::model::ModulesConfig::default(),
         },
         SpecEntry {
@@ -138,6 +142,7 @@ fn test_config_with_multiple_specs() {
             path: "specs/auth.yaml".to_string(),
             schemas: vika_cli::config::model::SchemasConfig::default(),
             apis: vika_cli::config::model::ApisConfig::default(),
+            hooks: None,
             modules: vika_cli::config::model::ModulesConfig::default(),
         },
     ];
