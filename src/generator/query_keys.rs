@@ -15,8 +15,8 @@ pub struct QueryKeyContext {
 pub struct QueryKeyEntry {
     pub key_name: String,
     pub has_params: bool,
-    pub param_list: String,      // Full parameter list with types: "id: string, name?: string"
-    pub param_names: String,      // Just parameter names: "id, name"
+    pub param_list: String, // Full parameter list with types: "id: string, name?: string"
+    pub param_names: String, // Just parameter names: "id, name"
 }
 
 /// Generate query keys context from operations.
@@ -38,10 +38,13 @@ pub fn generate_query_keys(
         // Extract parameters for the key
         let mut params = Vec::new();
         let mut param_names = Vec::new();
-        
+
         // Add path parameters
         for param_ref in &op_info.operation.parameters {
-            if let openapiv3::ReferenceOr::Item(openapiv3::Parameter::Path { parameter_data, .. }) = param_ref {
+            if let openapiv3::ReferenceOr::Item(openapiv3::Parameter::Path {
+                parameter_data, ..
+            }) = param_ref
+            {
                 let param_type = extract_param_type(parameter_data);
                 params.push(format!("{}: {}", parameter_data.name, param_type));
                 param_names.push(parameter_data.name.clone());
@@ -53,7 +56,11 @@ pub fn generate_query_keys(
         let mut query_fields = Vec::new();
         if is_query {
             for param_ref in &op_info.operation.parameters {
-                if let openapiv3::ReferenceOr::Item(openapiv3::Parameter::Query { parameter_data, .. }) = param_ref {
+                if let openapiv3::ReferenceOr::Item(openapiv3::Parameter::Query {
+                    parameter_data,
+                    ..
+                }) = param_ref
+                {
                     let param_type = extract_param_type(parameter_data);
                     query_fields.push(format!("{}?: {}", parameter_data.name, param_type));
                 }
@@ -133,19 +140,17 @@ fn extract_param_type(parameter_data: &openapiv3::ParameterData) -> String {
     match &parameter_data.format {
         openapiv3::ParameterSchemaOrContent::Schema(schema_ref) => {
             match schema_ref {
-                openapiv3::ReferenceOr::Item(schema) => {
-                    match &schema.schema_kind {
-                        openapiv3::SchemaKind::Type(type_) => match type_ {
-                            openapiv3::Type::String(_) => "string".to_string(),
-                            openapiv3::Type::Number(_) => "number".to_string(),
-                            openapiv3::Type::Integer(_) => "number".to_string(),
-                            openapiv3::Type::Boolean(_) => "boolean".to_string(),
-                            openapiv3::Type::Array(_) => "string[]".to_string(),
-                            openapiv3::Type::Object(_) => "string".to_string(),
-                        },
-                        _ => "string".to_string(),
-                    }
-                }
+                openapiv3::ReferenceOr::Item(schema) => match &schema.schema_kind {
+                    openapiv3::SchemaKind::Type(type_) => match type_ {
+                        openapiv3::Type::String(_) => "string".to_string(),
+                        openapiv3::Type::Number(_) => "number".to_string(),
+                        openapiv3::Type::Integer(_) => "number".to_string(),
+                        openapiv3::Type::Boolean(_) => "boolean".to_string(),
+                        openapiv3::Type::Array(_) => "string[]".to_string(),
+                        openapiv3::Type::Object(_) => "string".to_string(),
+                    },
+                    _ => "string".to_string(),
+                },
                 openapiv3::ReferenceOr::Reference { reference } => {
                     // Try to extract type name from reference
                     if let Some(ref_name) = reference.strip_prefix("#/components/schemas/") {
@@ -164,4 +169,3 @@ fn extract_param_type(parameter_data: &openapiv3::ParameterData) -> String {
 fn to_pascal_case(s: &str) -> String {
     crate::generator::utils::to_pascal_case(s)
 }
-

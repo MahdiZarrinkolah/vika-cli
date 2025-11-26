@@ -77,16 +77,17 @@ pub async fn run_single_spec(
     // Use pre-selected modules from config if available, otherwise prompt interactively
     let selected_modules = if !modules_config.selected.is_empty() {
         // Validate that all selected modules are available
-        let valid_selected: Vec<String> = modules_config.selected
+        let valid_selected: Vec<String> = modules_config
+            .selected
             .iter()
             .filter(|m| available_modules.contains(m))
             .cloned()
             .collect();
-        
+
         if valid_selected.is_empty() {
             return Err(crate::error::GenerationError::NoModulesSelected.into());
         }
-        
+
         valid_selected
     } else {
         // Select modules interactively (using spec-specific or global ignore list)

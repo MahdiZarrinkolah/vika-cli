@@ -18,10 +18,10 @@ pub struct HookContext {
     pub spec_name: Option<String>,
     pub api_import_path: String,
     pub query_keys_import_path: String,
-    pub param_list: String,      // Full parameter list with types: "id: string, query?: { page?: number }"
-    pub param_names: String,     // Just parameter names for function calls: "id, query"
+    pub param_list: String, // Full parameter list with types: "id: string, query?: { page?: number }"
+    pub param_names: String, // Just parameter names for function calls: "id, query"
     pub path_param_names: String, // Just path parameter names: "id"
-    pub schema_imports: String,  // Schema import statements
+    pub schema_imports: String, // Schema import statements
     pub description: String,
 }
 
@@ -29,10 +29,7 @@ impl HookContext {
     /// Calculate import path to API functions.
     /// From: src/hooks/{spec}/{module}/useX.ts
     /// To: src/apis/{spec}/{module}/index.ts
-    pub fn calculate_api_import_path(
-        module_name: &str,
-        spec_name: Option<&str>,
-    ) -> String {
+    pub fn calculate_api_import_path(module_name: &str, spec_name: Option<&str>) -> String {
         // Calculate depth: hooks/{spec}/{module}/ -> apis/{spec}/{module}/
         // For multi-spec: hooks/orders/orders/ -> ../../../apis/orders/orders
         // For single-spec: hooks/users/ -> ../../apis/users
@@ -41,7 +38,7 @@ impl HookContext {
         let total_depth = module_depth + spec_depth + 1; // +1 for hooks directory
 
         let sanitized_module = sanitize_module_name(module_name);
-        
+
         if let Some(spec) = spec_name {
             let sanitized_spec = sanitize_module_name(spec);
             format!(
@@ -51,21 +48,14 @@ impl HookContext {
                 sanitized_module
             )
         } else {
-            format!(
-                "{}apis/{}",
-                "../".repeat(total_depth),
-                sanitized_module
-            )
+            format!("{}apis/{}", "../".repeat(total_depth), sanitized_module)
         }
     }
 
     /// Calculate import path to query keys.
     /// From: src/hooks/{spec}/{module}/useX.ts
     /// To: src/query-keys/{spec}/{module}.ts
-    pub fn calculate_query_keys_import_path(
-        module_name: &str,
-        spec_name: Option<&str>,
-    ) -> String {
+    pub fn calculate_query_keys_import_path(module_name: &str, spec_name: Option<&str>) -> String {
         // Calculate depth: hooks/{spec}/{module}/ -> query-keys/{spec}/{module}.ts
         // For multi-spec: hooks/orders/orders/ -> ../../../query-keys/orders/orders
         // For single-spec: hooks/users/ -> ../../query-keys/users
@@ -74,7 +64,7 @@ impl HookContext {
         let total_depth = module_depth + spec_depth + 1; // +1 for hooks directory
 
         let sanitized_module = sanitize_module_name(module_name);
-        
+
         if let Some(spec) = spec_name {
             let sanitized_spec = sanitize_module_name(spec);
             format!(
@@ -92,4 +82,3 @@ impl HookContext {
         }
     }
 }
-

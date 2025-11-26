@@ -10,4 +10,3 @@ pub struct HookFile {
     pub filename: String,
     pub content: String,
 }
-

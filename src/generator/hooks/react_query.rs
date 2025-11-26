@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::generator::api_client::{
-    extract_all_responses, extract_path_parameters, extract_query_parameters,
-    extract_request_body, ResponseInfo,
+    extract_all_responses, extract_path_parameters, extract_query_parameters, extract_request_body,
+    ResponseInfo,
 };
 use crate::generator::hooks::context::HookContext;
 use crate::generator::hooks::HookFile;
@@ -87,7 +87,7 @@ pub fn generate_react_query_hooks(
 
         // Collect enum types from query parameters for imports
         let mut enum_types = Vec::new();
-        
+
         // Add query parameters (only for queries)
         if is_query && !query_params_info.is_empty() {
             let mut query_fields = Vec::new();
@@ -179,7 +179,8 @@ pub fn generate_react_query_hooks(
             .unwrap_or_default();
 
         // Build path parameter names (for mutations)
-        let path_param_names: Vec<String> = path_params_info.iter().map(|p| p.name.clone()).collect();
+        let path_param_names: Vec<String> =
+            path_params_info.iter().map(|p| p.name.clone()).collect();
         let path_param_names_str = path_param_names.join(", ");
 
         // Generate schema imports
@@ -245,7 +246,7 @@ pub fn generate_react_query_hooks(
                 namespace_name, schemas_import
             ));
         }
-        
+
         // Add enum type imports if we have any
         if needs_enum_import {
             let sanitized_module_name = crate::generator::utils::sanitize_module_name(module_name);
@@ -358,4 +359,3 @@ fn generate_hook_name_from_path(path: &str, method: &str) -> String {
 
     to_camel_case(&base_name)
 }
-

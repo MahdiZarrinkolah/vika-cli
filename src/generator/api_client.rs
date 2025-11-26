@@ -1165,7 +1165,10 @@ fn extract_response_type(openapi: &OpenAPI, operation: &Operation) -> Result<Str
     }
 }
 
-pub fn extract_all_responses(openapi: &OpenAPI, operation: &Operation) -> Result<Vec<ResponseInfo>> {
+pub fn extract_all_responses(
+    openapi: &OpenAPI,
+    operation: &Operation,
+) -> Result<Vec<ResponseInfo>> {
     let mut responses = Vec::new();
 
     for (status_code, response_ref) in &operation.responses.responses {
