@@ -382,7 +382,11 @@ pub fn write_api_client_with_options(
         for func in functions {
             let lines: Vec<&str> = func.content.lines().collect();
             let mut func_lines = Vec::new();
+            let mut type_lines = Vec::new();
             let mut in_function = false;
+            let mut in_type = false;
+            let mut type_definition = Vec::new();
+            let mut brace_count = 0;
             let mut jsdoc_lines = Vec::new();
             let mut in_jsdoc = false;
             let mut function_name: Option<String> = None;
@@ -438,8 +442,19 @@ pub fn write_api_client_with_options(
                             .or_insert_with(|| (std::collections::HashSet::new(), Vec::new()));
                         other_imports.push(import_line.to_string());
                     }
+                } else if in_type {
+                    // Inside a type definition - include everything (including JSDoc) as part of the type
+                    type_definition.push(line.to_string());
+                    brace_count +=
+                        line.matches('{').count() as i32 - line.matches('}').count() as i32;
+                    if brace_count == 0 && line.trim().ends_with(';') {
+                        // Type definition complete
+                        type_lines.push(type_definition.join("\n"));
+                        type_definition.clear();
+                        in_type = false;
+                    }
                 } else if line.trim().starts_with("/**") {
-                    // Start of JSDoc comment
+                    // Start of JSDoc comment (only collect if not inside a type)
                     in_jsdoc = true;
                     jsdoc_lines.push(line);
                 } else if in_jsdoc {
@@ -480,12 +495,49 @@ pub fn write_api_client_with_options(
                     if line.trim() == "};" {
                         break;
                     }
+                } else if line.trim().starts_with("export type ")
+                    || line.trim().starts_with("export interface ")
+                {
+                    // Start of a type/interface definition - capture the complete definition
+                    in_type = true;
+                    type_definition.clear();
+                    type_definition.push(line.to_string());
+                    // Count braces to know when type definition ends
+                    brace_count =
+                        line.matches('{').count() as i32 - line.matches('}').count() as i32;
+                    if brace_count == 0 && line.trim().ends_with(';') {
+                        // Single-line type definition
+                        type_lines.push(type_definition.join("\n"));
+                        type_definition.clear();
+                        in_type = false;
+                    }
                 }
-                // Skip type definitions - they're in types.ts now
+                // Skip non-exported type definitions - they're in types.ts now
             }
 
+            // If we're still in a type definition at the end, include it anyway
+            if in_type && !type_definition.is_empty() {
+                type_lines.push(type_definition.join("\n"));
+            }
+
+            // Combine types and function, with types first
             if !func_lines.is_empty() && function_name.is_some() {
-                function_bodies.push(func_lines.join("\n"));
+                let mut combined_content = Vec::new();
+                if !type_lines.is_empty() {
+                    combined_content.extend(type_lines.iter().map(|s| s.to_string()));
+                    combined_content.push(String::new()); // Add blank line between types and function
+                }
+                combined_content.extend(func_lines.iter().map(|s| s.to_string()));
+                function_bodies.push(combined_content.join("\n"));
+            } else if !type_lines.is_empty() {
+                // If we have types but no function (shouldn't happen, but handle it)
+                function_bodies.push(
+                    type_lines
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                );
             }
         }
 
@@ -558,6 +610,46 @@ pub fn write_api_client_with_options(
         write_file_with_backup(&api_file, &functions_content, backup, force)?;
         written_files.push(api_file);
     }
+
+    Ok(written_files)
+}
+
+/// Write runtime client files (types, http-client, index) to the runtime directory.
+pub fn write_runtime_client(apis_dir: &Path, _spec_name: Option<&str>) -> Result<Vec<PathBuf>> {
+    let runtime_dir = apis_dir.join("runtime");
+    ensure_directory(&runtime_dir)?;
+
+    let project_root = std::env::current_dir().ok();
+    let template_engine = crate::templates::engine::TemplateEngine::new(project_root.as_deref())?;
+
+    let mut written_files = Vec::new();
+
+    // Generate types.ts
+    let types_content = template_engine.render(
+        crate::templates::registry::TemplateId::RuntimeTypes,
+        &serde_json::json!({}),
+    )?;
+    let types_file = runtime_dir.join("types.ts");
+    write_file_safe(&types_file, &types_content)?;
+    written_files.push(types_file);
+
+    // Generate http-client.ts
+    let http_client_content = template_engine.render(
+        crate::templates::registry::TemplateId::RuntimeHttpClient,
+        &serde_json::json!({}),
+    )?;
+    let http_client_file = runtime_dir.join("http-client.ts");
+    write_file_safe(&http_client_file, &http_client_content)?;
+    written_files.push(http_client_file);
+
+    // Generate index.ts
+    let index_content = template_engine.render(
+        crate::templates::registry::TemplateId::RuntimeIndex,
+        &serde_json::json!({}),
+    )?;
+    let index_file = runtime_dir.join("index.ts");
+    write_file_safe(&index_file, &index_content)?;
+    written_files.push(index_file);
 
     Ok(written_files)
 }

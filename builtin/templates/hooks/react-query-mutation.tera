@@ -1,4 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
+import type { ApiResult } from "{{ import_runtime_path }}";
+import type { {{ success_map_type }}, {{ error_map_type }} } from "{{ api_import_path }}";
 import { {{ operation_id }} } from "{{ api_import_path }}";
 {% if schema_imports %}{{ schema_imports }}
 {% endif %}
@@ -6,7 +8,12 @@ import { {{ operation_id }} } from "{{ api_import_path }}";
  * {{ description }}
  */
 {% endif %}export function {{ hook_name }}({{ param_list }}) {
-  return useMutation({
+  return useMutation<
+    ApiResult<{{ success_map_type }}, {{ error_map_type }}>,
+    Error,
+    {% if body_type %}{{ body_type }}{% else %}void{% endif %},
+    unknown
+  >({
     mutationFn: {% if body_type %}(data: {{ body_type }}) => {{ operation_id }}({% if path_params %}{{ path_param_names }}, {% endif %}data){% else %}() => {{ operation_id }}({% if path_params %}{{ path_param_names }}{% endif %}){% endif %},
   });
 }

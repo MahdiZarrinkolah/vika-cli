@@ -14,6 +14,9 @@ pub enum TemplateId {
     SwrQuery,
     SwrMutation,
     QueryKeys,
+    RuntimeTypes,
+    RuntimeHttpClient,
+    RuntimeIndex,
 }
 
 impl TemplateId {
@@ -31,6 +34,9 @@ impl TemplateId {
             TemplateId::SwrQuery => "hooks/swr-query",
             TemplateId::SwrMutation => "hooks/swr-mutation",
             TemplateId::QueryKeys => "hooks/query-keys",
+            TemplateId::RuntimeTypes => "runtime/types",
+            TemplateId::RuntimeHttpClient => "runtime/http-client",
+            TemplateId::RuntimeIndex => "runtime/index",
         }
     }
 
@@ -53,6 +59,9 @@ impl TemplateId {
             TemplateId::SwrQuery,
             TemplateId::SwrMutation,
             TemplateId::QueryKeys,
+            TemplateId::RuntimeTypes,
+            TemplateId::RuntimeHttpClient,
+            TemplateId::RuntimeIndex,
         ]
     }
 }
@@ -73,6 +82,9 @@ impl FromStr for TemplateId {
             "hooks/swr-query" => Ok(TemplateId::SwrQuery),
             "hooks/swr-mutation" => Ok(TemplateId::SwrMutation),
             "hooks/query-keys" => Ok(TemplateId::QueryKeys),
+            "runtime/types" => Ok(TemplateId::RuntimeTypes),
+            "runtime/http-client" => Ok(TemplateId::RuntimeHttpClient),
+            "runtime/index" => Ok(TemplateId::RuntimeIndex),
             _ => Err(format!("Unknown template: {}", s)),
         }
     }
@@ -105,7 +117,7 @@ mod tests {
     #[test]
     fn test_template_id_all() {
         let all = TemplateId::all();
-        assert_eq!(all.len(), 11);
+        assert_eq!(all.len(), 14);
         assert!(all.contains(&TemplateId::TypeInterface));
     }
 }

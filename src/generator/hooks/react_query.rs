@@ -55,10 +55,15 @@ pub fn generate_react_query_hooks(
         let request_body_info = extract_request_body(openapi, operation)?;
         let all_responses = extract_all_responses(openapi, operation)?;
 
-        // Get response type
+        // Extract success and error responses
         let success_responses: Vec<ResponseInfo> = all_responses
             .iter()
             .filter(|r| r.status_code >= 200 && r.status_code < 300)
+            .cloned()
+            .collect();
+        let _error_responses: Vec<ResponseInfo> = all_responses
+            .iter()
+            .filter(|r| r.status_code < 200 || r.status_code >= 300)
             .cloned()
             .collect();
         let response_type = success_responses
@@ -66,6 +71,12 @@ pub fn generate_react_query_hooks(
             .find(|r| r.status_code == 200)
             .map(|r| r.body_type.clone())
             .unwrap_or_else(|| "any".to_string());
+
+        // Generate type names for success and error maps
+        let type_name_base = to_pascal_case(&operation_id);
+        let success_map_type = format!("{}Responses", type_name_base);
+        let error_map_type = format!("{}Errors", type_name_base);
+        let generic_result_type = format!("ApiResult<{}, {}>", success_map_type, error_map_type);
 
         // Build parameter list for hook
         let mut param_list_parts = Vec::new();
@@ -87,15 +98,18 @@ pub fn generate_react_query_hooks(
 
         // Collect enum types from query parameters for imports
         let mut enum_types = Vec::new();
+        let namespace_name = to_pascal_case(&module_name.replace("/", "_"));
 
         // Add query parameters (only for queries)
+        // Query params types are now in schema files, so use namespace-qualified types
         if is_query && !query_params_info.is_empty() {
             let mut query_fields = Vec::new();
             for param in &query_params_info {
                 let param_type = match &param.param_type {
                     crate::generator::api_client::ParameterType::Enum(enum_name) => {
                         enum_types.push(enum_name.clone());
-                        enum_name.clone()
+                        // Use namespace-qualified enum name (e.g., Orders.SortByEnum)
+                        format!("{}.{}", namespace_name, enum_name)
                     }
                     crate::generator::api_client::ParameterType::Array(item_type) => {
                         format!("{}[]", item_type)
@@ -248,31 +262,36 @@ pub fn generate_react_query_hooks(
         }
 
         // Add enum type imports if we have any
+        // Enum types are now generated in schema files, so import from schemas
         if needs_enum_import {
-            let sanitized_module_name = crate::generator::utils::sanitize_module_name(module_name);
-            let schemas_import = if let Some(spec) = spec_name {
-                format!(
-                    "{}schemas/{}/{}",
-                    "../".repeat(schemas_depth),
-                    crate::generator::utils::sanitize_module_name(spec),
-                    sanitized_module_name
-                )
-            } else {
-                format!(
-                    "{}schemas/{}",
-                    "../".repeat(schemas_depth),
-                    sanitized_module_name
-                )
-            };
-            if !schema_imports.is_empty() {
-                schema_imports.push('\n');
+            // Ensure we have namespace import for enums
+            if !needs_namespace_import {
+                let sanitized_module_name =
+                    crate::generator::utils::sanitize_module_name(module_name);
+                let schemas_import = if let Some(spec) = spec_name {
+                    format!(
+                        "{}schemas/{}/{}",
+                        "../".repeat(schemas_depth),
+                        crate::generator::utils::sanitize_module_name(spec),
+                        sanitized_module_name
+                    )
+                } else {
+                    format!(
+                        "{}schemas/{}",
+                        "../".repeat(schemas_depth),
+                        sanitized_module_name
+                    )
+                };
+                if !schema_imports.is_empty() {
+                    schema_imports.push('\n');
+                }
+                schema_imports.push_str(&format!(
+                    "import * as {} from \"{}\";",
+                    namespace_name, schemas_import
+                ));
             }
-            let enum_names: Vec<String> = enum_types.to_vec();
-            schema_imports.push_str(&format!(
-                "import type {{ {} }} from \"{}\";",
-                enum_names.join(", "),
-                schemas_import
-            ));
+            // Enums are now imported via namespace (e.g., Orders.SortByEnum)
+            // No need for separate enum import since they're in the namespace
         }
 
         // Build hook context
@@ -298,6 +317,10 @@ pub fn generate_react_query_hooks(
             path_param_names: path_param_names_str,
             schema_imports,
             description,
+            success_map_type,
+            error_map_type,
+            generic_result_type,
+            import_runtime_path: HookContext::calculate_runtime_import_path(module_name, spec_name),
         };
 
         // Render template

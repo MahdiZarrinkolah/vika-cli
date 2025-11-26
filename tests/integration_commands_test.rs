@@ -70,15 +70,17 @@ paths:
     fs::write(&spec_path, spec_content).unwrap();
 
     // Create config with spec (inspect command requires config)
-    let mut config = Config::default();
     let spec_str = spec_path.to_str().unwrap().to_string();
-    config.specs = vec![SpecEntry {
-        name: "test".to_string(),
-        path: spec_str.clone(),
-        schemas: SchemasConfig::default(),
-        apis: ApisConfig::default(),
-        modules: ModulesConfig::default(),
-    }];
+    let config = Config {
+        specs: vec![SpecEntry {
+            name: "test".to_string(),
+            path: spec_str.clone(),
+            schemas: SchemasConfig::default(),
+            apis: ApisConfig::default(),
+            modules: ModulesConfig::default(),
+        }],
+        ..Default::default()
+    };
     save_config(&config).unwrap();
 
     // Test inspect without module filter
@@ -129,17 +131,19 @@ paths:
     fs::write(&spec_path, spec_content).unwrap();
 
     // Create config with spec (use relative path since we changed directory)
-    let mut config = Config::default();
-    config.specs = vec![SpecEntry {
-        name: "test".to_string(),
-        path: "spec.yaml".to_string(), // Relative path
-        schemas: SchemasConfig::default(),
-        apis: ApisConfig::default(),
-        modules: ModulesConfig {
-            ignore: vec![],
-            selected: vec!["test".to_string()],
-        },
-    }];
+    let config = Config {
+        specs: vec![SpecEntry {
+            name: "test".to_string(),
+            path: "spec.yaml".to_string(), // Relative path
+            schemas: SchemasConfig::default(),
+            apis: ApisConfig::default(),
+            modules: ModulesConfig {
+                ignore: vec![],
+                selected: vec!["test".to_string()],
+            },
+        }],
+        ..Default::default()
+    };
     save_config(&config).unwrap();
 
     // Update command succeeds even if no operations found (graceful handling)

@@ -145,6 +145,7 @@ fn test_template_engine_render_api_client() {
         "users".to_string(),
         "id: string".to_string(),
         "Get user by ID".to_string(),
+        "".to_string(),
         None,
     );
     let result = engine.render(TemplateId::ApiClientFetch, &context);

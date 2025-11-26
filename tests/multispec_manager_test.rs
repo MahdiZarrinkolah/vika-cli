@@ -13,8 +13,10 @@ fn default_spec_entry(name: &str, path: &str) -> SpecEntry {
 
 #[test]
 fn test_list_specs_single_mode() {
-    let mut config = Config::default();
-    config.specs = vec![default_spec_entry("default", "openapi.json")];
+    let config = Config {
+        specs: vec![default_spec_entry("default", "openapi.json")],
+        ..Default::default()
+    };
 
     let specs = list_specs(&config);
     assert_eq!(specs.len(), 1);
@@ -24,11 +26,13 @@ fn test_list_specs_single_mode() {
 
 #[test]
 fn test_list_specs_multi_mode() {
-    let mut config = Config::default();
-    config.specs = vec![
-        default_spec_entry("auth", "specs/auth.yaml"),
-        default_spec_entry("orders", "specs/orders.json"),
-    ];
+    let config = Config {
+        specs: vec![
+            default_spec_entry("auth", "specs/auth.yaml"),
+            default_spec_entry("orders", "specs/orders.json"),
+        ],
+        ..Default::default()
+    };
 
     let specs = list_specs(&config);
     assert_eq!(specs.len(), 2);
@@ -40,8 +44,10 @@ fn test_list_specs_multi_mode() {
 
 #[test]
 fn test_get_spec_by_name_single_mode() {
-    let mut config = Config::default();
-    config.specs = vec![default_spec_entry("default", "openapi.json")];
+    let config = Config {
+        specs: vec![default_spec_entry("default", "openapi.json")],
+        ..Default::default()
+    };
 
     let spec = get_spec_by_name(&config, "default").unwrap();
     assert_eq!(spec.name, "default");
@@ -53,11 +59,13 @@ fn test_get_spec_by_name_single_mode() {
 
 #[test]
 fn test_get_spec_by_name_multi_mode() {
-    let mut config = Config::default();
-    config.specs = vec![
-        default_spec_entry("auth", "specs/auth.yaml"),
-        default_spec_entry("orders", "specs/orders.json"),
-    ];
+    let config = Config {
+        specs: vec![
+            default_spec_entry("auth", "specs/auth.yaml"),
+            default_spec_entry("orders", "specs/orders.json"),
+        ],
+        ..Default::default()
+    };
 
     let spec = get_spec_by_name(&config, "auth").unwrap();
     assert_eq!(spec.name, "auth");
@@ -75,11 +83,13 @@ fn test_get_spec_by_name_multi_mode() {
 
 #[test]
 fn test_resolve_spec_selection_all_specs() {
-    let mut config = Config::default();
-    config.specs = vec![
-        default_spec_entry("auth", "specs/auth.yaml"),
-        default_spec_entry("orders", "specs/orders.json"),
-    ];
+    let config = Config {
+        specs: vec![
+            default_spec_entry("auth", "specs/auth.yaml"),
+            default_spec_entry("orders", "specs/orders.json"),
+        ],
+        ..Default::default()
+    };
 
     let specs = resolve_spec_selection(&config, None, true).unwrap();
     assert_eq!(specs.len(), 2);
@@ -89,11 +99,13 @@ fn test_resolve_spec_selection_all_specs() {
 
 #[test]
 fn test_resolve_spec_selection_specific_spec() {
-    let mut config = Config::default();
-    config.specs = vec![
-        default_spec_entry("auth", "specs/auth.yaml"),
-        default_spec_entry("orders", "specs/orders.json"),
-    ];
+    let config = Config {
+        specs: vec![
+            default_spec_entry("auth", "specs/auth.yaml"),
+            default_spec_entry("orders", "specs/orders.json"),
+        ],
+        ..Default::default()
+    };
 
     let specs = resolve_spec_selection(&config, Some("auth".to_string()), false).unwrap();
     assert_eq!(specs.len(), 1);
@@ -103,8 +115,10 @@ fn test_resolve_spec_selection_specific_spec() {
 
 #[test]
 fn test_resolve_spec_selection_single_mode() {
-    let mut config = Config::default();
-    config.specs = vec![default_spec_entry("default", "openapi.json")];
+    let config = Config {
+        specs: vec![default_spec_entry("default", "openapi.json")],
+        ..Default::default()
+    };
 
     let specs = resolve_spec_selection(&config, None, false).unwrap();
     assert_eq!(specs.len(), 1);
@@ -114,8 +128,10 @@ fn test_resolve_spec_selection_single_mode() {
 
 #[test]
 fn test_resolve_spec_selection_nonexistent_spec_fails() {
-    let mut config = Config::default();
-    config.specs = vec![default_spec_entry("auth", "specs/auth.yaml")];
+    let config = Config {
+        specs: vec![default_spec_entry("auth", "specs/auth.yaml")],
+        ..Default::default()
+    };
 
     let result = resolve_spec_selection(&config, Some("nonexistent".to_string()), false);
     assert!(result.is_err());

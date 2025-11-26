@@ -120,16 +120,15 @@ fn test_clear_cache() {
     let url = "https://example.com/spec.json";
     let content = r#"{"openapi": "3.0.0"}"#;
 
-    if CacheManager::cache_spec(url, content).is_ok() {
-        if CacheManager::get_cached_spec(url)
+    if CacheManager::cache_spec(url, content).is_ok()
+        && CacheManager::get_cached_spec(url)
             .ok()
             .and_then(|x| x)
             .is_some()
-        {
-            let _ = CacheManager::clear_cache();
-            if let Ok(result) = CacheManager::get_cached_spec(url) {
-                assert!(result.is_none(), "Cache should be cleared");
-            }
+    {
+        let _ = CacheManager::clear_cache();
+        if let Ok(result) = CacheManager::get_cached_spec(url) {
+            assert!(result.is_none(), "Cache should be cleared");
         }
     }
 

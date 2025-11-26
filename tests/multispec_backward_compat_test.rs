@@ -5,14 +5,16 @@ use vika_cli::config::validator::validate_config;
 
 #[test]
 fn test_single_spec_config_validation_still_works() {
-    let mut config = Config::default();
-    config.specs = vec![SpecEntry {
-        name: "default".to_string(),
-        path: "openapi.json".to_string(),
-        schemas: vika_cli::config::model::SchemasConfig::default(),
-        apis: vika_cli::config::model::ApisConfig::default(),
-        modules: vika_cli::config::model::ModulesConfig::default(),
-    }];
+    let config = Config {
+        specs: vec![SpecEntry {
+            name: "default".to_string(),
+            path: "openapi.json".to_string(),
+            schemas: vika_cli::config::model::SchemasConfig::default(),
+            apis: vika_cli::config::model::ApisConfig::default(),
+            modules: vika_cli::config::model::ModulesConfig::default(),
+        }],
+        ..Default::default()
+    };
 
     let result = validate_config(&config);
     assert!(result.is_ok(), "Single spec config should still validate");
@@ -105,14 +107,16 @@ fn test_default_config_still_works() {
 
 #[test]
 fn test_config_with_single_spec() {
-    let mut config = Config::default();
-    config.specs = vec![SpecEntry {
-        name: "api".to_string(),
-        path: "specs/api.yaml".to_string(),
-        schemas: vika_cli::config::model::SchemasConfig::default(),
-        apis: vika_cli::config::model::ApisConfig::default(),
-        modules: vika_cli::config::model::ModulesConfig::default(),
-    }];
+    let config = Config {
+        specs: vec![SpecEntry {
+            name: "api".to_string(),
+            path: "specs/api.yaml".to_string(),
+            schemas: vika_cli::config::model::SchemasConfig::default(),
+            apis: vika_cli::config::model::ApisConfig::default(),
+            modules: vika_cli::config::model::ModulesConfig::default(),
+        }],
+        ..Default::default()
+    };
 
     let result = validate_config(&config);
     assert!(result.is_ok());

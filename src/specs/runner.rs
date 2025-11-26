@@ -102,14 +102,11 @@ pub async fn run_single_spec(
     let schemas_dir = PathBuf::from(&schemas_config.output);
     let apis_dir = PathBuf::from(&apis_config.output);
 
-    // Ensure http.ts file exists (only once per output directory)
-    let http_file = apis_dir.join("http.ts");
-    if !http_file.exists() {
-        use crate::generator::writer::write_http_client_template;
-        write_http_client_template(&http_file)?;
-        if options.verbose {
-            progress.success(&format!("Created {}", http_file.display()));
-        }
+    // Ensure runtime client exists (only once per output directory)
+    use crate::generator::writer::write_runtime_client;
+    let runtime_files = write_runtime_client(&apis_dir, spec_name)?;
+    if options.verbose && !runtime_files.is_empty() {
+        progress.success("Created runtime client files");
     }
 
     let mut total_files = 0;
@@ -229,6 +226,21 @@ pub async fn run_single_spec(
             Vec::new()
         };
 
+        // Generate query params types and Zod schemas
+        // Pass existing types and zod schemas to avoid duplicates
+        use crate::generator::query_params::{
+            generate_query_params_for_module, QueryParamsContext,
+        };
+        let query_params_result = generate_query_params_for_module(QueryParamsContext {
+            openapi: &parsed.openapi,
+            operations: &operations,
+            enum_registry: &mut shared_enum_registry,
+            template_engine: Some(&template_engine),
+            spec_name,
+            existing_types: &types,
+            existing_zod_schemas: &zod_schemas,
+        })?;
+
         // Generate API client (using same enum registry as schemas)
         let api_result = generate_api_client_with_registry_and_engine_and_spec(
             &parsed.openapi,
@@ -240,9 +252,14 @@ pub async fn run_single_spec(
             spec_name,
         )?;
 
-        // Combine response types with schema types
+        // Response types are written to API files, not schema files
+        // Combine schema types with query params types
         let mut all_types = types;
-        all_types.extend(api_result.response_types);
+        all_types.extend(query_params_result.types);
+
+        // Combine Zod schemas with query params Zod schemas
+        let mut all_zod_schemas = zod_schemas;
+        all_zod_schemas.extend(query_params_result.zod_schemas);
 
         // Write schemas (with backup and conflict detection)
         // Pass module_schemas mapping to enable cross-module enum imports
@@ -251,7 +268,7 @@ pub async fn run_single_spec(
             &schemas_dir,
             module,
             &all_types,
-            &zod_schemas,
+            &all_zod_schemas,
             spec_name,
             options.use_backup,
             options.use_force,

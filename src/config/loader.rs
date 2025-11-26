@@ -1,5 +1,5 @@
 use crate::config::model::Config;
-use crate::error::{ConfigError, Result, VikaError};
+use crate::error::{ConfigError, FileSystemError, Result, VikaError};
 use std::path::PathBuf;
 
 const CONFIG_FILE: &str = ".vika.json";
@@ -32,8 +32,22 @@ pub fn save_config(config: &Config) -> Result<()> {
     let content = serde_json::to_string_pretty(&config_to_save)
         .map_err(|e| VikaError::from(ConfigError::ParseError(e)))?;
 
-    std::fs::write(&config_path, content)
-        .map_err(|e| VikaError::from(ConfigError::ReadError(e)))?;
+    // Ensure parent directory exists
+    if let Some(parent) = config_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            VikaError::from(FileSystemError::CreateDirectoryFailed {
+                path: parent.to_string_lossy().to_string(),
+                source: e,
+            })
+        })?;
+    }
+
+    std::fs::write(&config_path, content).map_err(|e| {
+        VikaError::from(FileSystemError::WriteFileFailed {
+            path: config_path.to_string_lossy().to_string(),
+            source: e,
+        })
+    })?;
 
     Ok(())
 }

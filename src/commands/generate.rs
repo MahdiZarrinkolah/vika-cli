@@ -41,17 +41,17 @@ pub async fn run(
     // Resolve which specs to generate
     let specs_to_generate = resolve_spec_selection(&config, spec_name.clone(), all_specs)?;
 
-    // Ensure http.ts exists for ALL specs (not just the ones being generated)
-    // This fixes the issue where http.ts might be missing if init/add failed to create it
-    use crate::generator::writer::{ensure_directory, write_http_client_template};
+    // Ensure runtime client exists for ALL specs (not just the ones being generated)
+    // This fixes the issue where runtime files might be missing if init/add failed to create them
+    use crate::generator::writer::{ensure_directory, write_runtime_client};
     for spec in &config.specs {
         let apis_dir = PathBuf::from(&spec.apis.output);
         ensure_directory(&apis_dir)?;
-        let http_file = apis_dir.join("http.ts");
-        if !http_file.exists() {
-            write_http_client_template(&http_file)?;
+        let runtime_dir = apis_dir.join("runtime");
+        if !runtime_dir.exists() {
+            write_runtime_client(&apis_dir, Some(&spec.name))?;
             if verbose {
-                progress.success(&format!("Created {}", http_file.display()));
+                progress.success(&format!("Created runtime client for {}", spec.name));
             }
         }
     }

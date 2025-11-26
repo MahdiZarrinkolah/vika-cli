@@ -246,29 +246,13 @@ fn generate_function_for_operation(
 
     // Add query parameters (optional) AFTER any required parameters like body,
     // to satisfy TypeScript's \"required parameter cannot follow an optional parameter\" rule.
+    // Query params types are now generated in schema files, so we just reference them
     if !query_params.is_empty() {
-        let mut query_fields = Vec::new();
-        for param in &query_params {
-            let param_type = match &param.param_type {
-                ParameterType::Enum(enum_name) => {
-                    enum_types.push((
-                        enum_name.clone(),
-                        param.enum_values.clone().unwrap_or_default(),
-                    ));
-                    enum_name.clone()
-                }
-                ParameterType::Array(item_type) => {
-                    format!("{}[]", item_type)
-                }
-                ParameterType::String => "string".to_string(),
-                ParameterType::Number => "number".to_string(),
-                ParameterType::Integer => "number".to_string(),
-                ParameterType::Boolean => "boolean".to_string(),
-            };
-            query_fields.push(format!("{}?: {}", param.name, param_type));
-        }
-        let query_type = format!("{{ {} }}", query_fields.join(", "));
-        params.push(format!("query?: {}", query_type));
+        let type_name_base = to_pascal_case(&func_name);
+        let query_type_name = format!("{}QueryParams", type_name_base);
+
+        // Reference query params type from schemas (namespace-qualified)
+        params.push(format!("query?: {}.{}", namespace_name, query_type_name));
     }
 
     let params_str = params.join(", ");
@@ -322,7 +306,7 @@ fn generate_function_for_operation(
         body_lines.push(format!("    const url = `{}`;", url_template));
     }
 
-    // Build HTTP call
+    // Build HTTP call using VikaClient
     let http_method = match method.to_uppercase().as_str() {
         "GET" => "get",
         "POST" => "post",
@@ -334,36 +318,33 @@ fn generate_function_for_operation(
         _ => "get",
     };
 
-    // Use qualified type for generic parameter (check if it's common or module-specific)
-    let qualified_response_type_for_generic = if response_type != "any" {
-        let is_common = common_schemas.contains(&response_type);
-        if is_common {
-            format!("Common.{}", response_type)
-        } else {
-            format!("{}.{}", namespace_name, response_type)
-        }
-    } else {
-        response_type.clone()
-    };
+    // Generate type names for success and error maps
+    let type_name_base = to_pascal_case(&func_name);
+    let success_map_type = format!("{}Responses", type_name_base);
+    let error_map_type = format!("{}Errors", type_name_base);
 
+    // Build VikaClient call with generic types
     if let Some((_body_type, _)) = &request_body_info {
-        body_lines.push(format!("    return http.{}(url, body);", http_method));
+        body_lines.push(format!(
+            "    return vikaClient.{}<{}, {}>(url, {{ body }});",
+            http_method, success_map_type, error_map_type
+        ));
     } else {
         body_lines.push(format!(
-            "    return http.{}<{}>(url);",
-            http_method, qualified_response_type_for_generic
+            "    return vikaClient.{}<{}, {}>(url);",
+            http_method, success_map_type, error_map_type
         ));
     }
 
-    // HTTP client is at {output_dir}/http.ts
+    // Runtime client is at {output_dir}/runtime/index.ts
     // Note: output_dir already includes spec_name if needed (from config)
-    // So the file structure is: {output_dir}/{module}/index.ts and {output_dir}/http.ts
-    // For example: src/apis/ecommerce/addresses/index.ts and src/apis/ecommerce/http.ts
-    // From addresses/index.ts: go up 1 level to ecommerce/, then http.ts is at the same level
+    // So the file structure is: {output_dir}/{module}/index.ts and {output_dir}/runtime/index.ts
+    // For example: src/apis/ecommerce/addresses/index.ts and src/apis/ecommerce/runtime/index.ts
+    // From addresses/index.ts: go up 1 level to ecommerce/, then runtime/ is at the same level
     // So depth = 1 (just the module directory)
     let module_depth = module_name.matches('/').count() + 1; // +1 for the module directory itself
-    let http_relative_path = format!("{}http", "../".repeat(module_depth));
-    let http_import = http_relative_path;
+    let runtime_relative_path = format!("{}runtime", "../".repeat(module_depth));
+    let runtime_import = runtime_relative_path;
 
     // Determine if response type is in common schemas or module-specific
     // We still need schema imports for request/response body types
@@ -389,6 +370,14 @@ fn generate_function_for_operation(
             } else {
                 needs_namespace_import = true;
             }
+        }
+    }
+
+    // Check if any response map types need Common import
+    for response in success_responses.iter().chain(error_responses.iter()) {
+        if response.body_type != "any" && common_schemas.contains(&response.body_type) {
+            needs_common_import = true;
+            break;
         }
     }
 
@@ -435,6 +424,7 @@ fn generate_function_for_operation(
     }
 
     // Generate response types (Errors, Error union, Responses)
+    // Query params types are now generated in schema files, not here
     let response_types = generate_response_types(
         &func_name,
         &success_responses,
@@ -444,141 +434,28 @@ fn generate_function_for_operation(
         &enum_types,
     );
 
-    // Add imports for response types if we have any
+    // Always generate Responses and Errors types (even if empty, they'll be Record<never, never>)
     let type_name_base = to_pascal_case(&func_name);
-    let mut response_type_imports = Vec::new();
+    let success_map_type = format!("{}Responses", type_name_base);
+    let error_map_type = format!("{}Errors", type_name_base);
 
-    // Only add error types if we have errors with schemas
-    let errors_with_schemas: Vec<&ResponseInfo> = error_responses
-        .iter()
-        .filter(|r| r.status_code > 0)
-        .collect();
-    if !errors_with_schemas.is_empty() {
-        response_type_imports.push(format!("{}Errors", type_name_base));
-        response_type_imports.push(format!("{}Error", type_name_base));
-    }
+    // Response/Error types are generated and exported in the API file itself
+    // They should NOT be imported from schemas - they're defined locally
+    // Runtime imports are handled by the template via http_import parameter
 
-    // Only add Responses type if we have success responses with schemas
-    let success_with_schemas: Vec<&ResponseInfo> = success_responses
-        .iter()
-        .filter(|r| r.status_code >= 200 && r.status_code < 300 && r.body_type != "any")
-        .collect();
-    if !success_with_schemas.is_empty() {
-        response_type_imports.push(format!("{}Responses", type_name_base));
-    }
-
-    // Add type import if we have response types (separate line)
-    if !response_type_imports.is_empty() {
-        // Calculate relative path based on module depth
-        // module_depth already includes +1 for the module directory itself
-        // +1 to apis/, +1 to src/ = module_depth + 2
-        let schemas_depth = module_depth + 2;
-        let sanitized_module_name = sanitize_module_name(module_name);
-        let schemas_import = if let Some(spec) = spec_name {
-            format!(
-                "{}schemas/{}/{}",
-                "../".repeat(schemas_depth),
-                sanitize_module_name(spec),
-                sanitized_module_name
-            )
-        } else {
-            format!(
-                "{}schemas/{}",
-                "../".repeat(schemas_depth),
-                sanitized_module_name
-            )
-        };
-        let type_import_line = format!(
-            "import type {{ {} }} from \"{}\";",
-            response_type_imports.join(", "),
-            schemas_import
-        );
-        if type_imports.is_empty() {
-            type_imports = format!("{}\n", type_import_line);
-        } else {
-            type_imports = format!("{}\n{}", type_imports.trim_end(), type_import_line);
-        }
-    }
-
-    // Add enum type imports if we have any
-    if !enum_types.is_empty() {
-        // module_depth already includes +1 for the module directory itself
-        // +1 to apis/, +1 to src/ = module_depth + 2
-        let schemas_depth = module_depth + 2;
-        let sanitized_module_name = sanitize_module_name(module_name);
-        let schemas_import = if let Some(spec) = spec_name {
-            format!(
-                "{}schemas/{}/{}",
-                "../".repeat(schemas_depth),
-                sanitize_module_name(spec),
-                sanitized_module_name
-            )
-        } else {
-            format!(
-                "{}schemas/{}",
-                "../".repeat(schemas_depth),
-                sanitized_module_name
-            )
-        };
-        let enum_names: Vec<String> = enum_types.iter().map(|(name, _)| name.clone()).collect();
-        let enum_import_line = format!(
-            "import type {{ {} }} from \"{}\";",
-            enum_names.join(", "),
-            schemas_import
-        );
-        if type_imports.is_empty() {
-            type_imports = format!("{}\n", enum_import_line);
-        } else {
-            type_imports = format!("{}\n{}", type_imports.trim_end(), enum_import_line);
-        }
-    }
+    // Enum types are generated locally (in response_types), not imported from schemas
+    // Parameter-level enums don't exist in schemas, so they must be generated locally
 
     // Ensure type_imports ends with newline for proper separation
     if !type_imports.is_empty() && !type_imports.ends_with('\n') {
         type_imports.push('\n');
     }
 
-    // Determine return type - use Responses type if available, otherwise fallback to direct type
-    let has_responses_type = response_type_imports
-        .iter()
-        .any(|imp| imp.contains("Responses"));
-    let return_type = if has_responses_type {
-        // Use Responses type with primary status code
-        if let Some(_primary_response) = success_responses
-            .iter()
-            .find(|r| r.status_code == 200 && r.body_type != "any")
-        {
-            format!(": Promise<{}Responses[200]>", type_name_base)
-        } else if let Some(first_success) = success_responses
-            .iter()
-            .find(|r| r.status_code >= 200 && r.status_code < 300 && r.body_type != "any")
-        {
-            format!(
-                ": Promise<{}Responses[{}]>",
-                type_name_base, first_success.status_code
-            )
-        } else {
-            String::new()
-        }
-    } else if !success_responses.is_empty() {
-        // Fallback to direct type if no Responses type generated
-        if let Some(primary_response) = success_responses.iter().find(|r| r.status_code == 200) {
-            if primary_response.body_type != "any" {
-                let qualified = if common_schemas.contains(&primary_response.body_type) {
-                    format!("Common.{}", primary_response.body_type)
-                } else {
-                    format!("{}.{}", namespace_name, primary_response.body_type)
-                };
-                format!(": Promise<{}>", qualified)
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        }
-    } else {
-        String::new()
-    };
+    // Determine return type - use ApiResult with Responses and Errors maps
+    let return_type = format!(
+        ": Promise<ApiResult<{}, {}>>",
+        success_map_type, error_map_type
+    );
 
     let function_body = body_lines.join("\n");
 
@@ -631,6 +508,13 @@ fn generate_function_for_operation(
         .filter(|s| !s.is_empty())
         .unwrap_or_default();
 
+    // Prepare response types content
+    let response_types_content: String = response_types
+        .iter()
+        .map(|rt| rt.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
     let content = if let Some(engine) = template_engine {
         let context = ApiContext::new(
             func_name.clone(),
@@ -642,9 +526,10 @@ fn generate_function_for_operation(
             api_request_body,
             api_responses,
             type_imports.clone(),
-            http_import.to_string(),
+            runtime_import.to_string(),
             return_type.clone(),
             function_body.clone(),
+            response_types_content.clone(),
             module_name.to_string(),
             params_str.clone(),
             operation_description.clone(),
@@ -660,22 +545,34 @@ fn generate_function_for_operation(
             String::new()
         };
         if params_str.is_empty() {
+            let types_section = if !response_types_content.is_empty() {
+                format!("{}\n\n", response_types_content)
+            } else {
+                String::new()
+            };
             format!(
-                "import {{ http }} from \"{}\";\n{}{}{}export const {} = async (){} => {{\n{}\n}};",
-                http_import,
+                "import {{ vikaClient, type ApiResult }} from \"{}\";\n{}{}{}{}export const {} = async (){} => {{\n{}\n}};",
+                runtime_import,
                 type_imports,
                 if !type_imports.is_empty() { "\n" } else { "" },
+                types_section,
                 jsdoc,
                 func_name,
                 return_type,
                 function_body
             )
         } else {
+            let types_section = if !response_types_content.is_empty() {
+                format!("{}\n\n", response_types_content)
+            } else {
+                String::new()
+            };
             format!(
-                "import {{ http }} from \"{}\";\n{}{}{}export const {} = async ({}){} => {{\n{}\n}};",
-                http_import,
+                "import {{ vikaClient, type ApiResult }} from \"{}\";\n{}{}{}{}export const {} = async ({}){} => {{\n{}\n}};",
+                runtime_import,
                 type_imports,
                 if !type_imports.is_empty() { "\n" } else { "" },
+                types_section,
                 jsdoc,
                 func_name,
                 params_str,
@@ -1232,14 +1129,15 @@ fn generate_response_types(
     func_name: &str,
     success_responses: &[ResponseInfo],
     error_responses: &[ResponseInfo],
-    _namespace_name: &str,
+    namespace_name: &str,
     common_schemas: &[String],
     enum_types: &[(String, Vec<String>)],
 ) -> Vec<TypeScriptType> {
     let mut types = Vec::new();
     let type_name_base = to_pascal_case(func_name);
 
-    // Generate enum types for parameters
+    // Generate enum types for parameters (these are parameter-level enums, not schema enums)
+    // They need to be generated locally since they're not in schemas
     for (enum_name, enum_values) in enum_types {
         let variants = enum_values
             .iter()
@@ -1255,14 +1153,14 @@ fn generate_response_types(
         let mut error_fields = Vec::new();
         for error in error_responses {
             if error.status_code > 0 {
-                // For types in the same file (not common), use unqualified name
                 // For common types, use Common.TypeName
+                // For module-specific types, use namespace.TypeName (e.g., Addresses.TypeName)
                 let qualified_type = if error.body_type != "any" {
                     if common_schemas.contains(&error.body_type) {
                         format!("Common.{}", error.body_type)
                     } else {
-                        // Type is in the same file, use unqualified name
-                        error.body_type.clone()
+                        // Type is in schemas, use namespace qualification
+                        format!("{}.{}", namespace_name, error.body_type)
                     }
                 } else {
                     "any".to_string()
@@ -1299,6 +1197,15 @@ fn generate_response_types(
             types.push(TypeScriptType {
                 content: error_union_type,
             });
+        } else {
+            // Generate empty Errors type
+            let errors_type = format!(
+                "export type {}Errors = Record<never, never>;",
+                type_name_base
+            );
+            types.push(TypeScriptType {
+                content: errors_type,
+            });
         }
     }
 
@@ -1311,13 +1218,13 @@ fn generate_response_types(
     if !success_with_schemas.is_empty() {
         let mut response_fields = Vec::new();
         for response in success_with_schemas {
-            // For types in the same file (not common), use unqualified name
             // For common types, use Common.TypeName
+            // For module-specific types, use namespace.TypeName (e.g., Addresses.TypeName)
             let qualified_type = if common_schemas.contains(&response.body_type) {
                 format!("Common.{}", response.body_type)
             } else {
-                // Type is in the same file, use unqualified name
-                response.body_type.clone()
+                // Type is in schemas, use namespace qualification
+                format!("{}.{}", namespace_name, response.body_type)
             };
 
             let description = response
@@ -1341,7 +1248,25 @@ fn generate_response_types(
             types.push(TypeScriptType {
                 content: responses_type,
             });
+        } else {
+            // Generate empty Responses type
+            let responses_type = format!(
+                "export type {}Responses = Record<never, never>;",
+                type_name_base
+            );
+            types.push(TypeScriptType {
+                content: responses_type,
+            });
         }
+    } else {
+        // Generate empty Responses type if no success responses
+        let responses_type = format!(
+            "export type {}Responses = Record<never, never>;",
+            type_name_base
+        );
+        types.push(TypeScriptType {
+            content: responses_type,
+        });
     }
 
     types

@@ -8,7 +8,7 @@ use tempfile::TempDir;
 #[test]
 fn test_templates_list_command() {
     let mut cmd = Command::cargo_bin("vika-cli").unwrap();
-    cmd.args(&["templates", "list"]);
+    cmd.args(["templates", "list"]);
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("Built-in templates"))
@@ -30,7 +30,7 @@ fn test_custom_template_override() {
 
     // Copy a built-in template first
     let mut cmd = Command::cargo_bin("vika-cli").unwrap();
-    cmd.args(&["templates", "init"]);
+    cmd.args(["templates", "init"]);
     let result = cmd.output();
 
     // If binary not found, skip CLI test but verify file operations work

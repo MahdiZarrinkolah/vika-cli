@@ -1,5 +1,7 @@
-import { http } from "{{ http_import }}";
+import { vikaClient, type ApiResult } from "{{ http_import }}";
 {% if type_imports %}{{ type_imports }}
+{% endif %}{% if response_types %}{{ response_types }}
+
 {% endif %}{% if description or path_params or query_params or request_body %}/**
 {% if description %} * {{ description }}
 {% endif %}{% if path_params or query_params or request_body %}{% if description %}

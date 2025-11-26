@@ -75,23 +75,25 @@ mod tests {
 
     #[test]
     fn test_list_specs_multi_mode() {
-        let mut config = Config::default();
-        config.specs = vec![
-            SpecEntry {
-                name: "auth".to_string(),
-                path: "specs/auth.yaml".to_string(),
-                schemas: SchemasConfig::default(),
-                apis: ApisConfig::default(),
-                modules: ModulesConfig::default(),
-            },
-            SpecEntry {
-                name: "orders".to_string(),
-                path: "specs/orders.json".to_string(),
-                schemas: SchemasConfig::default(),
-                apis: ApisConfig::default(),
-                modules: ModulesConfig::default(),
-            },
-        ];
+        let config = Config {
+            specs: vec![
+                SpecEntry {
+                    name: "auth".to_string(),
+                    path: "specs/auth.yaml".to_string(),
+                    schemas: SchemasConfig::default(),
+                    apis: ApisConfig::default(),
+                    modules: ModulesConfig::default(),
+                },
+                SpecEntry {
+                    name: "orders".to_string(),
+                    path: "specs/orders.json".to_string(),
+                    schemas: SchemasConfig::default(),
+                    apis: ApisConfig::default(),
+                    modules: ModulesConfig::default(),
+                },
+            ],
+            ..Default::default()
+        };
 
         let specs = list_specs(&config);
         assert_eq!(specs.len(), 2);
@@ -101,14 +103,16 @@ mod tests {
 
     #[test]
     fn test_get_spec_by_name_single_mode() {
-        let mut config = Config::default();
-        config.specs = vec![SpecEntry {
-            name: "default".to_string(),
-            path: "openapi.json".to_string(),
-            schemas: SchemasConfig::default(),
-            apis: ApisConfig::default(),
-            modules: ModulesConfig::default(),
-        }];
+        let config = Config {
+            specs: vec![SpecEntry {
+                name: "default".to_string(),
+                path: "openapi.json".to_string(),
+                schemas: SchemasConfig::default(),
+                apis: ApisConfig::default(),
+                modules: ModulesConfig::default(),
+            }],
+            ..Default::default()
+        };
 
         let spec = get_spec_by_name(&config, "default").unwrap();
         assert_eq!(spec.name, "default");
@@ -120,23 +124,25 @@ mod tests {
 
     #[test]
     fn test_get_spec_by_name_multi_mode() {
-        let mut config = Config::default();
-        config.specs = vec![
-            SpecEntry {
-                name: "auth".to_string(),
-                path: "specs/auth.yaml".to_string(),
-                schemas: SchemasConfig::default(),
-                apis: ApisConfig::default(),
-                modules: ModulesConfig::default(),
-            },
-            SpecEntry {
-                name: "orders".to_string(),
-                path: "specs/orders.json".to_string(),
-                schemas: SchemasConfig::default(),
-                apis: ApisConfig::default(),
-                modules: ModulesConfig::default(),
-            },
-        ];
+        let config = Config {
+            specs: vec![
+                SpecEntry {
+                    name: "auth".to_string(),
+                    path: "specs/auth.yaml".to_string(),
+                    schemas: SchemasConfig::default(),
+                    apis: ApisConfig::default(),
+                    modules: ModulesConfig::default(),
+                },
+                SpecEntry {
+                    name: "orders".to_string(),
+                    path: "specs/orders.json".to_string(),
+                    schemas: SchemasConfig::default(),
+                    apis: ApisConfig::default(),
+                    modules: ModulesConfig::default(),
+                },
+            ],
+            ..Default::default()
+        };
 
         let spec = get_spec_by_name(&config, "auth").unwrap();
         assert_eq!(spec.name, "auth");
@@ -148,23 +154,25 @@ mod tests {
 
     #[test]
     fn test_resolve_spec_selection_all_specs() {
-        let mut config = Config::default();
-        config.specs = vec![
-            SpecEntry {
-                name: "auth".to_string(),
-                path: "specs/auth.yaml".to_string(),
-                schemas: SchemasConfig::default(),
-                apis: ApisConfig::default(),
-                modules: ModulesConfig::default(),
-            },
-            SpecEntry {
-                name: "orders".to_string(),
-                path: "specs/orders.json".to_string(),
-                schemas: SchemasConfig::default(),
-                apis: ApisConfig::default(),
-                modules: ModulesConfig::default(),
-            },
-        ];
+        let config = Config {
+            specs: vec![
+                SpecEntry {
+                    name: "auth".to_string(),
+                    path: "specs/auth.yaml".to_string(),
+                    schemas: SchemasConfig::default(),
+                    apis: ApisConfig::default(),
+                    modules: ModulesConfig::default(),
+                },
+                SpecEntry {
+                    name: "orders".to_string(),
+                    path: "specs/orders.json".to_string(),
+                    schemas: SchemasConfig::default(),
+                    apis: ApisConfig::default(),
+                    modules: ModulesConfig::default(),
+                },
+            ],
+            ..Default::default()
+        };
 
         let specs = resolve_spec_selection(&config, None, true).unwrap();
         assert_eq!(specs.len(), 2);
@@ -172,23 +180,25 @@ mod tests {
 
     #[test]
     fn test_resolve_spec_selection_specific_spec() {
-        let mut config = Config::default();
-        config.specs = vec![
-            SpecEntry {
-                name: "auth".to_string(),
-                path: "specs/auth.yaml".to_string(),
-                schemas: SchemasConfig::default(),
-                apis: ApisConfig::default(),
-                modules: ModulesConfig::default(),
-            },
-            SpecEntry {
-                name: "orders".to_string(),
-                path: "specs/orders.json".to_string(),
-                schemas: SchemasConfig::default(),
-                apis: ApisConfig::default(),
-                modules: ModulesConfig::default(),
-            },
-        ];
+        let config = Config {
+            specs: vec![
+                SpecEntry {
+                    name: "auth".to_string(),
+                    path: "specs/auth.yaml".to_string(),
+                    schemas: SchemasConfig::default(),
+                    apis: ApisConfig::default(),
+                    modules: ModulesConfig::default(),
+                },
+                SpecEntry {
+                    name: "orders".to_string(),
+                    path: "specs/orders.json".to_string(),
+                    schemas: SchemasConfig::default(),
+                    apis: ApisConfig::default(),
+                    modules: ModulesConfig::default(),
+                },
+            ],
+            ..Default::default()
+        };
 
         let specs = resolve_spec_selection(&config, Some("auth".to_string()), false).unwrap();
         assert_eq!(specs.len(), 1);
@@ -197,14 +207,16 @@ mod tests {
 
     #[test]
     fn test_resolve_spec_selection_single_mode() {
-        let mut config = Config::default();
-        config.specs = vec![SpecEntry {
-            name: "default".to_string(),
-            path: "openapi.json".to_string(),
-            schemas: SchemasConfig::default(),
-            apis: ApisConfig::default(),
-            modules: ModulesConfig::default(),
-        }];
+        let config = Config {
+            specs: vec![SpecEntry {
+                name: "default".to_string(),
+                path: "openapi.json".to_string(),
+                schemas: SchemasConfig::default(),
+                apis: ApisConfig::default(),
+                modules: ModulesConfig::default(),
+            }],
+            ..Default::default()
+        };
 
         let specs = resolve_spec_selection(&config, None, false).unwrap();
         assert_eq!(specs.len(), 1);

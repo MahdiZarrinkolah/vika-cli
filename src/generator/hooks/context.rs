@@ -23,6 +23,10 @@ pub struct HookContext {
     pub path_param_names: String, // Just path parameter names: "id"
     pub schema_imports: String, // Schema import statements
     pub description: String,
+    pub success_map_type: String, // e.g., "OrdersControllerCreateResponses"
+    pub error_map_type: String,   // e.g., "OrdersControllerCreateErrors"
+    pub generic_result_type: String, // e.g., "ApiResult<OrdersControllerCreateResponses, OrdersControllerCreateErrors>"
+    pub import_runtime_path: String, // Path to runtime types/client
 }
 
 impl HookContext {
@@ -79,6 +83,29 @@ impl HookContext {
                 "../".repeat(total_depth),
                 sanitized_module
             )
+        }
+    }
+
+    /// Calculate import path to runtime client.
+    /// From: src/hooks/{spec}/{module}/useX.ts
+    /// To: src/apis/{spec}/runtime/index.ts or src/apis/runtime/index.ts
+    pub fn calculate_runtime_import_path(module_name: &str, spec_name: Option<&str>) -> String {
+        // Calculate depth: hooks/{spec}/{module}/ -> apis/{spec}/runtime/
+        // For multi-spec: hooks/orders/orders/ -> ../../../apis/orders/runtime
+        // For single-spec: hooks/users/ -> ../../apis/runtime
+        let module_depth = module_name.matches('/').count() + 1; // +1 for module directory
+        let spec_depth = if spec_name.is_some() { 1 } else { 0 };
+        let total_depth = module_depth + spec_depth + 1; // +1 for hooks directory
+
+        if let Some(spec) = spec_name {
+            let sanitized_spec = sanitize_module_name(spec);
+            format!(
+                "{}apis/{}/runtime",
+                "../".repeat(total_depth),
+                sanitized_spec
+            )
+        } else {
+            format!("{}apis/runtime", "../".repeat(total_depth))
         }
     }
 }

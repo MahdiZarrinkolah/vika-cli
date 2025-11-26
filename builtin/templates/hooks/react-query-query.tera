@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import type { ApiResult } from "{{ import_runtime_path }}";
+import type { {{ success_map_type }}, {{ error_map_type }} } from "{{ api_import_path }}";
 import { {{ operation_id }} } from "{{ api_import_path }}";
 import { queryKeys } from "{{ query_keys_import_path }}";
 {% if schema_imports %}{{ schema_imports }}
@@ -7,7 +9,7 @@ import { queryKeys } from "{{ query_keys_import_path }}";
  * {{ description }}
  */
 {% endif %}export function {{ hook_name }}({{ param_list }}) {
-  return useQuery({
+  return useQuery<ApiResult<{{ success_map_type }}, {{ error_map_type }}>>({
     queryKey: queryKeys.{{ key_name }}({% if path_params or query_params %}{{ param_names }}{% endif %}),
     queryFn: () => {{ operation_id }}({% if path_params or query_params %}{{ param_names }}{% endif %}),
   });

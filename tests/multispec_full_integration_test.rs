@@ -99,8 +99,10 @@ fn test_multi_spec_config_persistence() {
 fn test_multi_spec_error_handling() {
     use vika_cli::specs::manager::get_spec_by_name;
 
-    let mut config = Config::default();
-    config.specs = vec![default_spec_entry("auth", "specs/auth.yaml")];
+    let config = Config {
+        specs: vec![default_spec_entry("auth", "specs/auth.yaml")],
+        ..Default::default()
+    };
 
     // Test getting non-existent spec
     let result = get_spec_by_name(&config, "nonexistent");

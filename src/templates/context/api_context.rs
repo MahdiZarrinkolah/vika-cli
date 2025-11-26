@@ -15,6 +15,7 @@ pub struct ApiContext {
     pub http_import: String,
     pub return_type: String,
     pub function_body: String,
+    pub response_types: String, // Response/Error type definitions
     pub module_name: String,
     pub params: String,
     pub description: String,
@@ -61,6 +62,7 @@ impl ApiContext {
         http_import: String,
         return_type: String,
         function_body: String,
+        response_types: String,
         module_name: String,
         params: String,
         description: String,
@@ -79,6 +81,7 @@ impl ApiContext {
             http_import,
             return_type,
             function_body,
+            response_types,
             module_name,
             params,
             description,

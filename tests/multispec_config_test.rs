@@ -84,8 +84,10 @@ fn test_validate_config_no_spec_defined_fails() {
 
 #[test]
 fn test_validate_config_empty_specs_array_fails() {
-    let mut config = Config::default();
-    config.specs = vec![];
+    let config = Config {
+        specs: vec![],
+        ..Default::default()
+    };
 
     let result = validate_config(&config);
     assert!(result.is_err());
@@ -95,11 +97,13 @@ fn test_validate_config_empty_specs_array_fails() {
 
 #[test]
 fn test_validate_config_duplicate_spec_names_fails() {
-    let mut config = Config::default();
-    config.specs = vec![
-        default_spec_entry("auth", "specs/auth.yaml"),
-        default_spec_entry("auth", "specs/auth2.yaml"),
-    ];
+    let config = Config {
+        specs: vec![
+            default_spec_entry("auth", "specs/auth.yaml"),
+            default_spec_entry("auth", "specs/auth2.yaml"),
+        ],
+        ..Default::default()
+    };
 
     let result = validate_config(&config);
     assert!(result.is_err());
@@ -109,8 +113,10 @@ fn test_validate_config_duplicate_spec_names_fails() {
 
 #[test]
 fn test_validate_config_invalid_spec_name_with_space_fails() {
-    let mut config = Config::default();
-    config.specs = vec![default_spec_entry("invalid name", "specs/auth.yaml")];
+    let config = Config {
+        specs: vec![default_spec_entry("invalid name", "specs/auth.yaml")],
+        ..Default::default()
+    };
 
     let result = validate_config(&config);
     assert!(result.is_err());
@@ -120,8 +126,10 @@ fn test_validate_config_invalid_spec_name_with_space_fails() {
 
 #[test]
 fn test_validate_config_invalid_spec_name_with_special_chars_fails() {
-    let mut config = Config::default();
-    config.specs = vec![default_spec_entry("invalid@name", "specs/auth.yaml")];
+    let config = Config {
+        specs: vec![default_spec_entry("invalid@name", "specs/auth.yaml")],
+        ..Default::default()
+    };
 
     let result = validate_config(&config);
     assert!(result.is_err());
@@ -131,8 +139,10 @@ fn test_validate_config_invalid_spec_name_with_special_chars_fails() {
 
 #[test]
 fn test_validate_config_empty_spec_name_fails() {
-    let mut config = Config::default();
-    config.specs = vec![default_spec_entry("", "specs/auth.yaml")];
+    let config = Config {
+        specs: vec![default_spec_entry("", "specs/auth.yaml")],
+        ..Default::default()
+    };
 
     let result = validate_config(&config);
     assert!(result.is_err());
@@ -142,8 +152,10 @@ fn test_validate_config_empty_spec_name_fails() {
 
 #[test]
 fn test_validate_config_empty_spec_path_fails() {
-    let mut config = Config::default();
-    config.specs = vec![default_spec_entry("auth", "")];
+    let config = Config {
+        specs: vec![default_spec_entry("auth", "")],
+        ..Default::default()
+    };
 
     let result = validate_config(&config);
     assert!(result.is_err());
@@ -153,11 +165,13 @@ fn test_validate_config_empty_spec_path_fails() {
 
 #[test]
 fn test_validate_config_valid_multi_spec() {
-    let mut config = Config::default();
-    config.specs = vec![
-        default_spec_entry("auth", "specs/auth.yaml"),
-        default_spec_entry("orders", "specs/orders.json"),
-    ];
+    let config = Config {
+        specs: vec![
+            default_spec_entry("auth", "specs/auth.yaml"),
+            default_spec_entry("orders", "specs/orders.json"),
+        ],
+        ..Default::default()
+    };
 
     let result = validate_config(&config);
     assert!(result.is_ok());
@@ -165,8 +179,10 @@ fn test_validate_config_valid_multi_spec() {
 
 #[test]
 fn test_validate_config_valid_single_spec() {
-    let mut config = Config::default();
-    config.specs = vec![default_spec_entry("default", "openapi.json")];
+    let config = Config {
+        specs: vec![default_spec_entry("default", "openapi.json")],
+        ..Default::default()
+    };
 
     let result = validate_config(&config);
     assert!(result.is_ok());
@@ -174,12 +190,14 @@ fn test_validate_config_valid_single_spec() {
 
 #[test]
 fn test_validate_config_valid_spec_names() {
-    let mut config = Config::default();
-    config.specs = vec![
-        default_spec_entry("auth-service", "specs/auth.yaml"),
-        default_spec_entry("orders_service", "specs/orders.json"),
-        default_spec_entry("products123", "specs/products.yaml"),
-    ];
+    let config = Config {
+        specs: vec![
+            default_spec_entry("auth-service", "specs/auth.yaml"),
+            default_spec_entry("orders_service", "specs/orders.json"),
+            default_spec_entry("products123", "specs/products.yaml"),
+        ],
+        ..Default::default()
+    };
 
     let result = validate_config(&config);
     assert!(result.is_ok());

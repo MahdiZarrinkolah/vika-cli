@@ -126,16 +126,20 @@ mod tests {
 
     #[test]
     fn test_validate_config_invalid_style() {
-        let mut config = Config::default();
-        let mut apis = crate::config::model::ApisConfig::default();
-        apis.style = "invalid".to_string();
-        config.specs = vec![crate::config::model::SpecEntry {
-            name: "test".to_string(),
-            path: "test.yaml".to_string(),
-            schemas: crate::config::model::SchemasConfig::default(),
-            apis,
-            modules: crate::config::model::ModulesConfig::default(),
-        }];
+        let apis = crate::config::model::ApisConfig {
+            style: "invalid".to_string(),
+            ..Default::default()
+        };
+        let config = Config {
+            specs: vec![crate::config::model::SpecEntry {
+                name: "test".to_string(),
+                path: "test.yaml".to_string(),
+                schemas: crate::config::model::SchemasConfig::default(),
+                apis,
+                modules: crate::config::model::ModulesConfig::default(),
+            }],
+            ..Default::default()
+        };
 
         let result = validate_config(&config);
         assert!(result.is_err());
@@ -180,18 +184,24 @@ mod tests {
 
     #[test]
     fn test_validate_config_absolute_paths() {
-        let mut config = Config::default();
-        let mut schemas = crate::config::model::SchemasConfig::default();
-        schemas.output = "/home/user/schemas".to_string();
-        let mut apis = crate::config::model::ApisConfig::default();
-        apis.output = "/home/user/apis".to_string();
-        config.specs = vec![crate::config::model::SpecEntry {
-            name: "test".to_string(),
-            path: "test.yaml".to_string(),
-            schemas,
-            apis,
-            modules: crate::config::model::ModulesConfig::default(),
-        }];
+        let schemas = crate::config::model::SchemasConfig {
+            output: "/home/user/schemas".to_string(),
+            ..Default::default()
+        };
+        let apis = crate::config::model::ApisConfig {
+            output: "/home/user/apis".to_string(),
+            ..Default::default()
+        };
+        let config = Config {
+            specs: vec![crate::config::model::SpecEntry {
+                name: "test".to_string(),
+                path: "test.yaml".to_string(),
+                schemas,
+                apis,
+                modules: crate::config::model::ModulesConfig::default(),
+            }],
+            ..Default::default()
+        };
 
         let result = validate_config(&config);
         assert!(result.is_ok());
@@ -199,16 +209,20 @@ mod tests {
 
     #[test]
     fn test_validate_config_unsafe_schemas_path() {
-        let mut config = Config::default();
-        let mut schemas = crate::config::model::SchemasConfig::default();
-        schemas.output = "/etc/schemas".to_string();
-        config.specs = vec![crate::config::model::SpecEntry {
-            name: "test".to_string(),
-            path: "test.yaml".to_string(),
-            schemas,
-            apis: crate::config::model::ApisConfig::default(),
-            modules: crate::config::model::ModulesConfig::default(),
-        }];
+        let schemas = crate::config::model::SchemasConfig {
+            output: "/etc/schemas".to_string(),
+            ..Default::default()
+        };
+        let config = Config {
+            specs: vec![crate::config::model::SpecEntry {
+                name: "test".to_string(),
+                path: "test.yaml".to_string(),
+                schemas,
+                apis: crate::config::model::ApisConfig::default(),
+                modules: crate::config::model::ModulesConfig::default(),
+            }],
+            ..Default::default()
+        };
 
         let result = validate_config(&config);
         assert!(result.is_err());
@@ -216,16 +230,20 @@ mod tests {
 
     #[test]
     fn test_validate_config_unsafe_apis_path() {
-        let mut config = Config::default();
-        let mut apis = crate::config::model::ApisConfig::default();
-        apis.output = "/usr/apis".to_string();
-        config.specs = vec![crate::config::model::SpecEntry {
-            name: "test".to_string(),
-            path: "test.yaml".to_string(),
-            schemas: crate::config::model::SchemasConfig::default(),
-            apis,
-            modules: crate::config::model::ModulesConfig::default(),
-        }];
+        let apis = crate::config::model::ApisConfig {
+            output: "/usr/apis".to_string(),
+            ..Default::default()
+        };
+        let config = Config {
+            specs: vec![crate::config::model::SpecEntry {
+                name: "test".to_string(),
+                path: "test.yaml".to_string(),
+                schemas: crate::config::model::SchemasConfig::default(),
+                apis,
+                modules: crate::config::model::ModulesConfig::default(),
+            }],
+            ..Default::default()
+        };
 
         let result = validate_config(&config);
         assert!(result.is_err());
@@ -243,8 +261,10 @@ mod tests {
 
     #[test]
     fn test_validate_config_empty_specs_array() {
-        let mut config = Config::default();
-        config.specs = vec![];
+        let config = Config {
+            specs: vec![],
+            ..Default::default()
+        };
 
         let result = validate_config(&config);
         assert!(result.is_err());
