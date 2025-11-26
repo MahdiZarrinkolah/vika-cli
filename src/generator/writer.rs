@@ -491,8 +491,13 @@ pub fn write_api_client_with_options(
 
         // Combine imports and function bodies (no type definitions)
         // Merge imports by module path
+        // Sort module paths for deterministic import order
+        let mut sorted_module_paths: Vec<String> = imports_by_module.keys().cloned().collect();
+        sorted_module_paths.sort();
+
         let mut imports_vec = Vec::new();
-        for (module_path, (type_import_items, other_imports)) in imports_by_module.iter() {
+        for module_path in sorted_module_paths {
+            let (type_import_items, other_imports) = imports_by_module.get(&module_path).unwrap();
             if module_path.is_empty() {
                 // Malformed imports - add as-is (deduplicate)
                 let deduped: std::collections::HashSet<String> =

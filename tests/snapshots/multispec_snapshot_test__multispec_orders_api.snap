@@ -2,9 +2,9 @@
 source: tests/multispec_snapshot_test.rs
 expression: content
 ---
-import { http } from "../http";
 import * as Orders from "../../../schemas/orders/orders";
 import type { GetOrderResponses } from "../../../schemas/orders/orders";
+import { http } from "../http";
 
 /**
  * List orders

@@ -173,13 +173,18 @@ fn test_template_engine_render_type_alias() {
 #[test]
 fn test_template_registry_all() {
     let all = TemplateId::all();
-    assert_eq!(all.len(), 6);
+    assert_eq!(all.len(), 11);
     assert!(all.contains(&TemplateId::TypeInterface));
     assert!(all.contains(&TemplateId::TypeEnum));
     assert!(all.contains(&TemplateId::TypeAlias));
     assert!(all.contains(&TemplateId::ZodSchema));
     assert!(all.contains(&TemplateId::ZodEnum));
     assert!(all.contains(&TemplateId::ApiClientFetch));
+    assert!(all.contains(&TemplateId::ReactQueryQuery));
+    assert!(all.contains(&TemplateId::ReactQueryMutation));
+    assert!(all.contains(&TemplateId::SwrQuery));
+    assert!(all.contains(&TemplateId::SwrMutation));
+    assert!(all.contains(&TemplateId::QueryKeys));
 }
 
 #[test]

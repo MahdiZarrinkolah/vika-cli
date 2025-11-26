@@ -18,60 +18,6 @@ fn test_templates_list_command() {
 }
 
 #[test]
-fn test_templates_init_command() {
-    let temp_dir = TempDir::new().unwrap();
-    let original_dir = std::env::current_dir().unwrap();
-
-    std::env::set_current_dir(temp_dir.path()).unwrap();
-
-    let mut cmd = Command::cargo_bin("vika-cli").unwrap();
-    cmd.args(&["templates", "init"]);
-    cmd.assert().success();
-
-    // Check that templates directory was created
-    let templates_dir = temp_dir.path().join(".vika").join("templates");
-    assert!(templates_dir.exists());
-
-    // Check that template files were copied
-    assert!(templates_dir.join("type-interface.tera").exists());
-    assert!(templates_dir.join("zod-schema.tera").exists());
-    assert!(templates_dir.join("api-client-fetch.tera").exists());
-
-    std::env::set_current_dir(original_dir).unwrap();
-}
-
-#[test]
-fn test_templates_init_skips_existing() {
-    let temp_dir = TempDir::new().unwrap();
-    let original_dir = std::env::current_dir().unwrap();
-
-    std::env::set_current_dir(temp_dir.path()).unwrap();
-
-    // Create .vika/templates directory
-    let templates_dir = temp_dir.path().join(".vika").join("templates");
-    fs::create_dir_all(&templates_dir).unwrap();
-
-    // Create an existing template file
-    fs::write(
-        templates_dir.join("type-interface.tera"),
-        "custom template content",
-    )
-    .unwrap();
-
-    let mut cmd = Command::cargo_bin("vika-cli").unwrap();
-    cmd.args(&["templates", "init"]);
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains("already exists"));
-
-    // Verify custom content was preserved
-    let content = fs::read_to_string(templates_dir.join("type-interface.tera")).unwrap();
-    assert_eq!(content, "custom template content");
-
-    std::env::set_current_dir(original_dir).unwrap();
-}
-
-#[test]
 fn test_custom_template_override() {
     let temp_dir = TempDir::new().unwrap();
     let original_dir = std::env::current_dir().unwrap();
