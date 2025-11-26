@@ -35,26 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI/CD workflows for testing and releases
 - Multi-platform binary releases (Linux, macOS Intel/ARM, Windows)
 
-### Changed
-
-- N/A (initial release)
-
-### Deprecated
-
-- N/A (initial release)
-
-### Removed
-
-- N/A (initial release)
-
-### Fixed
-
-- N/A (initial release)
-
-### Security
-
-- N/A (initial release)
-
 ## [1.0.2] - 2025-11-22
 
 ### Fixed
@@ -221,6 +201,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `#[allow(clippy::too_many_arguments)]` for generate command (9 args required by CLI structure)
 - Fixed template registry test to expect 11 templates (added 5 hook templates)
 - Removed failing template initialization tests that had file system issues
+
+## [1.4.0] - 2025-12-01
+
+### Added
+
+- **Runtime HTTP Client with Generic Result System**
+  - Added `VikaClient` class with configurable options (baseUrl, timeout, retries, retryDelay, headers, auth)
+  - Implemented middleware system with `beforeRequest`, `afterResponse`, and `onError` callbacks
+  - Added timeout support via `AbortController` for request cancellation
+  - Implemented retry logic with exponential backoff for specific HTTP status codes (408, 429, 5xx) and network errors
+  - Added authentication strategies: `bearerToken`, `fixed`, and `consumerInjected`
+  - Generated runtime client files: `src/runtime/types.ts`, `http-client.ts`, and `index.ts` (centralized at root_dir level)
+  - Runtime client supports both single-spec and multi-spec modes
+  - Enhanced runtime client with comprehensive JSDoc documentation and usage examples
+  - Type guard helpers (`isSuccess`, `isError`) for easier `ApiResult` type narrowing
+  - `bearerTokenMiddleware` helper function for easy Bearer token authentication setup
+  - Exported middleware types (`BeforeRequestMiddleware`, `AfterResponseMiddleware`, `ErrorMiddleware`) for better TypeScript support
+
+- **Generic API Result Type**
+  - Added `ApiResult<SuccessMap, ErrorMap>` discriminated union type for typed API responses
+  - Success map: `Record<status_code, body_type>` for all 2xx responses
+  - Error map: `Record<status_code, body_type>` for all non-2xx responses
+  - Generated type names: `{FunctionName}Responses` and `{FunctionName}Errors`
+  - API functions now return `Promise<ApiResult<SuccessMap, ErrorMap>>` for type-safe error handling
+
+- **Query Parameters as Schema Types**
+  - Query parameter interfaces are now generated in schema files (`types.ts`) instead of API client files
+  - Added Zod schemas for query parameters (`{FunctionName}QueryParamsSchema`)
+  - Parameter-level enums (e.g., `SortByEnum`) are generated in schema files with corresponding Zod schemas
+  - Query parameters are imported from schema files using namespace qualification (e.g., `Categories.PublicCategoriesControllerFindAllQueryParams`)
+  - Common query parameter types are placed in the `common` directory when applicable
+
+- **Enhanced Hook Generation**
+  - React Query and SWR hooks now use `ApiResult<SuccessMap, ErrorMap>` for typed responses
+  - Hooks import runtime types (`ApiResult`) from the runtime client
+  - Query parameter types and enums are imported from schema files with namespace qualification
+  - Improved type safety for hook return values and error handling
+  - Hook generation support in `update` command - hooks are now automatically generated when configured in `.vika.json`
+  - Interactive hook configuration prompts in `init` and `add` commands - users can now configure hooks during project initialization and when adding new specs
+  - Hook library selection via `.vika.json` configuration (`hooks.library: "react-query"` or `"swr"`)
+
+### Changed
+
+- **BREAKING**: API client functions now use `vikaClient` instead of simple `http` client
+  - All API functions import `vikaClient` and `ApiResult` from runtime client
+  - Function signatures changed to return `Promise<ApiResult<SuccessMap, ErrorMap>>`
+  - Request/response handling now goes through middleware pipeline
+
+- **BREAKING**: Query parameter types moved from API client files to schema files
+  - Query parameter interfaces are now in `src/schemas/{spec}/{module}/types.ts`
+  - Query parameter Zod schemas are in `src/schemas/{spec}/{module}/schemas.ts`
+  - API client files import query parameter types from schema files
+
+- **BREAKING**: Runtime client location changed from `src/apis/{spec}/runtime/` to `src/runtime/` (centralized at root_dir level)
+- Query parameter enums are now generated in schema files instead of API client files
+- Hook generation imports enums from schema files using namespace qualification
+- Hooks and query-keys output directories now follow the same pattern as schemas and apis (no spec-name subdirectory)
+- Improved runtime client documentation with inline examples and better explanations
+
+### Fixed
+
+- Fixed TypeScript strict mode compatibility (`exactOptionalPropertyTypes`)
+  - Updated `auth` property type to explicitly allow `undefined`
+  - Fixed `signal` property in `RequestInit` to conditionally include it
+- Fixed React Query mutation hook type mismatch by adding `TVariables` type parameter
+- Fixed duplicate enum declarations by checking existing types before generation
+- Fixed enum schema references in query parameter Zod schemas (e.g., `SortByEnumSchema.optional()`)
+- Fixed JSDoc comment placement for response types in API client files
+- Fixed directory structure inconsistency where hooks and query-keys had an extra spec-name directory nesting (now matches schemas/apis structure)
+- Fixed import paths in generated hooks to correctly resolve runtime, API clients, schemas, and query-keys without spec-name directory
+- Fixed hook file counting in `update` command summary to include hooks and query-keys
+- Fixed all Clippy warnings with `-D warnings` flag:
+  - Reduced function arguments by using context structs (`QueryParamsContext`)
+  - Simplified Option handling with `.and_then()` and `.map()` chains
+  - Used array syntax for char comparisons (e.g., `[' ', '=', '{']`)
+  - Removed useless `format!()` calls
+  - Fixed collapsible-if statements
+  - Removed needless borrows for generic arguments
+  - Fixed field-reassign-with-default warnings in test files by using struct initialization
+
+### Refactored
+
+- Created `QueryParamsContext` struct to reduce function argument count
+- Improved code organization by separating query parameter generation into dedicated module
+- Enhanced type extraction helpers with better Option handling patterns
+- Standardized test patterns to use struct initialization instead of field reassignment
+
 
 ## [Unreleased]
 
