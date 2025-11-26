@@ -202,7 +202,7 @@ pub struct Parameter {
 - `request_body` - Optional request body information
 - `responses` - Array of response objects
 - `type_imports` - Pre-formatted import statements
-- `http_import` - Relative path to http.ts
+- `http_import` - Relative path to runtime client (e.g., `./runtime` or `../runtime`)
 - `return_type` - TypeScript return type (e.g., ": Promise<User>")
 - `function_body` - Pre-formatted function body
 - `module_name` - Module name (e.g., "users")

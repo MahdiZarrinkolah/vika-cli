@@ -1,3 +1,16 @@
-export { VikaClient, vikaClient, type VikaClientOptions, type RequestContext, type ResponseContext, type RequestOptions } from "./http-client";
+export {
+  VikaClient,
+  vikaClient,
+  type VikaClientOptions,
+  type RequestContext,
+  type ResponseContext,
+  type RequestOptions,
+  type BeforeRequestMiddleware,
+  type AfterResponseMiddleware,
+  type ErrorMiddleware,
+  isSuccess,
+  isError,
+  bearerTokenMiddleware,
+} from "./http-client";
 export type { ApiResult } from "./types";
 

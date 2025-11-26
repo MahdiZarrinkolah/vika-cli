@@ -41,27 +41,39 @@ pub async fn run(
     // Resolve which specs to generate
     let specs_to_generate = resolve_spec_selection(&config, spec_name.clone(), all_specs)?;
 
-    // Ensure runtime client exists for ALL specs (not just the ones being generated)
-    // This fixes the issue where runtime files might be missing if init/add failed to create them
+    // Ensure runtime client exists at root_dir (shared across all specs)
     use crate::generator::writer::{ensure_directory, write_runtime_client};
-    for spec in &config.specs {
-        let apis_dir = PathBuf::from(&spec.apis.output);
-        ensure_directory(&apis_dir)?;
-        let runtime_dir = apis_dir.join("runtime");
-        if !runtime_dir.exists() {
-            write_runtime_client(&apis_dir, Some(&spec.name))?;
-            if verbose {
-                progress.success(&format!("Created runtime client for {}", spec.name));
-            }
+    let root_dir_path = PathBuf::from(&config.root_dir);
+    ensure_directory(&root_dir_path)?;
+    let runtime_dir = root_dir_path.join("runtime");
+    if !runtime_dir.exists() {
+        // Use first spec's apis config for runtime client configuration (or default)
+        let apis_config = config.specs.first().map(|s| &s.apis);
+        write_runtime_client(&root_dir_path, None, apis_config)?;
+        if verbose {
+            progress.success("Created runtime client files");
         }
     }
 
+    // Determine hook type: CLI flags take precedence, then check config
     let hook_type = if react_query {
         Some(crate::specs::runner::HookType::ReactQuery)
     } else if swr {
         Some(crate::specs::runner::HookType::Swr)
     } else {
-        None
+        // Check if any spec has hooks.library configured
+        // If multiple specs have different libraries, we'll use the first one
+        // (This could be enhanced to support per-spec hook types)
+        config.specs.iter().find_map(|spec| {
+            spec.hooks
+                .as_ref()
+                .and_then(|h| h.library.as_ref())
+                .and_then(|lib| match lib.as_str() {
+                    "react-query" => Some(crate::specs::runner::HookType::ReactQuery),
+                    "swr" => Some(crate::specs::runner::HookType::Swr),
+                    _ => None,
+                })
+        })
     };
 
     let options = GenerateOptions {

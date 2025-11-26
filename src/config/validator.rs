@@ -119,6 +119,7 @@ mod tests {
             path: "test.yaml".to_string(),
             schemas: crate::config::model::SchemasConfig::default(),
             apis: crate::config::model::ApisConfig::default(),
+            hooks: None,
             modules: crate::config::model::ModulesConfig::default(),
         }];
         assert!(validate_config(&config).is_ok());
@@ -136,6 +137,7 @@ mod tests {
                 path: "test.yaml".to_string(),
                 schemas: crate::config::model::SchemasConfig::default(),
                 apis,
+                hooks: None,
                 modules: crate::config::model::ModulesConfig::default(),
             }],
             ..Default::default()
@@ -198,6 +200,7 @@ mod tests {
                 path: "test.yaml".to_string(),
                 schemas,
                 apis,
+                hooks: None,
                 modules: crate::config::model::ModulesConfig::default(),
             }],
             ..Default::default()
@@ -219,6 +222,7 @@ mod tests {
                 path: "test.yaml".to_string(),
                 schemas,
                 apis: crate::config::model::ApisConfig::default(),
+                hooks: None,
                 modules: crate::config::model::ModulesConfig::default(),
             }],
             ..Default::default()
@@ -240,6 +244,7 @@ mod tests {
                 path: "test.yaml".to_string(),
                 schemas: crate::config::model::SchemasConfig::default(),
                 apis,
+                hooks: None,
                 modules: crate::config::model::ModulesConfig::default(),
             }],
             ..Default::default()
@@ -281,6 +286,7 @@ mod tests {
                 path: "specs/auth.yaml".to_string(),
                 schemas: crate::config::model::SchemasConfig::default(),
                 apis: crate::config::model::ApisConfig::default(),
+                hooks: None,
                 modules: crate::config::model::ModulesConfig::default(),
             },
             crate::config::model::SpecEntry {
@@ -288,6 +294,7 @@ mod tests {
                 path: "specs/auth2.yaml".to_string(),
                 schemas: crate::config::model::SchemasConfig::default(),
                 apis: crate::config::model::ApisConfig::default(),
+                hooks: None,
                 modules: crate::config::model::ModulesConfig::default(),
             },
         ];
@@ -306,6 +313,7 @@ mod tests {
             path: "specs/auth.yaml".to_string(),
             schemas: crate::config::model::SchemasConfig::default(),
             apis: crate::config::model::ApisConfig::default(),
+            hooks: None,
             modules: crate::config::model::ModulesConfig::default(),
         }];
 
@@ -323,6 +331,7 @@ mod tests {
             path: "specs/auth.yaml".to_string(),
             schemas: crate::config::model::SchemasConfig::default(),
             apis: crate::config::model::ApisConfig::default(),
+            hooks: None,
             modules: crate::config::model::ModulesConfig::default(),
         }];
 
@@ -340,6 +349,7 @@ mod tests {
             path: "".to_string(),
             schemas: crate::config::model::SchemasConfig::default(),
             apis: crate::config::model::ApisConfig::default(),
+            hooks: None,
             modules: crate::config::model::ModulesConfig::default(),
         }];
 
@@ -358,6 +368,7 @@ mod tests {
                 path: "specs/auth.yaml".to_string(),
                 schemas: crate::config::model::SchemasConfig::default(),
                 apis: crate::config::model::ApisConfig::default(),
+                hooks: None,
                 modules: crate::config::model::ModulesConfig::default(),
             },
             crate::config::model::SpecEntry {
@@ -365,6 +376,7 @@ mod tests {
                 path: "specs/orders.json".to_string(),
                 schemas: crate::config::model::SchemasConfig::default(),
                 apis: crate::config::model::ApisConfig::default(),
+                hooks: None,
                 modules: crate::config::model::ModulesConfig::default(),
             },
         ];
@@ -381,6 +393,7 @@ mod tests {
             path: "openapi.json".to_string(),
             schemas: crate::config::model::SchemasConfig::default(),
             apis: crate::config::model::ApisConfig::default(),
+            hooks: None,
             modules: crate::config::model::ModulesConfig::default(),
         }];
 

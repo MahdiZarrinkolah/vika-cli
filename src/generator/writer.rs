@@ -614,9 +614,13 @@ pub fn write_api_client_with_options(
     Ok(written_files)
 }
 
-/// Write runtime client files (types, http-client, index) to the runtime directory.
-pub fn write_runtime_client(apis_dir: &Path, _spec_name: Option<&str>) -> Result<Vec<PathBuf>> {
-    let runtime_dir = apis_dir.join("runtime");
+/// Write runtime client files (types, http-client, index) to the runtime directory at root_dir.
+pub fn write_runtime_client(
+    root_dir: &Path,
+    _spec_name: Option<&str>,
+    apis_config: Option<&crate::config::model::ApisConfig>,
+) -> Result<Vec<PathBuf>> {
+    let runtime_dir = root_dir.join("runtime");
     ensure_directory(&runtime_dir)?;
 
     let project_root = std::env::current_dir().ok();
@@ -633,10 +637,59 @@ pub fn write_runtime_client(apis_dir: &Path, _spec_name: Option<&str>) -> Result
     write_file_safe(&types_file, &types_content)?;
     written_files.push(types_file);
 
-    // Generate http-client.ts
+    // Prepare runtime client options from config
+    let mut client_options = serde_json::Map::new();
+    if let Some(config) = apis_config {
+        if let Some(ref base_url) = config.base_url {
+            client_options.insert(
+                "baseUrl".to_string(),
+                serde_json::Value::String(base_url.clone()),
+            );
+        }
+        if let Some(timeout) = config.timeout {
+            client_options.insert(
+                "timeout".to_string(),
+                serde_json::Value::Number(timeout.into()),
+            );
+        }
+        if let Some(retries) = config.retries {
+            client_options.insert(
+                "retries".to_string(),
+                serde_json::Value::Number(retries.into()),
+            );
+        }
+        if let Some(retry_delay) = config.retry_delay {
+            client_options.insert(
+                "retryDelay".to_string(),
+                serde_json::Value::Number(retry_delay.into()),
+            );
+        }
+        if let Some(ref headers) = config.headers {
+            // Convert HashMap to JSON object for template
+            let headers_json: serde_json::Value =
+                serde_json::to_value(headers).unwrap_or(serde_json::json!({}));
+            client_options.insert("headers".to_string(), headers_json);
+        }
+        // Map header_strategy to auth
+        let auth_strategy = match config.header_strategy.as_str() {
+            "bearerToken" => Some("bearerToken"),
+            "fixed" => Some("fixed"),
+            "consumerInjected" => Some("consumerInjected"),
+            _ => None,
+        };
+        if let Some(auth) = auth_strategy {
+            client_options.insert(
+                "auth".to_string(),
+                serde_json::Value::String(auth.to_string()),
+            );
+        }
+    }
+    let client_options_value = serde_json::Value::Object(client_options);
+
+    // Generate http-client.ts with config options
     let http_client_content = template_engine.render(
         crate::templates::registry::TemplateId::RuntimeHttpClient,
-        &serde_json::json!({}),
+        &client_options_value,
     )?;
     let http_client_file = runtime_dir.join("http-client.ts");
     write_file_safe(&http_client_file, &http_client_content)?;
@@ -652,158 +705,6 @@ pub fn write_runtime_client(apis_dir: &Path, _spec_name: Option<&str>) -> Result
     written_files.push(index_file);
 
     Ok(written_files)
-}
-
-pub fn write_http_client_template(output_path: &Path) -> Result<()> {
-    ensure_directory(output_path.parent().unwrap_or(Path::new(".")))?;
-
-    let http_client_content = r#"const requestInitIndicators = [
-  "method",
-  "headers",
-  "body",
-  "signal",
-  "credentials",
-  "cache",
-  "redirect",
-  "referrer",
-  "referrerPolicy",
-  "integrity",
-  "keepalive",
-  "mode",
-  "priority",
-  "window",
-];
-
-const isRequestInitLike = (value: unknown): value is RequestInit => {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const candidate = value as Record<string, unknown>;
-  return requestInitIndicators.some((key) => key in candidate);
-};
-
-export const http = {
-  // GET helper. Second argument can be either a RequestInit or a JSON body for uncommon GET-with-body endpoints.
-  async get<T = any>(url: string, optionsOrBody?: RequestInit | unknown): Promise<T> {
-    let init: RequestInit = { method: "GET", body: null };
-
-    if (optionsOrBody !== undefined && optionsOrBody !== null) {
-      if (isRequestInitLike(optionsOrBody)) {
-        const candidate = optionsOrBody as RequestInit;
-        init = {
-          ...candidate,
-          method: "GET",
-          body: candidate.body ?? null,
-        };
-      } else {
-        init = {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(optionsOrBody),
-        };
-      }
-    }
-
-    const response = await fetch(url, {
-      ...init,
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
-  },
-
-  async post<T = any>(url: string, body?: any, options: RequestInit = {}): Promise<T> {
-    const response = await fetch(url, {
-      ...options,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-      body: body !== undefined ? JSON.stringify(body) : (options.body ?? null),
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
-  },
-
-  async put<T = any>(url: string, body?: any, options: RequestInit = {}): Promise<T> {
-    const response = await fetch(url, {
-      ...options,
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-      body: body !== undefined ? JSON.stringify(body) : (options.body ?? null),
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
-  },
-
-  async delete<T = any>(url: string, options: RequestInit = {}): Promise<T> {
-    const response = await fetch(url, {
-      ...options,
-      method: "DELETE",
-      body: options.body ?? null,
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
-  },
-
-  async patch<T = any>(url: string, body?: any, options: RequestInit = {}): Promise<T> {
-    const response = await fetch(url, {
-      ...options,
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-      body: body !== undefined ? JSON.stringify(body) : (options.body ?? null),
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
-  },
-
-  async head(url: string, options: RequestInit = {}): Promise<Response> {
-    const response = await fetch(url, {
-      ...options,
-      method: "HEAD",
-      body: options.body ?? null,
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response;
-  },
-
-  async options<T = any>(url: string, options: RequestInit = {}): Promise<T> {
-    const response = await fetch(url, {
-      ...options,
-      method: "OPTIONS",
-      body: options.body ?? null,
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
-  },
-};
-"#;
-
-    write_file_safe(output_path, http_client_content)?;
-
-    Ok(())
 }
 
 fn format_typescript_code(code: &str) -> String {

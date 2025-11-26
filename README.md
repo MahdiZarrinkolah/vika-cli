@@ -346,7 +346,10 @@ Full documentation: [`docs/templates.md`](docs/templates.md)
 │
 └── 📁 apis/
     │
-    ├── 📄 http.ts                # HTTP client utility
+    ├── 📁 runtime/               # Runtime HTTP client with ApiResult types
+    │   ├── 📄 types.ts           # ApiResult type definitions
+    │   ├── 📄 http-client.ts     # VikaClient class with middleware, retries, auth
+    │   └── 📄 index.ts           # Runtime exports
     │
     ├── 📁 products/
     │   └── 📄 index.ts           # API client functions
@@ -384,7 +387,10 @@ When using `specs` array, output is organized by spec name:
 │
 └── 📁 apis/
     │
-    ├── 📄 http.ts
+    ├── 📁 runtime/               # Runtime HTTP client with ApiResult types
+    │   ├── 📄 types.ts           # ApiResult type definitions
+    │   ├── 📄 http-client.ts     # VikaClient class with middleware, retries, auth
+    │   └── 📄 index.ts           # Runtime exports
     │
     ├── 📁 ecommerce/             # From ecommerce spec
     │   ├── 📁 products/

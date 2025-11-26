@@ -14,6 +14,10 @@ pub struct SpecEntry {
     /// Required per-spec API output directory and configuration
     pub apis: ApisConfig,
 
+    /// Optional per-spec hooks output directory configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hooks: Option<HooksConfig>,
+
     /// Required per-spec module selection configuration
     pub modules: ModulesConfig,
 }
@@ -78,7 +82,7 @@ fn default_schemas_output() -> String {
 
 /// Configuration for API client generation.
 ///
-/// Controls API client output location, style, base URL, and header strategy.
+/// Controls API client output location, style, base URL, header strategy, and runtime client options.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApisConfig {
     #[serde(default = "default_apis_output")]
@@ -92,6 +96,22 @@ pub struct ApisConfig {
 
     #[serde(default = "default_header_strategy")]
     pub header_strategy: String,
+
+    /// Runtime client timeout in milliseconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout: Option<u32>,
+
+    /// Number of retries for failed requests
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retries: Option<u32>,
+
+    /// Delay between retries in milliseconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_delay: Option<u32>,
+
+    /// Default headers to include in all requests
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub headers: Option<std::collections::HashMap<String, String>>,
 }
 
 fn default_header_strategy() -> String {
@@ -104,6 +124,33 @@ fn default_apis_output() -> String {
 
 fn default_style() -> String {
     "fetch".to_string()
+}
+
+/// Configuration for hooks generation (React Query, SWR, etc.).
+///
+/// Controls where hooks and query keys are generated, and which hook library to use.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HooksConfig {
+    /// Output directory for hooks files (e.g., "src/hooks")
+    #[serde(default = "default_hooks_output")]
+    pub output: String,
+
+    /// Output directory for query keys files (e.g., "src/query-keys")
+    #[serde(default = "default_query_keys_output")]
+    pub query_keys_output: String,
+
+    /// Hook library to use for generation
+    /// Options: "react-query" or "swr"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub library: Option<String>,
+}
+
+pub fn default_hooks_output() -> String {
+    "src/hooks".to_string()
+}
+
+pub fn default_query_keys_output() -> String {
+    "src/query-keys".to_string()
 }
 
 /// Configuration for module selection and filtering.
@@ -182,6 +229,20 @@ impl Default for ApisConfig {
             style: default_style(),
             base_url: None,
             header_strategy: default_header_strategy(),
+            timeout: None,
+            retries: None,
+            retry_delay: None,
+            headers: None,
+        }
+    }
+}
+
+impl Default for HooksConfig {
+    fn default() -> Self {
+        Self {
+            output: default_hooks_output(),
+            query_keys_output: default_query_keys_output(),
+            library: None,
         }
     }
 }

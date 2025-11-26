@@ -1,39 +1,138 @@
 import type { ApiResult } from "./types";
 
+/**
+ * Configuration options for VikaClient.
+ * 
+ * @example
+ * ```typescript
+ * const client = new VikaClient({
+ *   baseUrl: "https://api.example.com",
+ *   timeout: 5000,
+ *   retries: 3,
+ *   retryDelay: 1000,
+ *   headers: { "X-Custom-Header": "value" },
+ *   auth: "bearerToken"
+ * });
+ * ```
+ */
 export interface VikaClientOptions {
+  /** Base URL for all requests. Can be overridden per-request with full URLs. */
   baseUrl?: string;
+  /** Request timeout in milliseconds. Default: 10000 */
   timeout?: number;
+  /** Number of retry attempts for failed requests. Default: 0 */
   retries?: number;
+  /** Delay between retries in milliseconds (exponential backoff). Default: 250 */
   retryDelay?: number;
+  /** Default headers to include in all requests. */
   headers?: Record<string, string>;
+  /** Authentication strategy. Use middleware to implement actual auth logic. */
   auth?: "bearerToken" | "fixed" | "consumerInjected";
 }
 
+/**
+ * Request context passed to beforeRequest middleware.
+ * You can modify headers, body, etc. before the request is sent.
+ * 
+ * @example
+ * ```typescript
+ * client.useBeforeRequest(async (ctx) => {
+ *   ctx.headers["Authorization"] = `Bearer ${getToken()}`;
+ * });
+ * ```
+ */
 export interface RequestContext {
+  /** HTTP method (GET, POST, etc.) */
   method: string;
+  /** Full request URL */
   url: string;
+  /** Request headers (modifiable) */
   headers: Record<string, string>;
+  /** Request body (modifiable) */
   body?: any;
+  /** Raw request options passed to request() */
   rawOptions?: any;
 }
 
+/**
+ * Response context passed to afterResponse middleware.
+ * Contains the request context, fetch Response, and parsed data.
+ * 
+ * @example
+ * ```typescript
+ * client.useAfterResponse(async (ctx) => {
+ *   console.log(`Request to ${ctx.request.url} returned ${ctx.response.status}`);
+ * });
+ * ```
+ */
 export interface ResponseContext {
+  /** Original request context */
   request: RequestContext;
+  /** Fetch Response object */
   response: Response;
+  /** Parsed response data (JSON or text) */
   data: any;
 }
 
-type BeforeRequestMiddleware = (ctx: RequestContext) => Promise<void> | void;
-type AfterResponseMiddleware = (ctx: ResponseContext) => Promise<void> | void;
-type ErrorMiddleware = (error: any, ctx: RequestContext) => Promise<void> | void;
+/**
+ * Middleware function called before each request.
+ * Use this to modify headers, add auth tokens, log requests, etc.
+ */
+export type BeforeRequestMiddleware = (ctx: RequestContext) => Promise<void> | void;
 
+/**
+ * Middleware function called after each successful response.
+ * Use this to log responses, transform data, etc.
+ */
+export type AfterResponseMiddleware = (ctx: ResponseContext) => Promise<void> | void;
+
+/**
+ * Middleware function called when a request fails (after retries exhausted).
+ * Use this for error logging, notifications, etc.
+ */
+export type ErrorMiddleware = (error: any, ctx: RequestContext) => Promise<void> | void;
+
+/**
+ * Options for individual requests.
+ * 
+ * @example
+ * ```typescript
+ * const result = await client.get("/users", {
+ *   headers: { "X-Custom": "value" },
+ *   signal: abortController.signal
+ * });
+ * ```
+ */
 export interface RequestOptions {
+  /** Additional headers for this request (merged with default headers) */
   headers?: Record<string, string>;
+  /** Request body (automatically JSON.stringify'd if object) */
   body?: any;
+  /** AbortSignal for request cancellation */
   signal?: AbortSignal;
+  /** Additional options (for extensibility) */
   [key: string]: any;
 }
 
+/**
+ * HTTP client for making typed API requests with middleware support.
+ * 
+ * @example
+ * ```typescript
+ * import { vikaClient } from "./runtime";
+ * 
+ * // Configure default instance
+ * vikaClient.useBeforeRequest(async (ctx) => {
+ *   ctx.headers["Authorization"] = `Bearer ${getToken()}`;
+ * });
+ * 
+ * // Or create custom instance
+ * const customClient = new VikaClient({
+ *   baseUrl: "https://api.example.com",
+ *   timeout: 5000
+ * });
+ * ```
+ */
 export class VikaClient {
   private baseUrl: string;
   private timeout: number;
@@ -45,6 +144,11 @@ export class VikaClient {
   private afterResponse: AfterResponseMiddleware[];
   private onError: ErrorMiddleware[];
 
+  /**
+   * Create a new VikaClient instance.
+   * 
+   * @param options - Configuration options
+   */
   constructor(options: VikaClientOptions = {}) {
     this.baseUrl = options.baseUrl ?? "";
     this.timeout = options.timeout ?? 10000;
@@ -57,14 +161,49 @@ export class VikaClient {
     this.onError = [];
   }
 
+  /**
+   * Register middleware to run before each request.
+   * Useful for adding auth tokens, logging, etc.
+   * 
+   * @example
+   * ```typescript
+   * client.useBeforeRequest(async (ctx) => {
+   *   const token = await getAuthToken();
+   *   ctx.headers["Authorization"] = `Bearer ${token}`;
+   * });
+   * ```
+   */
   useBeforeRequest(fn: BeforeRequestMiddleware): void {
     this.beforeRequest.push(fn);
   }
 
+  /**
+   * Register middleware to run after each successful response.
+   * Useful for logging, data transformation, etc.
+   * 
+   * @example
+   * ```typescript
+   * client.useAfterResponse(async (ctx) => {
+   *   console.log(`Request succeeded: ${ctx.request.url}`);
+   * });
+   * ```
+   */
   useAfterResponse(fn: AfterResponseMiddleware): void {
     this.afterResponse.push(fn);
   }
 
+  /**
+   * Register middleware to run when requests fail (after retries exhausted).
+   * Useful for error logging, notifications, etc.
+   * 
+   * @example
+   * ```typescript
+   * client.useError(async (error, ctx) => {
+   *   console.error(`Request failed: ${ctx.url}`, error);
+   *   await sendErrorNotification(error);
+   * });
+   * ```
+   */
   useError(fn: ErrorMiddleware): void {
     this.onError.push(fn);
   }
@@ -93,13 +232,10 @@ export class VikaClient {
       await middleware(requestContext);
     }
 
-    // Apply auth headers
-    if (this.auth === "bearerToken") {
-      // Consumer should inject token via middleware
-      // This is a placeholder - actual implementation depends on consumer
-    } else if (this.auth === "fixed") {
-      // Consumer should set fixed headers via constructor
-    }
+    // Note: Auth strategies are hints for middleware implementation.
+    // For "bearerToken": Use middleware to inject token dynamically
+    // For "fixed": Set headers in constructor options
+    // For "consumerInjected": Consumer handles all auth via middleware
 
     // Prepare fetch options
     const fetchOptions: RequestInit = {
@@ -247,6 +383,91 @@ export class VikaClient {
   }
 }
 
-// Default instance - consumers can configure this or create their own
-export const vikaClient = new VikaClient();
+/**
+ * Default client instance configured from .vika.json.
+ * You can use this directly or configure it with middleware.
+ * 
+ * @example
+ * ```typescript
+ * import { vikaClient } from "./runtime";
+ * 
+ * // Add auth middleware
+ * vikaClient.useBeforeRequest(async (ctx) => {
+ *   ctx.headers["Authorization"] = `Bearer ${getToken()}`;
+ * });
+ * 
+ * // Use in generated API functions
+ * const result = await getUsers();
+ * if (result.ok) {
+ *   console.log(result.data);
+ * } else {
+ *   console.error(result.error);
+ * }
+ * ```
+ */
+export const vikaClient = new VikaClient({
+{% if baseUrl %}  baseUrl: "{{ baseUrl }}",
+{% endif %}{% if timeout %}  timeout: {{ timeout }},
+{% endif %}{% if retries %}  retries: {{ retries }},
+{% endif %}{% if retryDelay %}  retryDelay: {{ retryDelay }},
+{% endif %}{% if headers %}  headers: {{ headers }},
+{% endif %}{% if auth %}  auth: "{{ auth }}",
+{% endif %}});
+
+/**
+ * Type guard to check if ApiResult is a success response.
+ * 
+ * @example
+ * ```typescript
+ * const result = await getUsers();
+ * if (isSuccess(result)) {
+ *   // TypeScript knows result.data exists
+ *   console.log(result.data);
+ * }
+ * ```
+ */
+export function isSuccess<SuccessMap extends Record<number, any>, ErrorMap extends Record<number, any>>(
+  result: ApiResult<SuccessMap, ErrorMap>
+): result is { ok: true; status: keyof SuccessMap; data: SuccessMap[keyof SuccessMap] } {
+  return result.ok === true;
+}
+
+/**
+ * Type guard to check if ApiResult is an error response.
+ * 
+ * @example
+ * ```typescript
+ * const result = await getUsers();
+ * if (isError(result)) {
+ *   // TypeScript knows result.error exists
+ *   console.error(result.error);
+ * }
+ * ```
+ */
+export function isError<SuccessMap extends Record<number, any>, ErrorMap extends Record<number, any>>(
+  result: ApiResult<SuccessMap, ErrorMap>
+): result is { ok: false; status: keyof ErrorMap; error: ErrorMap[keyof ErrorMap] } {
+  return result.ok === false;
+}
+
+/**
+ * Helper middleware factory for Bearer token authentication.
+ * 
+ * @example
+ * ```typescript
+ * import { vikaClient, bearerTokenMiddleware } from "./runtime";
+ * 
+ * vikaClient.useBeforeRequest(
+ *   bearerTokenMiddleware(() => localStorage.getItem("token") || "")
+ * );
+ * ```
+ */
+export function bearerTokenMiddleware(getToken: () => string | Promise<string>): BeforeRequestMiddleware {
+  return async (ctx: RequestContext) => {
+    const token = await getToken();
+    if (token) {
+      ctx.headers["Authorization"] = `Bearer ${token}`;
+    }
+  };
+}
 

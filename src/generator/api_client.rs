@@ -14,6 +14,25 @@ use crate::templates::registry::TemplateId;
 use openapiv3::OpenAPI;
 use openapiv3::{Operation, Parameter, ReferenceOr, SchemaKind, Type};
 
+/// Find the common prefix of two paths
+fn find_common_prefix(path1: &str, path2: &str) -> String {
+    let parts1: Vec<&str> = path1.split('/').collect();
+    let parts2: Vec<&str> = path2.split('/').collect();
+
+    let mut common = Vec::new();
+    let min_len = parts1.len().min(parts2.len());
+
+    for i in 0..min_len {
+        if parts1[i] == parts2[i] {
+            common.push(parts1[i]);
+        } else {
+            break;
+        }
+    }
+
+    common.join("/")
+}
+
 pub struct ApiFunction {
     pub content: String,
 }
@@ -107,6 +126,9 @@ pub fn generate_api_client_with_registry_and_engine(
         enum_registry,
         template_engine,
         None,
+        None,
+        None,
+        None,
     )
 }
 
@@ -118,6 +140,9 @@ pub fn generate_api_client_with_registry_and_engine_and_spec(
     enum_registry: &mut std::collections::HashMap<String, String>,
     template_engine: Option<&TemplateEngine>,
     spec_name: Option<&str>,
+    root_dir: Option<&str>,
+    apis_dir: Option<&str>,
+    schemas_dir: Option<&str>,
 ) -> Result<ApiGenerationResult> {
     let mut functions = Vec::new();
     let mut response_types = Vec::new();
@@ -131,6 +156,9 @@ pub fn generate_api_client_with_registry_and_engine_and_spec(
             enum_registry,
             template_engine,
             spec_name,
+            root_dir,
+            apis_dir,
+            schemas_dir,
         )?;
         functions.push(result.function);
         response_types.extend(result.response_types);
@@ -155,6 +183,9 @@ fn generate_function_for_operation(
     enum_registry: &mut std::collections::HashMap<String, String>,
     template_engine: Option<&TemplateEngine>,
     spec_name: Option<&str>,
+    root_dir: Option<&str>,
+    apis_dir: Option<&str>,
+    schemas_dir: Option<&str>,
 ) -> Result<FunctionGenerationResult> {
     let operation = &op_info.operation;
     let method = op_info.method.to_lowercase();
@@ -336,15 +367,34 @@ fn generate_function_for_operation(
         ));
     }
 
-    // Runtime client is at {output_dir}/runtime/index.ts
-    // Note: output_dir already includes spec_name if needed (from config)
-    // So the file structure is: {output_dir}/{module}/index.ts and {output_dir}/runtime/index.ts
-    // For example: src/apis/ecommerce/addresses/index.ts and src/apis/ecommerce/runtime/index.ts
-    // From addresses/index.ts: go up 1 level to ecommerce/, then runtime/ is at the same level
-    // So depth = 1 (just the module directory)
+    // Runtime client is at {root_dir}/runtime/index.ts
+    // Calculate relative path from {apis_dir}/{module}/index.ts to {root_dir}/runtime/index.ts
+    // For example: src/apis/ecommerce/addresses/index.ts -> src/runtime/index.ts
+    // Calculate module depth (module_name can have nested modules like "tenant/auth")
     let module_depth = module_name.matches('/').count() + 1; // +1 for the module directory itself
-    let runtime_relative_path = format!("{}runtime", "../".repeat(module_depth));
-    let runtime_import = runtime_relative_path;
+
+    let runtime_import = if let (Some(root), Some(apis)) = (root_dir, apis_dir) {
+        // Calculate depth: number of path segments from apis_dir to root_dir
+        // e.g., if root_dir = "src" and apis_dir = "src/apis/ecommerce", depth = 2
+        let root_normalized = root.trim_end_matches('/');
+        let apis_normalized = apis
+            .trim_start_matches(root_normalized)
+            .trim_start_matches('/');
+
+        // Count path segments in apis_dir relative to root_dir
+        let apis_depth = if apis_normalized.is_empty() {
+            0
+        } else {
+            apis_normalized.matches('/').count() + 1
+        };
+
+        let total_depth = apis_depth + module_depth;
+
+        format!("{}runtime", "../".repeat(total_depth))
+    } else {
+        // Fallback: assume runtime is at same level as apis (backward compatibility)
+        format!("{}runtime", "../".repeat(module_depth))
+    };
 
     // Determine if response type is in common schemas or module-specific
     // We still need schema imports for request/response body types
@@ -382,45 +432,101 @@ fn generate_function_for_operation(
     }
 
     // Add imports
-    // File is at: {output_dir}/{module}/index.ts
-    // output_dir already includes spec_name (e.g., src/apis/tenant)
-    // To get to schemas: go up from module to output_dir, then up to apis/, then up to src/, then into schemas/
-    // From auth/index.ts: go up 1 to tenant/, up 1 more to apis/, up 1 more to src/, then into schemas/
-    // So depth = module_depth (1) + 1 (to apis/) + 1 (to src/) = module_depth + 2
-    if needs_common_import {
-        let schemas_depth = module_depth + 2; // +1 to apis/, +1 to src/
-        let common_import = if let Some(spec) = spec_name {
-            format!(
-                "{}schemas/{}/common",
-                "../".repeat(schemas_depth),
-                sanitize_module_name(spec)
-            )
+    // Calculate relative path from {apis_dir}/{module}/index.ts to {schemas_dir}/{module}/index.ts
+    // Use actual schemas_dir path from config instead of hardcoded "schemas"
+    if needs_common_import || needs_namespace_import {
+        let schemas_import_path = if let (Some(apis), Some(schemas)) = (apis_dir, schemas_dir) {
+            // Calculate relative path from apis_dir to schemas_dir
+            // e.g., apis_dir = "src/apis", schemas_dir = "src/schema"
+            // From "src/apis/{module}/index.ts" to "src/schema/{module}/index.ts"
+            // Need to go up from module to apis_dir, then calculate path to schemas_dir
+
+            // Normalize paths
+            let apis_normalized = apis.trim_end_matches('/');
+            let schemas_normalized = schemas.trim_end_matches('/');
+
+            // Find common prefix
+            let common_prefix = find_common_prefix(apis_normalized, schemas_normalized);
+
+            // Calculate depth from apis_dir/{module} to common prefix
+            let apis_relative = apis_normalized
+                .strip_prefix(&common_prefix)
+                .unwrap_or(apis_normalized)
+                .trim_start_matches('/');
+            let apis_depth = if apis_relative.is_empty() {
+                0
+            } else {
+                apis_relative.matches('/').count() + 1
+            };
+
+            // Calculate path from common prefix to schemas_dir
+            let schemas_relative = schemas_normalized
+                .strip_prefix(&common_prefix)
+                .unwrap_or(schemas_normalized)
+                .trim_start_matches('/');
+
+            // Total depth: module_depth + apis_depth (to get to common prefix)
+            let total_depth = module_depth + apis_depth;
+
+            // Build relative path: go up total_depth, then into schemas_relative
+            if schemas_relative.is_empty() {
+                format!("{}", "../".repeat(total_depth))
+            } else {
+                format!("{}{}", "../".repeat(total_depth), schemas_relative)
+            }
         } else {
-            format!("{}schemas/common", "../".repeat(schemas_depth))
+            // Fallback: assume schemas is at same level as apis (backward compatibility)
+            let schemas_depth = module_depth + 2; // +1 to apis/, +1 to src/
+            format!("{}schemas", "../".repeat(schemas_depth))
         };
-        type_imports.push_str(&format!("import * as Common from \"{}\";\n", common_import));
-    }
-    if needs_namespace_import {
-        let schemas_depth = module_depth + 2; // +1 to apis/, +1 to src/
-        let sanitized_module_name = sanitize_module_name(module_name);
-        let schemas_import = if let Some(spec) = spec_name {
-            format!(
-                "{}schemas/{}/{}",
-                "../".repeat(schemas_depth),
-                sanitize_module_name(spec),
-                sanitized_module_name
-            )
-        } else {
-            format!(
-                "{}schemas/{}",
-                "../".repeat(schemas_depth),
-                sanitized_module_name
-            )
-        };
-        type_imports.push_str(&format!(
-            "import * as {} from \"{}\";\n",
-            namespace_name, schemas_import
-        ));
+
+        // Check if schemas_dir includes spec_name by checking if it ends with spec name
+        // If schemas_dir is "src/schema" and spec_name is "ecommerce", schemas_dir doesn't include it
+        // If schemas_dir is "src/schemas/ecommerce" and spec_name is "ecommerce", schemas_dir includes it
+        let schemas_dir_includes_spec =
+            if let (Some(schemas), Some(spec)) = (schemas_dir, spec_name) {
+                let schemas_normalized = schemas.trim_end_matches('/');
+                let spec_normalized = sanitize_module_name(spec);
+                schemas_normalized.ends_with(&spec_normalized)
+                    || schemas_normalized.ends_with(&format!("/{}", spec_normalized))
+            } else {
+                false
+            };
+
+        if needs_common_import {
+            let common_import = if schemas_dir_includes_spec {
+                // Spec name is already in schemas_dir path (e.g., src/schemas/ecommerce)
+                format!("{}/common", schemas_import_path.trim_end_matches('/'))
+            } else {
+                // Spec name is NOT in schemas_dir path, so schemas are at {schemas_dir}/common
+                // Don't add spec name to import path
+                format!("{}/common", schemas_import_path.trim_end_matches('/'))
+            };
+            type_imports.push_str(&format!("import * as Common from \"{}\";\n", common_import));
+        }
+        if needs_namespace_import {
+            let sanitized_module_name = sanitize_module_name(module_name);
+            let schemas_import = if schemas_dir_includes_spec {
+                // Spec name is already in schemas_dir path
+                format!(
+                    "{}/{}",
+                    schemas_import_path.trim_end_matches('/'),
+                    sanitized_module_name
+                )
+            } else {
+                // Spec name is NOT in schemas_dir path, so schemas are at {schemas_dir}/{module}
+                // Don't add spec name to import path
+                format!(
+                    "{}/{}",
+                    schemas_import_path.trim_end_matches('/'),
+                    sanitized_module_name
+                )
+            };
+            type_imports.push_str(&format!(
+                "import * as {} from \"{}\";\n",
+                namespace_name, schemas_import
+            ));
+        }
     }
 
     // Generate response types (Errors, Error union, Responses)

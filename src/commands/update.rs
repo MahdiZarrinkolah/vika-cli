@@ -62,13 +62,20 @@ pub async fn run() -> Result<()> {
         let apis_config = &spec.apis;
         let modules_config = &spec.modules;
 
-        // Ensure http.ts exists for this spec
-        use crate::generator::writer::{ensure_directory, write_http_client_template};
-        let apis_dir = PathBuf::from(&apis_config.output);
-        ensure_directory(&apis_dir)?;
-        let http_file = apis_dir.join("http.ts");
-        if !http_file.exists() {
-            write_http_client_template(&http_file)?;
+        // Get hooks config (use defaults if not specified)
+        let hooks_config = spec
+            .hooks
+            .as_ref()
+            .map(|h| h.clone())
+            .unwrap_or_else(|| crate::config::model::HooksConfig::default());
+
+        // Ensure runtime client exists at root_dir (shared across all specs)
+        use crate::generator::writer::{ensure_directory, write_runtime_client};
+        let root_dir_path = PathBuf::from(&config.root_dir);
+        ensure_directory(&root_dir_path)?;
+        let runtime_dir = root_dir_path.join("runtime");
+        if !runtime_dir.exists() {
+            write_runtime_client(&root_dir_path, None, Some(apis_config))?;
         }
 
         // Print fetch message only once per unique URL
@@ -281,6 +288,20 @@ pub async fn run() -> Result<()> {
                 Vec::new()
             };
 
+            // Generate query params types and Zod schemas
+            use crate::generator::query_params::{
+                generate_query_params_for_module, QueryParamsContext,
+            };
+            let query_params_result = generate_query_params_for_module(QueryParamsContext {
+                openapi: &parsed.openapi,
+                operations: &operations,
+                enum_registry: &mut shared_enum_registry,
+                template_engine: Some(&template_engine),
+                spec_name: Some(&spec.name),
+                existing_types: &types,
+                existing_zod_schemas: &zod_schemas,
+            })?;
+
             // Generate API client (using same enum registry as schemas)
             let api_result =
             crate::generator::api_client::generate_api_client_with_registry_and_engine_and_spec(
@@ -291,11 +312,19 @@ pub async fn run() -> Result<()> {
                 &mut shared_enum_registry,
                 Some(&template_engine),
                 Some(&spec.name),
+                Some(&config.root_dir),
+                Some(&apis_config.output),
+                Some(&schemas_config.output),
             )?;
 
-            // Combine response types with schema types
+            // Response types are written to API files, not schema files
+            // Combine schema types with query params types
             let mut all_types = types;
-            all_types.extend(api_result.response_types);
+            all_types.extend(query_params_result.types);
+
+            // Combine Zod schemas with query params Zod schemas
+            let mut all_zod_schemas = zod_schemas;
+            all_zod_schemas.extend(query_params_result.zod_schemas);
 
             // Write schemas (use force if config says so)
             use crate::generator::writer::write_schemas_with_module_mapping;
@@ -303,7 +332,7 @@ pub async fn run() -> Result<()> {
                 &schemas_dir,
                 module,
                 &all_types,
-                &zod_schemas,
+                &all_zod_schemas,
                 Some(&spec.name), // spec_name for multi-spec mode
                 use_backup,
                 use_force,
@@ -323,7 +352,110 @@ pub async fn run() -> Result<()> {
             )?;
             total_files += api_files.len();
 
-            let module_file_count = schema_files.len() + api_files.len();
+            // Determine hook type from hooks config
+            use crate::specs::runner::HookType;
+            let hook_type = hooks_config
+                .library
+                .as_ref()
+                .and_then(|lib| match lib.as_str() {
+                    "react-query" => Some(HookType::ReactQuery),
+                    "swr" => Some(HookType::Swr),
+                    _ => None,
+                });
+
+            // Generate hooks if configured
+            let mut hook_files_count = 0;
+            if let Some(hook_type) = hook_type {
+                println!(
+                    "{}",
+                    format!("🔨 Generating hooks for module: {}", module).bright_cyan()
+                );
+
+                // Generate query keys first (hooks depend on them)
+                use crate::generator::query_keys::generate_query_keys;
+                let query_keys_context = generate_query_keys(&operations, module, Some(&spec.name));
+
+                // Render query keys template
+                let query_keys_content = template_engine.render(
+                    crate::templates::registry::TemplateId::QueryKeys,
+                    &query_keys_context,
+                )?;
+
+                // Write query keys file using configured output directory
+                // Note: output_dir already includes spec_name if needed (from config), just like schemas/apis
+                let query_keys_output = PathBuf::from(&hooks_config.query_keys_output);
+
+                use crate::generator::writer::write_query_keys_with_options;
+                write_query_keys_with_options(
+                    &query_keys_output,
+                    module,
+                    &query_keys_content,
+                    Some(&spec.name),
+                    use_backup,
+                    use_force,
+                )?;
+                total_files += 1;
+
+                // Generate hooks based on type
+                let hooks = match hook_type {
+                    HookType::ReactQuery => {
+                        use crate::generator::hooks::react_query::generate_react_query_hooks;
+                        generate_react_query_hooks(
+                            &parsed.openapi,
+                            &operations,
+                            module,
+                            Some(&spec.name),
+                            &common_schemas,
+                            &mut shared_enum_registry,
+                            &template_engine,
+                            Some(&apis_config.output),
+                            Some(&schemas_config.output),
+                            Some(&hooks_config.output),
+                            Some(&hooks_config.query_keys_output),
+                        )?
+                    }
+                    HookType::Swr => {
+                        use crate::generator::hooks::swr::generate_swr_hooks;
+                        generate_swr_hooks(
+                            &parsed.openapi,
+                            &operations,
+                            module,
+                            Some(&spec.name),
+                            &common_schemas,
+                            &mut shared_enum_registry,
+                            &template_engine,
+                            Some(&apis_config.output),
+                            Some(&schemas_config.output),
+                            Some(&hooks_config.output),
+                            Some(&hooks_config.query_keys_output),
+                        )?
+                    }
+                };
+
+                // Write hooks files using configured output directory
+                // Note: output_dir already includes spec_name if needed (from config), just like schemas/apis
+                let hooks_output = PathBuf::from(&hooks_config.output);
+
+                use crate::generator::writer::write_hooks_with_options;
+                let hook_files = write_hooks_with_options(
+                    &hooks_output,
+                    module,
+                    &hooks,
+                    Some(&spec.name),
+                    use_backup,
+                    use_force,
+                )?;
+                hook_files_count = hook_files.len();
+                total_files += hook_files_count;
+            }
+
+            let module_file_count = schema_files.len()
+                + api_files.len()
+                + if hook_type.is_some() {
+                    1 + hook_files_count
+                } else {
+                    0
+                };
             module_summary.push((module.clone(), module_file_count));
             println!(
                 "{}",
@@ -351,6 +483,10 @@ pub async fn run() -> Result<()> {
         );
         println!("  📁 Schemas: {}", schemas_config.output);
         println!("  📁 APIs: {}", apis_config.output);
+        if hooks_config.library.is_some() {
+            println!("  📁 Hooks: {}", hooks_config.output);
+            println!("  📁 Query Keys: {}", hooks_config.query_keys_output);
+        }
 
         // Store summary for this spec
         all_specs_summary.push((spec.name.clone(), total_files, module_summary.clone()));

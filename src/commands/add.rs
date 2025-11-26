@@ -1,7 +1,7 @@
 use crate::config::loader::{load_config, save_config};
 use crate::config::validator::validate_config;
 use crate::error::{GenerationError, Result};
-use crate::generator::writer::{ensure_directory, write_http_client_template};
+use crate::generator::writer::{ensure_directory, write_runtime_client};
 use colored::*;
 use dialoguer::{Confirm, Input, Select};
 use std::path::PathBuf;
@@ -159,6 +159,57 @@ pub async fn run() -> Result<()> {
 
     println!();
 
+    // Hooks configuration
+    println!("{}", "📎 Hooks Configuration".bright_yellow());
+    println!();
+
+    let enable_hooks = Confirm::new()
+        .with_prompt("Do you want to generate hooks (React Query or SWR)?")
+        .default(false)
+        .interact()
+        .map_err(|e| GenerationError::InvalidOperation {
+            message: format!("Failed to get user input: {}", e),
+        })?;
+
+    let hooks_config = if enable_hooks {
+        let hook_library_options = ["react-query", "swr"];
+        let hook_library_index = Select::new()
+            .with_prompt("Which hook library do you want to use?")
+            .items(&hook_library_options)
+            .default(0)
+            .interact()
+            .map_err(|e| GenerationError::InvalidOperation {
+                message: format!("Failed to get user selection: {}", e),
+            })?;
+        let hook_library = hook_library_options[hook_library_index].to_string();
+
+        let hooks_output: String = Input::new()
+            .with_prompt("Hooks output directory")
+            .default("src/hooks".to_string())
+            .interact_text()
+            .map_err(|e| GenerationError::InvalidOperation {
+                message: format!("Failed to get user input: {}", e),
+            })?;
+
+        let query_keys_output: String = Input::new()
+            .with_prompt("Query keys output directory")
+            .default("src/query-keys".to_string())
+            .interact_text()
+            .map_err(|e| GenerationError::InvalidOperation {
+                message: format!("Failed to get user input: {}", e),
+            })?;
+
+        Some(crate::config::model::HooksConfig {
+            output: hooks_output.trim().to_string(),
+            query_keys_output: query_keys_output.trim().to_string(),
+            library: Some(hook_library),
+        })
+    } else {
+        None
+    };
+
+    println!();
+
     // Create the new spec entry
     let new_spec = crate::config::model::SpecEntry {
         name: spec_name.trim().to_string(),
@@ -172,7 +223,12 @@ pub async fn run() -> Result<()> {
             style: spec_api_style,
             base_url: spec_base_url,
             header_strategy: spec_header_strategy,
+            timeout: None,
+            retries: None,
+            retry_delay: None,
+            headers: None,
         },
+        hooks: hooks_config,
         modules: crate::config::model::ModulesConfig {
             ignore: vec![],
             selected: vec![],
@@ -197,25 +253,21 @@ pub async fn run() -> Result<()> {
     let apis_dir = PathBuf::from(&new_spec.apis.output);
     ensure_directory(&apis_dir)?;
 
-    // Write http client template
-    let http_client_path = apis_dir.join("http.ts");
-    if !http_client_path.exists() {
-        write_http_client_template(&http_client_path)?;
+    // Write runtime client at root_dir (shared across all specs)
+    let root_dir_path = PathBuf::from(&config.root_dir);
+    ensure_directory(&root_dir_path)?;
+    let runtime_dir = root_dir_path.join("runtime");
+    if !runtime_dir.exists() {
+        write_runtime_client(&root_dir_path, None, Some(&new_spec.apis))?;
         println!(
             "{}",
-            format!(
-                "✅ Created {} for spec '{}'",
-                http_client_path.display(),
-                new_spec.name
-            )
-            .green()
+            format!("✅ Created runtime client for spec '{}'", new_spec.name).green()
         );
     } else {
         println!(
             "{}",
             format!(
-                "⚠️  {} already exists for spec '{}'. Skipping.",
-                http_client_path.display(),
+                "⚠️  Runtime client already exists for spec '{}'. Skipping.",
                 new_spec.name
             )
             .yellow()

@@ -38,7 +38,7 @@ pub struct GenerateOptions {
 /// Generate code for a single spec
 pub async fn run_single_spec(
     spec: &SpecEntry,
-    _config: &Config,
+    config: &Config,
     options: &GenerateOptions,
 ) -> Result<GenerationStats> {
     let mut progress = ProgressReporter::new(options.verbose);
@@ -101,13 +101,16 @@ pub async fn run_single_spec(
     // Generate code for each module (using spec-specific or global output directories)
     let schemas_dir = PathBuf::from(&schemas_config.output);
     let apis_dir = PathBuf::from(&apis_config.output);
+    let _root_dir = PathBuf::from(&config.root_dir);
 
-    // Ensure runtime client exists (only once per output directory)
-    use crate::generator::writer::write_runtime_client;
-    let runtime_files = write_runtime_client(&apis_dir, spec_name)?;
-    if options.verbose && !runtime_files.is_empty() {
-        progress.success("Created runtime client files");
-    }
+    // Get hooks config (use defaults if not specified)
+    let hooks_config = spec
+        .hooks
+        .as_ref()
+        .map(|h| h.clone())
+        .unwrap_or_else(|| crate::config::model::HooksConfig::default());
+
+    // Runtime client is generated once at root_dir level (handled in generate.rs)
 
     let mut total_files = 0;
 
@@ -250,6 +253,9 @@ pub async fn run_single_spec(
             &mut shared_enum_registry,
             Some(&template_engine),
             spec_name,
+            Some(&config.root_dir),
+            Some(&apis_config.output),
+            Some(&schemas_config.output),
         )?;
 
         // Response types are written to API files, not schema files
@@ -288,8 +294,21 @@ pub async fn run_single_spec(
         )?;
         total_files += api_files.len();
 
+        // Determine hook type: options.hook_type (from CLI) takes precedence,
+        // otherwise check spec's hooks.library config
+        let hook_type = options.hook_type.or_else(|| {
+            hooks_config
+                .library
+                .as_ref()
+                .and_then(|lib| match lib.as_str() {
+                    "react-query" => Some(HookType::ReactQuery),
+                    "swr" => Some(HookType::Swr),
+                    _ => None,
+                })
+        });
+
         // Generate hooks if requested
-        if let Some(hook_type) = options.hook_type {
+        if let Some(hook_type) = hook_type {
             progress.start_spinner(&format!("Generating hooks for module: {}", module));
 
             // Generate query keys first (hooks depend on them)
@@ -302,18 +321,9 @@ pub async fn run_single_spec(
                 &query_keys_context,
             )?;
 
-            // Write query keys file
-            // Default output directory: src/query-keys/{spec}/{module}.ts
-            let root_dir = std::env::current_dir().ok();
-            let query_keys_output = if let Some(ref root) = root_dir {
-                if let Some(spec) = spec_name {
-                    root.join("src").join("query-keys").join(spec)
-                } else {
-                    root.join("src").join("query-keys")
-                }
-            } else {
-                PathBuf::from("src/query-keys")
-            };
+            // Write query keys file using configured output directory
+            // Note: output_dir already includes spec_name if needed (from config), just like schemas/apis
+            let query_keys_output = PathBuf::from(&hooks_config.query_keys_output);
 
             use crate::generator::writer::write_query_keys_with_options;
             write_query_keys_with_options(
@@ -338,6 +348,10 @@ pub async fn run_single_spec(
                         &common_schemas,
                         &mut shared_enum_registry,
                         &template_engine,
+                        Some(&apis_config.output),
+                        Some(&schemas_config.output),
+                        Some(&hooks_config.output),
+                        Some(&hooks_config.query_keys_output),
                     )?
                 }
                 HookType::Swr => {
@@ -350,21 +364,17 @@ pub async fn run_single_spec(
                         &common_schemas,
                         &mut shared_enum_registry,
                         &template_engine,
+                        Some(&apis_config.output),
+                        Some(&schemas_config.output),
+                        Some(&hooks_config.output),
+                        Some(&hooks_config.query_keys_output),
                     )?
                 }
             };
 
-            // Write hooks files
-            // Default output directory: src/hooks/{spec}/{module}/
-            let hooks_output = if let Some(ref root) = root_dir {
-                if let Some(spec) = spec_name {
-                    root.join("src").join("hooks").join(spec)
-                } else {
-                    root.join("src").join("hooks")
-                }
-            } else {
-                PathBuf::from("src/hooks")
-            };
+            // Write hooks files using configured output directory
+            // Note: output_dir already includes spec_name if needed (from config), just like schemas/apis
+            let hooks_output = PathBuf::from(&hooks_config.output);
 
             use crate::generator::writer::write_hooks_with_options;
             let hook_files = write_hooks_with_options(

@@ -112,6 +112,34 @@
               }
             }
           },
+          "hooks": {
+            "type": "object",
+            "description": "Configuration for hooks generation (React Query, SWR, etc.).",
+            "additionalProperties": false,
+            "properties": {
+              "output": {
+                "type": "string",
+                "description": "Directory where hook files are written.",
+                "default": "src/hooks"
+              },
+              "query_keys_output": {
+                "type": "string",
+                "description": "Directory where query keys files are written.",
+                "default": "src/query-keys"
+              },
+              "library": {
+                "type": "string",
+                "description": "Hook library to use for generation. CLI flags (--react-query, --swr) take precedence over this setting.",
+                "enum": ["react-query", "swr"],
+                "default": null
+              }
+            },
+            "default": {
+              "output": "src/hooks",
+              "query_keys_output": "src/query-keys",
+              "library": null
+            }
+          },
           "modules": {
             "type": "object",
             "description": "Module/tag filtering rules for this spec.",
@@ -167,6 +195,11 @@
             "style": "fetch",
             "base_url": "https://api.example.com",
             "header_strategy": "consumerInjected"
+          },
+          "hooks": {
+            "output": "src/hooks",
+            "query_keys_output": "src/query-keys",
+            "library": "react-query"
           },
           "modules": {
             "ignore": [],

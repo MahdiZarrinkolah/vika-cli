@@ -21,6 +21,10 @@ pub fn generate_react_query_hooks(
     common_schemas: &[String],
     enum_registry: &mut std::collections::HashMap<String, String>,
     template_engine: &TemplateEngine,
+    apis_dir: Option<&str>,
+    schemas_dir: Option<&str>,
+    hooks_dir: Option<&str>,
+    query_keys_dir: Option<&str>,
 ) -> Result<Vec<HookFile>> {
     let mut hooks = Vec::new();
 
@@ -215,40 +219,85 @@ pub fn generate_react_query_hooks(
             }
         }
 
-        // Calculate schema import depth
-        // From: src/hooks/{spec}/{module}/useX.ts
-        // To: src/schemas/{spec}/{module}/
-        // Structure: hooks/{spec}/{module}/useX.ts -> go up to hooks/, then to src/, then into schemas/
+        // Calculate schema import path using actual schemas_dir from config
+        // From: src/hooks/{module}/useX.ts
+        // To: {schemas_dir}/{module}/index.ts
+        // Note: hooks_dir and schemas_dir don't include spec_name (it's in config if needed)
         let module_depth = module_name.matches('/').count() + 1; // +1 for module directory
-        let spec_depth = if spec_name.is_some() { 1 } else { 0 };
-        let total_depth = module_depth + spec_depth + 1; // +1 for hooks directory
-        let schemas_depth = total_depth; // hooks/ and schemas/ are both under src/, so same depth
+        let hooks_depth = 1; // hooks directory
+        let total_depth = module_depth + hooks_depth;
+
+        let schemas_import_base = if let Some(schemas) = schemas_dir {
+            // Calculate relative path from hooks/{module}/ to {schemas_dir}/{module}/
+            let hooks_path = format!("src/hooks/{}", module_name);
+
+            let common_prefix = HookContext::find_common_prefix(&hooks_path, schemas);
+            let hooks_relative = hooks_path
+                .strip_prefix(&common_prefix)
+                .unwrap_or(&hooks_path)
+                .trim_start_matches('/');
+            let schemas_relative = schemas
+                .strip_prefix(&common_prefix)
+                .unwrap_or(schemas)
+                .trim_start_matches('/');
+
+            let hooks_depth_from_common = if hooks_relative.is_empty() {
+                0
+            } else {
+                hooks_relative.matches('/').count() + 1
+            };
+
+            if schemas_relative.is_empty() {
+                format!("{}", "../".repeat(hooks_depth_from_common))
+            } else {
+                format!(
+                    "{}{}",
+                    "../".repeat(hooks_depth_from_common),
+                    schemas_relative
+                )
+            }
+        } else {
+            // Fallback: assume schemas is at src/schemas/{spec}/{module}
+            format!("{}schemas", "../".repeat(total_depth))
+        };
+
+        // Check if schemas_dir includes spec_name
+        let schemas_dir_includes_spec =
+            if let (Some(schemas), Some(spec)) = (schemas_dir, spec_name) {
+                let schemas_normalized = schemas.trim_end_matches('/');
+                let spec_normalized = crate::generator::utils::sanitize_module_name(spec);
+                schemas_normalized.ends_with(&spec_normalized)
+                    || schemas_normalized.ends_with(&format!("/{}", spec_normalized))
+            } else {
+                false
+            };
 
         if needs_common_import {
-            let common_import = if let Some(spec) = spec_name {
-                format!(
-                    "{}schemas/{}/common",
-                    "../".repeat(schemas_depth),
-                    crate::generator::utils::sanitize_module_name(spec)
-                )
+            let common_import = if schemas_dir_includes_spec {
+                // Spec name is already in schemas_dir path
+                format!("{}/common", schemas_import_base.trim_end_matches('/'))
             } else {
-                format!("{}schemas/common", "../".repeat(schemas_depth))
+                // Spec name is NOT in schemas_dir path, so schemas are at {schemas_dir}/common
+                // Don't add spec name to import path
+                format!("{}/common", schemas_import_base.trim_end_matches('/'))
             };
             schema_imports.push_str(&format!("import * as Common from \"{}\";", common_import));
         }
         if needs_namespace_import {
             let sanitized_module_name = crate::generator::utils::sanitize_module_name(module_name);
-            let schemas_import = if let Some(spec) = spec_name {
+            let schemas_import = if schemas_dir_includes_spec {
+                // Spec name is already in schemas_dir path
                 format!(
-                    "{}schemas/{}/{}",
-                    "../".repeat(schemas_depth),
-                    crate::generator::utils::sanitize_module_name(spec),
+                    "{}/{}",
+                    schemas_import_base.trim_end_matches('/'),
                     sanitized_module_name
                 )
             } else {
+                // Spec name is NOT in schemas_dir path, so schemas are at {schemas_dir}/{module}
+                // Don't add spec name to import path
                 format!(
-                    "{}schemas/{}",
-                    "../".repeat(schemas_depth),
+                    "{}/{}",
+                    schemas_import_base.trim_end_matches('/'),
                     sanitized_module_name
                 )
             };
@@ -268,17 +317,17 @@ pub fn generate_react_query_hooks(
             if !needs_namespace_import {
                 let sanitized_module_name =
                     crate::generator::utils::sanitize_module_name(module_name);
-                let schemas_import = if let Some(spec) = spec_name {
+                let schemas_import = if schemas_dir_includes_spec {
                     format!(
-                        "{}schemas/{}/{}",
-                        "../".repeat(schemas_depth),
-                        crate::generator::utils::sanitize_module_name(spec),
+                        "{}/{}",
+                        schemas_import_base.trim_end_matches('/'),
                         sanitized_module_name
                     )
                 } else {
+                    // Spec name is NOT in schemas_dir path
                     format!(
-                        "{}schemas/{}",
-                        "../".repeat(schemas_depth),
+                        "{}/{}",
+                        schemas_import_base.trim_end_matches('/'),
                         sanitized_module_name
                     )
                 };
@@ -307,10 +356,16 @@ pub fn generate_react_query_hooks(
             response_type,
             module_name: module_name.to_string(),
             spec_name: spec_name.map(|s| s.to_string()),
-            api_import_path: HookContext::calculate_api_import_path(module_name, spec_name),
+            api_import_path: HookContext::calculate_api_import_path(
+                module_name,
+                spec_name,
+                apis_dir,
+            ),
             query_keys_import_path: HookContext::calculate_query_keys_import_path(
                 module_name,
                 spec_name,
+                hooks_dir,
+                query_keys_dir,
             ),
             param_list,
             param_names,
