@@ -1,5 +1,7 @@
 pub mod api_client;
+pub mod hooks;
 pub mod module_selector;
+pub mod query_keys;
 pub mod schema_resolver;
 pub mod swagger_parser;
 pub mod ts_typings;

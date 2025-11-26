@@ -1,0 +1,13 @@
+import { useMutation } from "@tanstack/react-query";
+import { {{ operation_id }} } from "{{ api_import_path }}";
+{% if schema_imports %}{{ schema_imports }}
+{% endif %}
+{% if description %}/**
+ * {{ description }}
+ */
+{% endif %}export function {{ hook_name }}({{ param_list }}) {
+  return useMutation({
+    mutationFn: {% if body_type %}(data: {{ body_type }}) => {{ operation_id }}({% if path_params %}{{ path_param_names }}, {% endif %}data){% else %}() => {{ operation_id }}({% if path_params %}{{ path_param_names }}{% endif %}){% endif %},
+  });
+}
+

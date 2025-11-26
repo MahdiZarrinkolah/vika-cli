@@ -1,0 +1,14 @@
+import useSWRMutation from "swr/mutation";
+import { {{ operation_id }} } from "{{ api_import_path }}";
+{% if schema_imports %}{{ schema_imports }}
+{% endif %}
+{% if description %}/**
+ * {{ description }}
+ */
+{% endif %}export function {{ hook_name }}({{ param_list }}) {
+  return useSWRMutation(
+    "{{ key_name }}",
+    {% if body_type %}(key: string, { arg }: { arg: {{ body_type }} }) => {{ operation_id }}({% if path_params %}{{ path_param_names }}, {% endif %}arg){% else %}(key: string) => {{ operation_id }}({% if path_params %}{{ path_param_names }}{% endif %}){% endif %}
+  );
+}
+

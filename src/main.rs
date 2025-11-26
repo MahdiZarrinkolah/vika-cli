@@ -27,9 +27,11 @@ async fn main() {
             cache,
             backup,
             force,
+            react_query,
+            swr,
         } => {
             if let Err(e) = vika_cli::commands::generate::run(
-                spec, all_specs, spec_name, verbose, cache, backup, force,
+                spec, all_specs, spec_name, verbose, cache, backup, force, react_query, swr,
             )
             .await
             {

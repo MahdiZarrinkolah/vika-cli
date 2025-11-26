@@ -250,6 +250,8 @@ pub async fn run() -> Result<()> {
             config.generation.enable_cache,                 // cache
             config.generation.enable_backup,                // backup
             config.generation.conflict_strategy == "force", // force
+            false,                                          // react_query
+            false,                                          // swr
         )
         .await
         {

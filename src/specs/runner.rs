@@ -19,12 +19,20 @@ pub struct GenerationStats {
     pub modules: Vec<String>,
 }
 
+/// Hook generator type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookType {
+    ReactQuery,
+    Swr,
+}
+
 /// Options for generation
 pub struct GenerateOptions {
     pub use_cache: bool,
     pub use_backup: bool,
     pub use_force: bool,
     pub verbose: bool,
+    pub hook_type: Option<HookType>,
 }
 
 /// Generate code for a single spec
@@ -66,8 +74,24 @@ pub async fn run_single_spec(
         return Err(crate::error::GenerationError::NoModulesAvailable.into());
     }
 
-    // Select modules interactively (using spec-specific or global ignore list)
-    let selected_modules = select_modules(&available_modules, &modules_config.ignore)?;
+    // Use pre-selected modules from config if available, otherwise prompt interactively
+    let selected_modules = if !modules_config.selected.is_empty() {
+        // Validate that all selected modules are available
+        let valid_selected: Vec<String> = modules_config.selected
+            .iter()
+            .filter(|m| available_modules.contains(m))
+            .cloned()
+            .collect();
+        
+        if valid_selected.is_empty() {
+            return Err(crate::error::GenerationError::NoModulesSelected.into());
+        }
+        
+        valid_selected
+    } else {
+        // Select modules interactively (using spec-specific or global ignore list)
+        select_modules(&available_modules, &modules_config.ignore)?
+    };
 
     // Filter common schemas based on selected modules only
     let (filtered_module_schemas, common_schemas) =
@@ -246,6 +270,102 @@ pub async fn run_single_spec(
         )?;
         total_files += api_files.len();
 
+        // Generate hooks if requested
+        if let Some(hook_type) = options.hook_type {
+            progress.start_spinner(&format!("Generating hooks for module: {}", module));
+
+            // Generate query keys first (hooks depend on them)
+            use crate::generator::query_keys::generate_query_keys;
+            let query_keys_context = generate_query_keys(&operations, module, spec_name);
+
+            // Render query keys template
+            let query_keys_content = template_engine.render(
+                crate::templates::registry::TemplateId::QueryKeys,
+                &query_keys_context,
+            )?;
+
+            // Write query keys file
+            // Default output directory: src/query-keys/{spec}/{module}.ts
+            let root_dir = std::env::current_dir().ok();
+            let query_keys_output = if let Some(ref root) = root_dir {
+                if let Some(spec) = spec_name {
+                    root.join("src").join("query-keys").join(spec)
+                } else {
+                    root.join("src").join("query-keys")
+                }
+            } else {
+                PathBuf::from("src/query-keys")
+            };
+
+            use crate::generator::writer::write_query_keys_with_options;
+            write_query_keys_with_options(
+                &query_keys_output,
+                module,
+                &query_keys_content,
+                spec_name,
+                options.use_backup,
+                options.use_force,
+            )?;
+            total_files += 1;
+
+            // Generate hooks based on type
+            let hooks = match hook_type {
+                HookType::ReactQuery => {
+                    use crate::generator::hooks::react_query::generate_react_query_hooks;
+                    generate_react_query_hooks(
+                        &parsed.openapi,
+                        &operations,
+                        module,
+                        spec_name,
+                        &common_schemas,
+                        &mut shared_enum_registry,
+                        &template_engine,
+                    )?
+                }
+                HookType::Swr => {
+                    use crate::generator::hooks::swr::generate_swr_hooks;
+                    generate_swr_hooks(
+                        &parsed.openapi,
+                        &operations,
+                        module,
+                        spec_name,
+                        &common_schemas,
+                        &mut shared_enum_registry,
+                        &template_engine,
+                    )?
+                }
+            };
+
+            // Write hooks files
+            // Default output directory: src/hooks/{spec}/{module}/
+            let hooks_output = if let Some(ref root) = root_dir {
+                if let Some(spec) = spec_name {
+                    root.join("src").join("hooks").join(spec)
+                } else {
+                    root.join("src").join("hooks")
+                }
+            } else {
+                PathBuf::from("src/hooks")
+            };
+
+            use crate::generator::writer::write_hooks_with_options;
+            let hook_files = write_hooks_with_options(
+                &hooks_output,
+                module,
+                &hooks,
+                spec_name,
+                options.use_backup,
+                options.use_force,
+            )?;
+            total_files += hook_files.len();
+
+            progress.finish_spinner(&format!(
+                "Generated {} hook files for module: {}",
+                hook_files.len(),
+                module
+            ));
+        }
+
         progress.finish_spinner(&format!(
             "Generated {} files for module: {}",
             schema_files.len() + api_files.len(),
@@ -264,6 +384,37 @@ pub async fn run_single_spec(
     // Collect API files recursively
     if apis_dir.exists() {
         collect_ts_files(&apis_dir, &mut all_generated_files)?;
+    }
+
+    // Collect hook files recursively if hooks were generated
+    if options.hook_type.is_some() {
+        let root_dir = std::env::current_dir().ok();
+        let hooks_dir = if let Some(ref root) = root_dir {
+            if let Some(spec) = spec_name {
+                root.join("src").join("hooks").join(spec)
+            } else {
+                root.join("src").join("hooks")
+            }
+        } else {
+            PathBuf::from("src/hooks")
+        };
+        if hooks_dir.exists() {
+            collect_ts_files(&hooks_dir, &mut all_generated_files)?;
+        }
+
+        // Collect query keys files
+        let query_keys_dir = if let Some(ref root) = root_dir {
+            if let Some(spec) = spec_name {
+                root.join("src").join("query-keys").join(spec)
+            } else {
+                root.join("src").join("query-keys")
+            }
+        } else {
+            PathBuf::from("src/query-keys")
+        };
+        if query_keys_dir.exists() {
+            collect_ts_files(&query_keys_dir, &mut all_generated_files)?;
+        }
     }
 
     // Format files if formatter is available

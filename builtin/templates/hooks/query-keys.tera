@@ -1,0 +1,6 @@
+export const queryKeys = {
+{% for key in keys %}
+  {{ key.key_name }}: {% if key.has_params %}({{ key.param_list }}) => {% else %}() => {% endif %}["{{ key.key_name }}"{% if key.has_params %}, {{ key.param_names }}{% endif %}],
+{% endfor %}
+};
+

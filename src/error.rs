@@ -159,6 +159,9 @@ pub enum GenerationError {
     #[error("No modules available after filtering")]
     NoModulesAvailable,
 
+    #[error("Cannot use more than one hook generator at once. Please specify only one of --react-query or --swr")]
+    InvalidHookFlags,
+
     #[error("No modules selected")]
     NoModulesSelected,
 

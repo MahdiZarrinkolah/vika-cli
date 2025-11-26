@@ -9,6 +9,11 @@ pub enum TemplateId {
     ZodSchema,
     ZodEnum,
     ApiClientFetch,
+    ReactQueryQuery,
+    ReactQueryMutation,
+    SwrQuery,
+    SwrMutation,
+    QueryKeys,
 }
 
 impl TemplateId {
@@ -21,6 +26,11 @@ impl TemplateId {
             TemplateId::ZodSchema => "zod-schema",
             TemplateId::ZodEnum => "zod-enum",
             TemplateId::ApiClientFetch => "api-client-fetch",
+            TemplateId::ReactQueryQuery => "hooks/react-query-query",
+            TemplateId::ReactQueryMutation => "hooks/react-query-mutation",
+            TemplateId::SwrQuery => "hooks/swr-query",
+            TemplateId::SwrMutation => "hooks/swr-mutation",
+            TemplateId::QueryKeys => "hooks/query-keys",
         }
     }
 
@@ -38,6 +48,11 @@ impl TemplateId {
             TemplateId::ZodSchema,
             TemplateId::ZodEnum,
             TemplateId::ApiClientFetch,
+            TemplateId::ReactQueryQuery,
+            TemplateId::ReactQueryMutation,
+            TemplateId::SwrQuery,
+            TemplateId::SwrMutation,
+            TemplateId::QueryKeys,
         ]
     }
 }
@@ -53,6 +68,11 @@ impl FromStr for TemplateId {
             "zod-schema" => Ok(TemplateId::ZodSchema),
             "zod-enum" => Ok(TemplateId::ZodEnum),
             "api-client-fetch" => Ok(TemplateId::ApiClientFetch),
+            "hooks/react-query-query" => Ok(TemplateId::ReactQueryQuery),
+            "hooks/react-query-mutation" => Ok(TemplateId::ReactQueryMutation),
+            "hooks/swr-query" => Ok(TemplateId::SwrQuery),
+            "hooks/swr-mutation" => Ok(TemplateId::SwrMutation),
+            "hooks/query-keys" => Ok(TemplateId::QueryKeys),
             _ => Err(format!("Unknown template: {}", s)),
         }
     }
@@ -85,7 +105,7 @@ mod tests {
     #[test]
     fn test_template_id_all() {
         let all = TemplateId::all();
-        assert_eq!(all.len(), 6);
+        assert_eq!(all.len(), 11);
         assert!(all.contains(&TemplateId::TypeInterface));
     }
 }

@@ -1083,3 +1083,50 @@ fn load_file_metadata(path: &Path) -> Result<FileMetadata> {
             .into()
         })
 }
+
+/// Write hook files to the output directory.
+pub fn write_hooks_with_options(
+    output_dir: &Path,
+    module_name: &str,
+    hooks: &[crate::generator::hooks::HookFile],
+    _spec_name: Option<&str>,
+    backup: bool,
+    force: bool,
+) -> Result<Vec<PathBuf>> {
+    // Build module directory path: {output_dir}/{module_name}
+    // Note: output_dir already includes spec_name if needed (from config or caller)
+    let module_dir = output_dir.join(sanitize_module_name(module_name));
+    ensure_directory(&module_dir)?;
+
+    let mut written_files = Vec::new();
+
+    for hook in hooks {
+        let hook_file = module_dir.join(&hook.filename);
+        write_file_with_backup(&hook_file, &hook.content, backup, force)?;
+        written_files.push(hook_file);
+    }
+
+    Ok(written_files)
+}
+
+/// Write query keys file to the output directory.
+pub fn write_query_keys_with_options(
+    output_dir: &Path,
+    module_name: &str,
+    query_keys_content: &str,
+    _spec_name: Option<&str>,
+    backup: bool,
+    force: bool,
+) -> Result<PathBuf> {
+    // Build query keys directory path: {output_dir}/
+    // Note: output_dir already includes spec_name if needed (from config or caller)
+    ensure_directory(output_dir)?;
+
+    // Generate filename: {module_name}.ts
+    let filename = format!("{}.ts", sanitize_module_name(module_name));
+    let query_keys_file = output_dir.join(&filename);
+
+    write_file_with_backup(&query_keys_file, query_keys_content, backup, force)?;
+
+    Ok(query_keys_file)
+}

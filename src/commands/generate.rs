@@ -14,7 +14,15 @@ pub async fn run(
     cache: bool,
     backup: bool,
     force: bool,
+    react_query: bool,
+    swr: bool,
 ) -> Result<()> {
+    // Validate hook flags - only one can be set
+    let hook_flags_count = [react_query, swr].iter().filter(|&&f| f).count();
+    if hook_flags_count > 1 {
+        return Err(crate::error::GenerationError::InvalidHookFlags.into());
+    }
+
     let mut progress = ProgressReporter::new(verbose);
 
     progress.success("Starting code generation...");
@@ -47,6 +55,14 @@ pub async fn run(
         }
     }
 
+    let hook_type = if react_query {
+        Some(crate::specs::runner::HookType::ReactQuery)
+    } else if swr {
+        Some(crate::specs::runner::HookType::Swr)
+    } else {
+        None
+    };
+
     let options = GenerateOptions {
         use_cache: if cache {
             true
@@ -64,6 +80,7 @@ pub async fn run(
             config.generation.conflict_strategy == "force"
         },
         verbose,
+        hook_type,
     };
 
     if specs_to_generate.len() > 1 {

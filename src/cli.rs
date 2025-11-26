@@ -38,6 +38,12 @@ pub enum Commands {
         /// Force overwrite user-modified files (overrides config)
         #[arg(long, action = clap::ArgAction::SetTrue)]
         force: bool,
+        /// Generate React Query hooks
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        react_query: bool,
+        /// Generate SWR hooks
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        swr: bool,
     },
     /// Update existing generated code
     Update,

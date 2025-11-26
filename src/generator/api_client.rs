@@ -691,7 +691,7 @@ fn generate_function_for_operation(
     })
 }
 
-fn extract_path_parameters(
+pub fn extract_path_parameters(
     openapi: &OpenAPI,
     operation: &Operation,
     enum_registry: &mut std::collections::HashMap<String, String>,
@@ -747,7 +747,7 @@ fn extract_path_parameters(
     Ok(params)
 }
 
-fn extract_query_parameters(
+pub fn extract_query_parameters(
     openapi: &OpenAPI,
     operation: &Operation,
     enum_registry: &mut std::collections::HashMap<String, String>,
@@ -1014,7 +1014,7 @@ fn extract_parameter_info(
     }
 }
 
-fn extract_request_body(
+pub fn extract_request_body(
     openapi: &OpenAPI,
     operation: &Operation,
 ) -> Result<Option<(String, Option<String>)>> {
@@ -1165,7 +1165,7 @@ fn extract_response_type(openapi: &OpenAPI, operation: &Operation) -> Result<Str
     }
 }
 
-fn extract_all_responses(openapi: &OpenAPI, operation: &Operation) -> Result<Vec<ResponseInfo>> {
+pub fn extract_all_responses(openapi: &OpenAPI, operation: &Operation) -> Result<Vec<ResponseInfo>> {
     let mut responses = Vec::new();
 
     for (status_code, response_ref) in &operation.responses.responses {
