@@ -14,6 +14,11 @@ pub fn load_config() -> Result<Config> {
     let content = std::fs::read_to_string(&config_path)
         .map_err(|e| VikaError::from(ConfigError::ReadError(e)))?;
 
+    // Handle empty or whitespace-only files
+    if content.trim().is_empty() {
+        return Ok(Config::default());
+    }
+
     let config: Config =
         serde_json::from_str(&content).map_err(|e| VikaError::from(ConfigError::ParseError(e)))?;
 
