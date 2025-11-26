@@ -2,10 +2,10 @@ export type Module = {
   id: string;
   title: string;
   description: string;
-  lessons: Lesson[];
+  docs: Doc[];
 };
 
-export type Lesson = {
+export type Doc = {
   id: string;
   title: string;
   description: string;
@@ -17,39 +17,39 @@ export type Lesson = {
 };
 
 export function getModules(): Module[] {
-  return lessons;
+  return docs;
 }
 
 export async function getLesson(
   slug: string,
-): Promise<(Lesson & { module: Module; next: Lesson | null }) | null> {
-  let module = lessons.find(({ lessons }) =>
-    lessons.some(({ id }) => id === slug),
+): Promise<(Doc & { module: Module; next: Doc | null }) | null> {
+  let module = docs.find(({ docs }) =>
+    docs.some(({ id }) => id === slug),
   );
 
   if (!module) {
     return null;
   }
 
-  let index = module.lessons.findIndex(({ id }) => id === slug);
+  let index = module.docs.findIndex(({ id }) => id === slug);
 
   return {
-    ...module.lessons[index],
+    ...module.docs[index],
     module,
-    next: index < module.lessons.length - 1 ? module.lessons[index + 1] : null,
+    next: index < module.docs.length - 1 ? module.docs[index + 1] : null,
   };
 }
 
 export async function getLessonContent(slug: string) {
-  return (await import(`@/data/lessons/${slug}.mdx`)).default;
+  return (await import(`@/data/docs/${slug}.mdx`)).default;
 }
 
-const lessons = [
+const docs = [
   {
     id: "getting-started",
     title: "Getting Started",
     description: "Learn the basics of Vika and get up and running quickly.",
-    lessons: [
+    docs: [
       {
         id: "getting-started",
         title: "Getting Started",
@@ -62,7 +62,7 @@ const lessons = [
     id: "installation",
     title: "Installation",
     description: "Install and set up Vika in your project.",
-    lessons: [
+    docs: [
       {
         id: "installation",
         title: "Installation",
@@ -75,7 +75,7 @@ const lessons = [
     id: "configuration",
     title: "Configuration",
     description: "Configure Vika to match your project's needs.",
-    lessons: [
+    docs: [
       {
         id: "configuration",
         title: "Configuration",
@@ -88,7 +88,7 @@ const lessons = [
     id: "templates",
     title: "Templates",
     description: "Customize and create templates for code generation.",
-    lessons: [
+    docs: [
       {
         id: "templates",
         title: "Templates",
@@ -101,7 +101,7 @@ const lessons = [
     id: "runtime",
     title: "Runtime",
     description: "Runtime utilities and HTTP client configuration.",
-    lessons: [
+    docs: [
       {
         id: "runtime",
         title: "Runtime",
@@ -114,7 +114,7 @@ const lessons = [
     id: "hooks",
     title: "Hooks",
     description: "Generate React hooks for data fetching.",
-    lessons: [
+    docs: [
       {
         id: "hooks",
         title: "Hooks",
@@ -127,7 +127,7 @@ const lessons = [
     id: "mocks",
     title: "Mocks",
     description: "Generate mock data for testing and development.",
-    lessons: [
+    docs: [
       {
         id: "mocks",
         title: "Mocks",
@@ -140,7 +140,7 @@ const lessons = [
     id: "diff-mode",
     title: "Diff Mode",
     description: "Review and manage code generation diffs.",
-    lessons: [
+    docs: [
       {
         id: "diff-mode",
         title: "Diff Mode",

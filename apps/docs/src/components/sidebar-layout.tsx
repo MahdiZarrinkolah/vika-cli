@@ -1,7 +1,7 @@
 "use client";
 
 import { IconButton } from "@/components/icon-button";
-import type { Module } from "@/data/lessons";
+import type { Module } from "@/data/docs";
 import { SidebarIcon } from "@/icons/sidebar-icon";
 import {
   CloseButton,
@@ -28,7 +28,7 @@ export const SidebarContext = createContext<{
   setIsMobileDialogOpen: () => {},
 });
 
-function CourseNavigation({
+function DocsNavigation({
   modules,
   onNavigate,
   className,
@@ -47,7 +47,7 @@ function CourseNavigation({
             {module.title}
           </h2>
           <ul className="mt-4 flex flex-col gap-4 border-l border-gray-950/10 text-base/7 text-gray-700 sm:mt-3 sm:gap-3 sm:text-sm/6 dark:border-white/10 dark:text-gray-400">
-            {module.lessons.map((lesson) => (
+            {module.docs.map((lesson) => (
               <li
                 key={lesson.id}
                 className={clsx(
@@ -95,7 +95,7 @@ function MobileNavigation({
             </CloseButton>
           </div>
         </div>
-        <CourseNavigation
+        <DocsNavigation
           modules={modules}
           onNavigate={onClose}
           className="px-4 pb-4 sm:px-6"
@@ -129,7 +129,7 @@ export function SidebarLayout({
         className="group"
       >
         <aside className="fixed inset-y-0 left-0 w-2xs overflow-y-auto border-r border-gray-950/10 group-data-sidebar-collapsed:hidden max-xl:hidden dark:border-white/10">
-          <nav aria-label="Course" className="px-6 py-4">
+          <nav aria-label="Documentation" className="px-6 py-4">
             <div className="sticky top-4 flex h-6">
               <IconButton onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
                 <SidebarIcon className="shrink-0 stroke-gray-950 dark:stroke-white" />
@@ -141,7 +141,7 @@ export function SidebarLayout({
               />
             </div>
             <div className="mt-3">
-              <CourseNavigation modules={modules} className="max-xl:hidden" />
+              <DocsNavigation modules={modules} className="max-xl:hidden" />
             </div>
           </nav>
         </aside>

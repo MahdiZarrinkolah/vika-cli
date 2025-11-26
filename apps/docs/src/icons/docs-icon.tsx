@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import type React from "react";
 
-export function ClockIcon({
+export function DocsIcon({
   className,
   ...props
 }: React.ComponentProps<"svg">) {
@@ -12,8 +12,7 @@ export function ClockIcon({
       className={clsx(className, "h-4 shrink-0")}
       {...props}
     >
-      <circle cx="8" cy="8" r="7.5" />
-      <path d="M8 4V8H12" />
+      <path d="M10.5 4.5H6.5c-.55 0-1 .45-1 1v6m4-7h3c.55 0 1 .45 1 1v9c0 .55-.45 1-1 1H6.5c-.55 0-1-.45-1-1v-3m4-7V1.5c0-.55-.45-1-1-1h-7c-.55 0-1 .45-1 1v9c0 .55.45 1 1 1h3" />
     </svg>
   );
 }

@@ -8,9 +8,9 @@ import { ContentLink } from "@/components/content-link";
 import { Logo } from "@/components/logo";
 import { PageSection } from "@/components/page-section";
 import { SidebarLayoutContent } from "@/components/sidebar-layout";
-import { getModules, type Module } from "@/data/lessons";
+import { getModules, type Module } from "@/data/docs";
 import { BookIcon } from "@/icons/book-icon";
-import { LessonsIcon } from "@/icons/lessons-icon";
+import { DocsIcon } from "@/icons/docs-icon";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 export default async function Page() {
   let modules = await getModules();
-  let lessons = modules.flatMap(({ lessons }) => lessons);
+  let docs = modules.flatMap(({ docs }) => docs);
 
   return (
     <SidebarLayoutContent
@@ -47,7 +47,7 @@ export default async function Page() {
           <div className="relative">
             <div className="px-4 pt-48 pb-12 lg:py-24">
               <Logo className="h-8 fill-gray-950 dark:fill-white" />
-              <h1 className="sr-only">Course overview</h1>
+              <h1 className="sr-only">Documentation overview</h1>
               <p className="mt-7 max-w-lg text-base/7 text-pretty text-gray-600 dark:text-gray-400">
                 Complete documentation for Vika - Generate TypeScript code from OpenAPI/Swagger specifications.
               </p>
@@ -60,13 +60,13 @@ export default async function Page() {
                   &middot;
                 </span>
                 <div className="flex items-center gap-1.5">
-                  <LessonsIcon className="stroke-gray-950/40 dark:stroke-white/40" />
-                  {lessons.length} topics
+                  <DocsIcon className="stroke-gray-950/40 dark:stroke-white/40" />
+                  {docs.length} topics
                 </div>
               </div>
               <div className="mt-10">
                 <Link
-                  href={`/${modules[0].lessons[0].id}`}
+                  href={`/${modules[0].docs[0].id}`}
                   className="inline-flex items-center gap-x-2 rounded-full bg-gray-950 px-3 py-0.5 text-sm/7 font-semibold text-white hover:bg-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600"
                 >
                   Get Started
@@ -90,7 +90,7 @@ export default async function Page() {
                   </p>
 
                   <ol className="mt-6 space-y-4">
-                    {module.lessons.map((lesson) => (
+                    {module.docs.map((lesson) => (
                       <li key={lesson.id}>
                         <ContentLink
                           title={lesson.title}

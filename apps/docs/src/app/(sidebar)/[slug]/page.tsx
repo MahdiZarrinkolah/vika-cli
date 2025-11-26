@@ -8,7 +8,7 @@ import { NextPageLink } from "@/components/next-page-link";
 import { SidebarLayoutContent } from "@/components/sidebar-layout";
 import TableOfContents from "@/components/table-of-contents";
 import { Video } from "@/components/video-player";
-import { getLesson, getLessonContent } from "@/data/lessons";
+import { getLesson, getLessonContent } from "@/data/docs";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -20,7 +20,7 @@ export async function generateMetadata({
   let lesson = await getLesson((await params).slug);
 
   return {
-    title: `${lesson?.title} - Compass`,
+    title: `${lesson?.title} - Vika`,
     description: lesson?.description,
   };
 }
@@ -75,13 +75,7 @@ export default async function Page({
                   description={lesson.next.description}
                   href={`/${lesson.next.id}`}
                 />
-              ) : (
-                <NextPageLink
-                  title="Interviews"
-                  description="Explore interviews with industry experts and thought leaders."
-                  href="/interviews"
-                />
-              )}
+              ) : null}
             </div>
           </div>
           <div className="hidden w-66 lg:block">
