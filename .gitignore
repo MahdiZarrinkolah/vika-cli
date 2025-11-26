@@ -16,8 +16,7 @@ coverage/
 regenerate_and_check.sh
 
 # Monorepo build artifacts
-/apps/docs/.next
-/apps/docs/node_modules
-/packages/playground/dist
-/packages/playground/node_modules
-/examples/*/node_modules
+.next
+node_modules
+dist
+
