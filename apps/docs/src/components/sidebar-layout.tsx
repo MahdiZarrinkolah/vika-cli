@@ -57,9 +57,9 @@ function DocsNavigation({
                 )}
               >
                 <Link
-                  href={`/${lesson.id}`}
+                  href={`/docs/${lesson.id}`}
                   aria-current={
-                    `/${lesson.id}` === pathname ? "page" : undefined
+                    `/docs/${lesson.id}` === pathname ? "page" : undefined
                   }
                   onNavigate={onNavigate}
                   className="aria-[current=page]:font-medium aria-[current=page]:text-gray-950 dark:aria-[current=page]:text-white"

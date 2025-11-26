@@ -66,7 +66,7 @@ export default async function Page() {
               </div>
               <div className="mt-10">
                 <Link
-                  href={`/${modules[0].docs[0].id}`}
+                  href={`/docs/${modules[0].docs[0].id}`}
                   className="inline-flex items-center gap-x-2 rounded-full bg-gray-950 px-3 py-0.5 text-sm/7 font-semibold text-white hover:bg-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600"
                 >
                   Get Started
@@ -95,7 +95,7 @@ export default async function Page() {
                         <ContentLink
                           title={lesson.title}
                           description={lesson.description}
-                          href={`/${lesson.id}`}
+                          href={`/docs/${lesson.id}`}
                           type="article"
                         />
                       </li>
