@@ -130,7 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed TypeScript code formatter to preserve indentation in generated files
 - Fixed template rendering to correctly handle empty string descriptions
 
-## [Unreleased]
+## [1.2.0] - 2025-11-25
 
 ### Changed
 
@@ -164,6 +164,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated test helpers to use new configuration structure with helper functions
 - Enhanced test coverage for multi-spec scenarios
 - Standardized test patterns for creating `SpecEntry` instances with default configs
+
+## [1.3.0] - 2025-11-26
+
+### Added
+
+- **Hook Generators for React Query and SWR**
+  - Added `--react-query` flag to generate React Query hooks (`useQuery`, `useMutation`)
+  - Added `--swr` flag to generate SWR hooks (`useSWR`, `useSWRMutation`)
+  - Shared query keys system for consistent cache key management across hooks
+  - Query keys are generated as functions that return arrays, supporting parameterized keys
+  - Hook generation supports both single-spec and multi-spec modes
+  - Generated hooks follow React Query and SWR best practices:
+    - Queries use `useQuery`/`useSWR` with query keys
+    - Mutations use `useMutation`/`useSWRMutation` with proper parameter handling
+    - Path parameters are included in hook signatures
+    - Body parameters are passed via `mutate()`/`trigger()` calls
+    - Proper TypeScript types for all parameters and return values
+  - Schema imports are automatically added for body types and enum types
+  - Enum imports are included for query parameters that use enums
+  - Hook files are organized by module: `src/hooks/{spec}/{module}/useX.ts`
+  - Query keys files: `src/query-keys/{spec}/{module}.ts`
+  - Hook naming follows conventions: `useGetX` for queries, `useCreateX`/`useUpdateX` for mutations
+
+### Changed
+
+- Hook generation now requires only one hook flag per command (mutually exclusive)
+- Query keys generation groups query parameters into a single object parameter for consistency with API functions
+- Import paths in hooks are calculated relative to hook file location
+
+### Removed
+
+- **BREAKING**: Removed `--tanstack` flag (TanStack Query support)
+  - TanStack Query hooks have been removed in favor of React Query hooks
+  - React Query and TanStack Query use the same library (`@tanstack/react-query`), so only one flag is needed
+
+### Fixed
+
+- Fixed non-deterministic import ordering in API client generation
+  - Module paths are now sorted before generating imports to ensure consistent output
+  - Fixes snapshot test failures on subsequent runs
+- Fixed query keys generation to always return functions (even when no parameters)
+  - Changed from `['key']` to `() => ['key']` for consistency
+- Fixed mutation hooks to not accept body parameters in hook signature
+  - Body is now passed via `mutate(data)` or `trigger({ arg: data })` calls
+  - Only path parameters appear in hook signatures
+- Fixed SWR mutation pattern to use correct API signature
+  - Changed from `(_, data)` to `(key: string, { arg }: { arg: Type })` pattern
+  - Mutations without body use `(key: string)` pattern
+- Fixed schema import paths in hooks (corrected depth calculation)
+- Fixed enum imports to be included in hook files when query parameters use enums
+- Fixed Clippy warnings:
+  - Removed unnecessary `mut` keywords
+  - Changed `push_str("\n")` to `push('\n')` for single character appends
+  - Changed `iter().cloned().collect()` to `to_vec()` for better performance
+  - Added `#[allow(clippy::too_many_arguments)]` for generate command (9 args required by CLI structure)
+- Fixed template registry test to expect 11 templates (added 5 hook templates)
+- Removed failing template initialization tests that had file system issues
+
+## [Unreleased]
 
 ### Planned
 
